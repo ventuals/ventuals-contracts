@@ -60,27 +60,19 @@ contract ValidatorAccountant is IValidatorAccountant, Initializable, PausableUpg
 
     function _delegate(uint64 weiAmount) private view returns (DelegationInstruction[] memory) {
         uint64 amountLeftToDelegate = weiAmount;
-        DelegationInstruction[] memory instructions = new DelegationInstruction[](enabledValidators.length);
+
+        uint64[] memory amountsToDelegate = new uint64[](enabledValidators.length);
 
         for (uint256 i = 0; i < enabledValidators.length; i++) {
-            // We haven't reached the target delegation amount
             if (delegatedAmounts[enabledValidators[i]] < targetDelegationAmounts[enabledValidators[i]]) {
                 uint64 amountLeftToTarget =
                     targetDelegationAmounts[enabledValidators[i]] - delegatedAmounts[enabledValidators[i]];
 
                 if (amountLeftToDelegate > amountLeftToTarget) {
-                    instructions[i] = DelegationInstruction({
-                        validator: enabledValidators[i],
-                        weiAmount: amountLeftToTarget,
-                        isUndelegate: false
-                    });
+                    amountsToDelegate[i] = amountLeftToTarget;
                     amountLeftToDelegate -= amountLeftToTarget;
                 } else {
-                    instructions[i] = DelegationInstruction({
-                        validator: enabledValidators[i],
-                        weiAmount: amountLeftToDelegate,
-                        isUndelegate: false
-                    });
+                    amountsToDelegate[i] = amountLeftToDelegate;
                     amountLeftToDelegate = 0;
                 }
             }
@@ -88,11 +80,27 @@ contract ValidatorAccountant is IValidatorAccountant, Initializable, PausableUpg
 
         // If we still have some wei left to delegate, just delegate it to the first validator
         if (amountLeftToDelegate > 0) {
-            instructions[0] = DelegationInstruction({
-                validator: enabledValidators[0],
-                weiAmount: amountLeftToDelegate,
-                isUndelegate: false
-            });
+            amountsToDelegate[0] += amountLeftToDelegate;
+        }
+
+        uint256 nonZeroAmountsCount = 0;
+        for (uint256 i = 0; i < amountsToDelegate.length; i++) {
+            if (amountsToDelegate[i] > 0) {
+                nonZeroAmountsCount++;
+            }
+        }
+
+        DelegationInstruction[] memory instructions = new DelegationInstruction[](nonZeroAmountsCount);
+        uint256 instructionsIndex = 0;
+        for (uint256 i = 0; i < amountsToDelegate.length; i++) {
+            if (amountsToDelegate[i] > 0) {
+                instructions[instructionsIndex] = DelegationInstruction({
+                    validator: enabledValidators[i],
+                    weiAmount: amountsToDelegate[i],
+                    isUndelegate: false
+                });
+                instructionsIndex++;
+            }
         }
 
         return instructions;
@@ -100,28 +108,40 @@ contract ValidatorAccountant is IValidatorAccountant, Initializable, PausableUpg
 
     function _undelegate(uint64 weiAmount) private view returns (DelegationInstruction[] memory) {
         uint64 amountLeftToUndelegate = weiAmount;
-        DelegationInstruction[] memory instructions = new DelegationInstruction[](enabledValidators.length);
+
+        uint64[] memory amountsToUndelegate = new uint64[](enabledValidators.length);
 
         // Iterate over enabled validators in reverse order
         for (uint256 i = enabledValidators.length - 1; i >= 0; i--) {
             uint64 validatorDelegatedAmount = delegatedAmounts[enabledValidators[i]];
-            // If the validator has any delegated amount
             if (validatorDelegatedAmount > 0) {
                 if (amountLeftToUndelegate > validatorDelegatedAmount) {
-                    instructions[i] = DelegationInstruction({
-                        validator: enabledValidators[i],
-                        weiAmount: validatorDelegatedAmount,
-                        isUndelegate: true
-                    });
+                    amountsToUndelegate[i] = validatorDelegatedAmount;
                     amountLeftToUndelegate -= validatorDelegatedAmount;
                 } else {
-                    instructions[i] = DelegationInstruction({
-                        validator: enabledValidators[i],
-                        weiAmount: amountLeftToUndelegate,
-                        isUndelegate: true
-                    });
+                    amountsToUndelegate[i] = amountLeftToUndelegate;
                     amountLeftToUndelegate = 0;
                 }
+            }
+        }
+
+        uint256 nonZeroAmountsCount = 0;
+        for (uint256 i = 0; i < amountsToUndelegate.length; i++) {
+            if (amountsToUndelegate[i] > 0) {
+                nonZeroAmountsCount++;
+            }
+        }
+
+        DelegationInstruction[] memory instructions = new DelegationInstruction[](nonZeroAmountsCount);
+        uint256 instructionsIndex = 0;
+        for (uint256 i = 0; i < amountsToUndelegate.length; i++) {
+            if (amountsToUndelegate[i] > 0) {
+                instructions[instructionsIndex] = DelegationInstruction({
+                    validator: enabledValidators[i],
+                    weiAmount: amountsToUndelegate[i],
+                    isUndelegate: true
+                });
+                instructionsIndex++;
             }
         }
 
