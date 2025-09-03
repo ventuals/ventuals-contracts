@@ -4,11 +4,19 @@ pragma solidity ^0.8.27;
 
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
-import {ERC20BurnableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
-import {ERC20PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
+import {ERC20BurnableUpgradeable} from
+    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import {ERC20PausableUpgradeable} from
+    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract vHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, ERC20PausableUpgradeable, AccessControlUpgradeable {
+contract vHYPE is
+    Initializable,
+    ERC20Upgradeable,
+    ERC20BurnableUpgradeable,
+    ERC20PausableUpgradeable,
+    AccessControlUpgradeable
+{
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
@@ -17,9 +25,7 @@ contract vHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, ERC
         _disableInitializers();
     }
 
-    function initialize(address defaultAdmin, address pauser, address minter)
-        public initializer
-    {
+    function initialize(address defaultAdmin, address pauser, address minter) public initializer {
         __ERC20_init("vHYPE", "vHYPE");
         __ERC20Burnable_init();
         __ERC20Pausable_init();
