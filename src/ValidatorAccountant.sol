@@ -112,14 +112,15 @@ contract ValidatorAccountant is IValidatorAccountant, Initializable, PausableUpg
         uint64[] memory amountsToUndelegate = new uint64[](enabledValidators.length);
 
         // Iterate over enabled validators in reverse order
-        for (uint256 i = enabledValidators.length - 1; i >= 0; i--) {
-            uint64 validatorDelegatedAmount = delegatedAmounts[enabledValidators[i]];
+        for (uint256 i = enabledValidators.length; i > 0; i--) {
+            uint256 idx = i - 1;
+            uint64 validatorDelegatedAmount = delegatedAmounts[enabledValidators[idx]];
             if (validatorDelegatedAmount > 0) {
                 if (amountLeftToUndelegate > validatorDelegatedAmount) {
-                    amountsToUndelegate[i] = validatorDelegatedAmount;
+                    amountsToUndelegate[idx] = validatorDelegatedAmount;
                     amountLeftToUndelegate -= validatorDelegatedAmount;
                 } else {
-                    amountsToUndelegate[i] = amountLeftToUndelegate;
+                    amountsToUndelegate[idx] = amountLeftToUndelegate;
                     amountLeftToUndelegate = 0;
                 }
             }
