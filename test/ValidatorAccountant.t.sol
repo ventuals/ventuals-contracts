@@ -149,7 +149,7 @@ contract ValidatorAccountantTest is Test {
         validatorAccountant.recordDelegation(validator1, 100, false);
     }
 
-    function test_RecordDelegation_UndeledateExceedsBalance() public {
+    function test_RecordDelegation_UndelegateExceedsBalance() public {
         vm.prank(manager);
         validatorAccountant.recordDelegation(validator1, 50, false);
 
@@ -242,7 +242,7 @@ contract ValidatorAccountantTest is Test {
         validatorAccountant.delegationInstructions(0, false);
     }
 
-    function test_DelegationInstructions_UndeledateExceedsTotalDelegated() public {
+    function test_DelegationInstructions_UndelegateExceedsTotalDelegated() public {
         vm.prank(manager);
         validatorAccountant.recordDelegation(validator1, 50, false);
 
