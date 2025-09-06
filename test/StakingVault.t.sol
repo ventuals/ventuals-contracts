@@ -117,6 +117,16 @@ contract StakingVaultTest is Test {
         stakingVault.spotSend(destination, token, weiAmount);
     }
 
+    function test_TransferHype(uint256 amount) public {
+        vm.deal(address(stakingVault), amount);
+
+        vm.prank(manager);
+        stakingVault.transferHype(amount);
+
+        assertEq(address(stakingVault).balance, 0);
+        assertEq(manager.balance, amount);
+    }
+
     function test_AddApiWallet(address apiWalletAddress, string memory name) public {
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(apiWalletAddress, name);
@@ -213,6 +223,17 @@ contract StakingVaultTest is Test {
         vm.prank(operator);
         vm.expectRevert("Caller is not a manager");
         stakingVault.spotSend(destination, token, weiAmount);
+    }
+
+    function test_TransferHype_OnlyManager() public {
+        vm.deal(address(stakingVault), 1e18);
+        vm.prank(admin);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.transferHype(1e18);
+
+        vm.prank(operator);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.transferHype(1e18);
     }
 
     function test_AddApiWallet_OnlyOperator() public {

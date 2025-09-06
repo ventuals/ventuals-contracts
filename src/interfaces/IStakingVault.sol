@@ -25,4 +25,8 @@ interface IStakingVault {
     /// @param apiWalletAddress The API wallet address to add
     /// @param name The name of the API wallet. If empty, then this becomes the main API wallet / agent
     function addApiWallet(address apiWalletAddress, string calldata name) external;
+
+    /// @dev Transfer HYPE from HyperEVM account to the caller
+    /// @param amount The amount of HYPE to transfer (18 decimals)
+    function transferHype(uint256 amount) external;
 }

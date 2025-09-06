@@ -49,6 +49,12 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
     }
 
     /// @inheritdoc IStakingVault
+    function transferHype(uint256 amount) external onlyManager whenNotPaused {
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        require(success, "Transfer failed");
+    }
+
+    /// @inheritdoc IStakingVault
     function addApiWallet(address apiWalletAddress, string calldata name) external onlyOperator whenNotPaused {
         CoreWriterLibrary.addApiWallet(apiWalletAddress, name);
     }
