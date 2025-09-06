@@ -3,8 +3,8 @@ pragma solidity ^0.8.27;
 
 import {ICoreWriter} from "../interfaces/ICoreWriter.sol";
 
-// @notice Library for sending actions to CoreWriter
-// @dev Important! All weiAmounts should be converted to 6 decimals before calling this library
+/// @notice Library for sending actions to CoreWriter
+/// @dev Important! All weiAmounts should be converted to 6 decimals before calling this library
 library CoreWriterLibrary {
     address public constant CORE_WRITER = 0x3333333333333333333333333333333333333333;
 
@@ -18,47 +18,47 @@ library CoreWriterLibrary {
     bytes3 public constant SPOT_SEND = hex"000006";
     bytes3 public constant ADD_API_WALLET = hex"000009";
 
-    // @dev Sends a token delegate action to CoreWriter
-    // @param validator The validator address to delegate or undelegate to
-    // @param weiAmount The amount of wei to delegate or undelegate. Should be in 6 decimals
-    // @param isUndelegate Whether to undelegate or delegate
+    /// @dev Sends a token delegate action to CoreWriter
+    /// @param validator The validator address to delegate or undelegate to
+    /// @param weiAmount The amount of wei to delegate or undelegate (8 decimals)
+    /// @param isUndelegate Whether to undelegate or delegate
     function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external {
         bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
         _sendRawAction(CORE_WRITER_VERSION, TOKEN_DELEGATE, encodedAction);
     }
 
-    // @dev Sends a staking deposit action to CoreWriter
-    // @param weiAmount The amount of wei to deposit. Should be in 6 decimals
+    /// @dev Sends a staking deposit action to CoreWriter
+    /// @param weiAmount The amount of wei to deposit (8 decimals)
     function stakingDeposit(uint64 weiAmount) external {
         bytes memory encodedAction = abi.encode(weiAmount);
         _sendRawAction(CORE_WRITER_VERSION, STAKING_DEPOSIT, encodedAction);
     }
 
-    // @dev Sends a staking withdraw action to CoreWriter
-    // @param weiAmount The amount of wei to withdraw. Should be in 6 decimals
+    /// @dev Sends a staking withdraw action to CoreWriter
+    /// @param weiAmount The amount of wei to withdraw (8 decimals)
     function stakingWithdraw(uint64 weiAmount) external {
         bytes memory encodedAction = abi.encode(weiAmount);
         _sendRawAction(CORE_WRITER_VERSION, STAKING_WITHDRAW, encodedAction);
     }
 
-    // @dev Sends a spot send action to CoreWriter
-    // @param destination The destination address to send the spot to
-    // @param token The token to send
-    // @param weiAmount The amount of wei to send. Should be in 6 decimals
+    /// @dev Sends a spot send action to CoreWriter
+    /// @param destination The destination address to send the spot to
+    /// @param token The token to send
+    /// @param weiAmount The amount of wei to send. Should be in HyperCore decimals (e.g. 8 decimals for HYPE)
     function spotSend(address destination, uint64 token, uint64 weiAmount) external {
         bytes memory encodedAction = abi.encode(destination, token, weiAmount);
         _sendRawAction(CORE_WRITER_VERSION, SPOT_SEND, encodedAction);
     }
 
-    // @dev Sends an add API wallet action to CoreWriter
-    // @param apiWalletAddress The API wallet address to add
-    // @param name The name of the API wallet. If empty, then this becomes the main API wallet / agent
+    /// @dev Sends an add API wallet action to CoreWriter
+    /// @param apiWalletAddress The API wallet address to add
+    /// @param name The name of the API wallet. If empty, then this becomes the main API wallet / agent
     function addApiWallet(address apiWalletAddress, string calldata name) external {
         bytes memory encodedAction = abi.encode(apiWalletAddress, name);
         _sendRawAction(CORE_WRITER_VERSION, ADD_API_WALLET, encodedAction);
     }
 
-    // @dev See https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interacting-with-hypercore#action-encoding-details for more info
+    /// @dev See https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interacting-with-hypercore#action-encoding-details for more info
     function _sendRawAction(bytes1 version, bytes3 actionId, bytes memory encodedAction) internal {
         bytes memory data = new bytes(4 + encodedAction.length);
         // Byte 1: Encoding version
