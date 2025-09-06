@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {IL1Read} from "./IL1Read.sol";
-
 interface IStakingVault {
     /// @dev Deposit HYPE from spot to staking account on HyperCore. The payable amount will be converted to 8 decimals before sending to CoreWriter
     function stakingDeposit() external payable;
