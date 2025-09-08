@@ -19,14 +19,14 @@ contract StakingVaultTest is Test {
         StakingVault implementation = new StakingVault();
         bytes memory initData = abi.encodeWithSelector(StakingVault.initialize.selector, admin, manager, operator);
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-        stakingVault = StakingVault(address(proxy));
+        stakingVault = StakingVault(payable(proxy));
     }
 
-    function test_StakingDeposit(uint256 amountIn18Decimals) public {
-        vm.assume(amountIn18Decimals < type(uint64).max);
+    function test_StakingDeposit(uint64 weiAmount) public {
+        vm.assume(weiAmount < type(uint64).max);
 
         // Mock the CoreWriter call
-        bytes memory encodedAction = abi.encode(SafeCast.toUint64(amountIn18Decimals / 1e10));
+        bytes memory encodedAction = abi.encode(weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
         data[0] = 0x01;
         data[1] = 0x00;
@@ -43,9 +43,8 @@ contract StakingVaultTest is Test {
 
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
 
-        vm.deal(manager, amountIn18Decimals);
         vm.prank(manager);
-        stakingVault.stakingDeposit{value: amountIn18Decimals}();
+        stakingVault.stakingDeposit(weiAmount);
     }
 
     function test_StakingWithdraw(uint64 weiAmount) public {
@@ -180,12 +179,12 @@ contract StakingVaultTest is Test {
         vm.deal(admin, 1e18);
         vm.prank(admin);
         vm.expectRevert("Caller is not a manager");
-        stakingVault.stakingDeposit{value: 1e18}();
+        stakingVault.stakingDeposit(1e10);
 
         vm.deal(operator, 1e18);
         vm.prank(operator);
         vm.expectRevert("Caller is not a manager");
-        stakingVault.stakingDeposit{value: 1e18}();
+        stakingVault.stakingDeposit(1e10);
     }
 
     function test_StakingWithdraw_OnlyManager() public {
@@ -297,7 +296,7 @@ contract StakingVaultTest is Test {
         vm.deal(manager, 1e18);
         vm.prank(manager);
         vm.expectRevert();
-        stakingVault.stakingDeposit{value: 1e18}();
+        stakingVault.stakingDeposit(1e10);
 
         vm.prank(manager);
         vm.expectRevert();
@@ -354,7 +353,7 @@ contract StakingVaultTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
 
         vm.prank(manager);
-        stakingVault.stakingDeposit{value: 0}();
+        stakingVault.stakingDeposit(0);
     }
 
     function test_StakingWithdraw_ZeroAmount() public {

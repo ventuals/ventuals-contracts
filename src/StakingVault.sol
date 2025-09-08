@@ -13,6 +13,8 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
+    event Received(address indexed sender, uint256 amount);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -28,9 +30,8 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
     }
 
     /// @inheritdoc IStakingVault
-    function stakingDeposit() external payable onlyManager whenNotPaused {
-        // Convert amount from 18 decimals to 8 decimals for HyperCore
-        CoreWriterLibrary.stakingDeposit(SafeCast.toUint64(msg.value / 1e10));
+    function stakingDeposit(uint64 weiAmount) external onlyManager whenNotPaused {
+        CoreWriterLibrary.stakingDeposit(weiAmount);
     }
 
     /// @inheritdoc IStakingVault
@@ -80,5 +81,15 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
     modifier onlyOperator() {
         require(hasRole(OPERATOR_ROLE, msg.sender), "Caller is not an operator");
         _;
+    }
+
+    /// @dev Function to receive HYPE when msg.data is empty
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
+    /// @dev Fallback function to receive HYPE when msg.data is not empty
+    fallback() external payable {
+        emit Received(msg.sender, msg.value);
     }
 }
