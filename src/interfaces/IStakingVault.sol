@@ -2,8 +2,9 @@
 pragma solidity ^0.8.27;
 
 interface IStakingVault {
-    /// @dev Deposit HYPE from spot to staking account on HyperCore. The payable amount will be converted to 8 decimals before sending to CoreWriter
-    function stakingDeposit() external payable;
+    /// @dev Deposit HYPE from spot to staking account on HyperCore
+    /// @param weiAmount The amount of wei to deposit (8 decimals)
+    function stakingDeposit(uint64 weiAmount) external;
 
     /// @dev Withdraw HYPE from staking account to spot on HyperCore
     /// @param weiAmount The amount of wei to withdraw (8 decimals)
