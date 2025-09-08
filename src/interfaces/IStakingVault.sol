@@ -30,4 +30,10 @@ interface IStakingVault {
     /// @dev Transfer HYPE from HyperEVM account to the caller
     /// @param amount The amount of HYPE to transfer (18 decimals)
     function transferHype(uint256 amount) external;
+
+    /// @dev Receive HYPE (when msg.data is empty)
+    receive() external payable;
+
+    /// @dev Receive HYPE (fallback when msg.data is not empty)
+    fallback() external payable;
 }
