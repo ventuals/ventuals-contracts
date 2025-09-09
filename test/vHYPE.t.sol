@@ -4,163 +4,80 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {vHYPE} from "../src/vHYPE.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 
 contract vHYPETest is Test {
+    ProtocolRegistry protocolRegistry;
     vHYPE public token;
-    vHYPE public implementation;
 
-    address public admin = address(0x1);
-    address public pauser = address(0x2);
-    address public minter = address(0x3);
-    address public user1 = address(0x4);
-    address public user2 = address(0x5);
-
-    bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
+    address public owner = makeAddr("owner");
+    address public manager = makeAddr("manager");
 
     function setUp() public {
-        implementation = new vHYPE();
+        ProtocolRegistry protocolRegistryImplementation = new ProtocolRegistry();
+        bytes memory protocolRegistryInitData = abi.encodeWithSelector(ProtocolRegistry.initialize.selector, owner);
+        ERC1967Proxy protocolRegistryProxy =
+            new ERC1967Proxy(address(protocolRegistryImplementation), protocolRegistryInitData);
+        protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
 
-        bytes memory initData = abi.encodeWithSelector(vHYPE.initialize.selector, admin, pauser, minter);
-
+        vHYPE implementation = new vHYPE();
+        bytes memory initData = abi.encodeWithSelector(vHYPE.initialize.selector, address(protocolRegistryProxy));
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         token = vHYPE(address(proxy));
+
+        vm.startPrank(owner);
+        protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), manager);
+        vm.stopPrank();
     }
 
-    function test_CannotInitializeTwice() public {
-        vm.expectRevert();
-        token.initialize(admin, pauser, minter);
-    }
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       Tests: Mint                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_Mint_OnlyManager(address user, uint256 amount) public {
+        vm.assume(user != address(0));
+        vm.assume(amount > 0);
 
-    // Access control
-    function test_AdminCanGrantRoles() public {
-        vm.prank(admin);
-        token.grantRole(MINTER_ROLE, user1);
-        assertTrue(token.hasRole(MINTER_ROLE, user1));
-    }
-
-    function test_AdminCanRevokeRoles() public {
-        vm.prank(admin);
-        token.revokeRole(MINTER_ROLE, minter);
-        assertFalse(token.hasRole(MINTER_ROLE, minter));
-    }
-
-    function test_NonAdminCannotGrantRoles() public {
-        vm.prank(user1);
-        vm.expectRevert();
-        token.grantRole(MINTER_ROLE, user2);
-    }
-
-    // Minting
-    function test_MinterCanMint() public {
-        uint256 amount = 1000 * 10 ** 18;
-        vm.prank(minter);
-        token.mint(user1, amount);
-        assertEq(token.balanceOf(user1), amount);
+        vm.prank(manager);
+        token.mint(user, amount);
+        assertEq(token.balanceOf(user), amount);
         assertEq(token.totalSupply(), amount);
     }
 
-    function test_NonMinterCannotMint() public {
-        uint256 amount = 1000 * 10 ** 18;
-        vm.prank(user1);
+    function test_Mint_NotManager(address user, uint256 amount) public {
+        vm.assume(user != address(0));
+        vm.assume(user != manager);
+        vm.assume(amount > 0);
+
+        vm.prank(user);
         vm.expectRevert();
-        token.mint(user1, amount);
+        token.mint(user, amount);
     }
 
-    function test_MintToZeroAddress() public {
-        uint256 amount = 1000 * 10 ** 18;
-        vm.prank(minter);
-        vm.expectRevert();
-        token.mint(address(0), amount);
-    }
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       Tests: Burn                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_CanBurnOwnTokens(address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user != address(0));
+        vm.assume(amount > 0);
+        vm.assume(amount > burnAmount);
 
-    // Pause/unpause
-    function test_PauserCanPause() public {
-        vm.prank(pauser);
-        token.pause();
-        assertTrue(token.paused());
-    }
+        vm.prank(manager);
+        token.mint(user, amount);
 
-    function test_PauserCanUnpause() public {
-        vm.prank(pauser);
-        token.pause();
-        assertTrue(token.paused());
-
-        vm.prank(pauser);
-        token.unpause();
-        assertFalse(token.paused());
-    }
-
-    function test_NonPauserCannotPause() public {
-        vm.prank(user1);
-        vm.expectRevert();
-        token.pause();
-    }
-
-    function test_NonPauserCannotUnpause() public {
-        vm.prank(pauser);
-        token.pause();
-
-        vm.prank(user1);
-        vm.expectRevert();
-        token.unpause();
-    }
-
-    function test_TransferFailsWhenPaused() public {
-        uint256 amount = 1000 * 10 ** 18;
-
-        vm.prank(minter);
-        token.mint(user1, amount);
-
-        vm.prank(pauser);
-        token.pause();
-
-        vm.prank(user1);
-        vm.expectRevert();
-        token.transfer(user2, 100 * 10 ** 18);
-    }
-
-    function test_TransferWorksWhenUnpaused() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint256 transferAmount = 100 * 10 ** 18;
-
-        vm.prank(minter);
-        token.mint(user1, amount);
-
-        vm.prank(pauser);
-        token.pause();
-
-        vm.prank(pauser);
-        token.unpause();
-
-        vm.prank(user1);
-        token.transfer(user2, transferAmount);
-
-        assertEq(token.balanceOf(user1), amount - transferAmount);
-        assertEq(token.balanceOf(user2), transferAmount);
-    }
-
-    // Burn
-    function test_UserCanBurnOwnTokens() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint256 burnAmount = 100 * 10 ** 18;
-
-        vm.prank(minter);
-        token.mint(user1, amount);
-
-        vm.prank(user1);
+        vm.prank(user);
         token.burn(burnAmount);
 
-        assertEq(token.balanceOf(user1), amount - burnAmount);
+        assertEq(token.balanceOf(user), amount - burnAmount);
         assertEq(token.totalSupply(), amount - burnAmount);
     }
 
-    function test_UserCanBurnFromWithApproval() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint256 burnAmount = 100 * 10 ** 18;
+    function test_CanBurnWithApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user1 != address(0));
+        vm.assume(user2 != address(0));
+        vm.assume(amount > 0);
+        vm.assume(amount > burnAmount);
 
-        vm.prank(minter);
+        vm.prank(manager);
         token.mint(user1, amount);
 
         vm.prank(user1);
@@ -174,39 +91,30 @@ contract vHYPETest is Test {
         assertEq(token.allowance(user1, user2), 0);
     }
 
-    function test_CannotBurnMoreThanBalance() public {
-        uint256 amount = 100 * 10 ** 18;
-        uint256 burnAmount = 200 * 10 ** 18;
+    function test_CannotBurnMoreThanBalance(address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user != address(0));
+        vm.assume(amount > 0);
+        vm.assume(burnAmount > amount);
 
-        vm.prank(minter);
-        token.mint(user1, amount);
+        vm.prank(manager);
+        token.mint(user, amount);
 
-        vm.prank(user1);
+        vm.prank(user);
         vm.expectRevert();
         token.burn(burnAmount);
     }
 
-    function test_BurnFailsWhenPaused() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint256 burnAmount = 100 * 10 ** 18;
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       Tests: Transfer                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_Transfer(uint256 amount, uint256 transferAmount) public {
+        vm.assume(amount > 0);
+        vm.assume(amount > transferAmount);
 
-        vm.prank(minter);
-        token.mint(user1, amount);
+        address user1 = makeAddr("user1");
+        address user2 = makeAddr("user2");
 
-        vm.prank(pauser);
-        token.pause();
-
-        vm.prank(user1);
-        vm.expectRevert();
-        token.burn(burnAmount);
-    }
-
-    // Transfer
-    function test_StandardTransfer() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint256 transferAmount = 100 * 10 ** 18;
-
-        vm.prank(minter);
+        vm.prank(manager);
         token.mint(user1, amount);
 
         vm.prank(user1);
@@ -216,11 +124,14 @@ contract vHYPETest is Test {
         assertEq(token.balanceOf(user2), transferAmount);
     }
 
-    function test_ApproveAndTransferFrom() public {
-        uint256 amount = 1000 * 10 ** 18;
-        uint256 transferAmount = 100 * 10 ** 18;
+    function test_ApproveAndTransferFrom(uint256 amount, uint256 transferAmount) public {
+        vm.assume(amount > 0);
+        vm.assume(amount > transferAmount);
 
-        vm.prank(minter);
+        address user1 = makeAddr("user1");
+        address user2 = makeAddr("user2");
+
+        vm.prank(manager);
         token.mint(user1, amount);
 
         vm.prank(user1);
@@ -232,30 +143,5 @@ contract vHYPETest is Test {
         assertEq(token.balanceOf(user1), amount - transferAmount);
         assertEq(token.balanceOf(user2), transferAmount);
         assertEq(token.allowance(user1, user2), 0);
-    }
-
-    // Fuzz
-    function testFuzz_MintAmount(uint256 amount) public {
-        vm.assume(amount <= type(uint256).max / 2);
-
-        vm.prank(minter);
-        token.mint(user1, amount);
-
-        assertEq(token.balanceOf(user1), amount);
-        assertEq(token.totalSupply(), amount);
-    }
-
-    function testFuzz_TransferAmount(uint256 mintAmount, uint256 transferAmount) public {
-        vm.assume(mintAmount <= type(uint256).max / 2);
-        vm.assume(transferAmount <= mintAmount);
-
-        vm.prank(minter);
-        token.mint(user1, mintAmount);
-
-        vm.prank(user1);
-        token.transfer(user2, transferAmount);
-
-        assertEq(token.balanceOf(user1), mintAmount - transferAmount);
-        assertEq(token.balanceOf(user2), transferAmount);
     }
 }
