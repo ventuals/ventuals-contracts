@@ -8,6 +8,7 @@ import {StakingVault} from "../src/StakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
+import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 
 contract StakingVaultTest is Test {
     ProtocolRegistry protocolRegistry;
@@ -186,6 +187,8 @@ contract StakingVaultTest is Test {
     /*                  Tests: Transfer Hype                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TransferHype(address payable recipient, uint256 amount) public {
+        vm.assume(recipient != address(stakingVault));
+
         vm.deal(address(stakingVault), amount);
         uint256 vaultBalanceBefore = address(stakingVault).balance;
         uint256 recipientBalanceBefore = recipient.balance;
@@ -273,6 +276,57 @@ contract StakingVaultTest is Test {
         vm.prank(notOperator);
         vm.expectRevert("Caller is not an operator");
         stakingVault.addApiWallet(apiWalletAddress, name);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Delegator Summary                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_DelegatorSummary() public {
+        // Mock the L1Read call
+        L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
+            delegated: 1e18,
+            undelegated: 0,
+            totalPendingWithdrawal: 0,
+            nPendingWithdrawals: 0
+        });
+        bytes memory encodedDelegatorSummary = abi.encode(mockDelegatorSummary);
+        vm.mockCall(
+            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, // Precompile address
+            abi.encode(address(stakingVault)), // Calldata parameters
+            encodedDelegatorSummary // Return data
+        );
+
+        vm.expectCall(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)));
+
+        L1ReadLibrary.DelegatorSummary memory result = stakingVault.delegatorSummary();
+        assertEq(result.delegated, mockDelegatorSummary.delegated);
+        assertEq(result.undelegated, mockDelegatorSummary.undelegated);
+        assertEq(result.totalPendingWithdrawal, mockDelegatorSummary.totalPendingWithdrawal);
+        assertEq(result.nPendingWithdrawals, mockDelegatorSummary.nPendingWithdrawals);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Spot Balance                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SpotBalance() public {
+        // Mock the L1Read call
+        L1ReadLibrary.SpotBalance memory mockSpotBalance =
+            L1ReadLibrary.SpotBalance({total: 1e18, hold: 0, entryNtl: 0});
+        bytes memory encodedSpotBalance = abi.encode(mockSpotBalance);
+        vm.mockCall(
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, // Precompile address
+            abi.encode(address(stakingVault), 1), // Calldata parameters
+            encodedSpotBalance // Return data
+        );
+
+        vm.expectCall(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault), 1));
+
+        L1ReadLibrary.SpotBalance memory result = stakingVault.spotBalance(1);
+        assertEq(result.total, mockSpotBalance.total);
+        assertEq(result.hold, mockSpotBalance.hold);
+        assertEq(result.entryNtl, mockSpotBalance.entryNtl);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

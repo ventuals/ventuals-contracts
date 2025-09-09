@@ -9,6 +9,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ICoreWriter} from "./interfaces/ICoreWriter.sol";
 import {CoreWriterLibrary} from "./libraries/CoreWriterLibrary.sol";
 import {ProtocolRegistry} from "./ProtocolRegistry.sol";
+import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 
 contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
     ProtocolRegistry public protocolRegistry;
@@ -55,6 +56,16 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
     /// @inheritdoc IStakingVault
     function addApiWallet(address apiWalletAddress, string calldata name) external onlyOperator whenNotPaused {
         CoreWriterLibrary.addApiWallet(apiWalletAddress, name);
+    }
+
+    /// @inheritdoc IStakingVault
+    function delegatorSummary() external view returns (L1ReadLibrary.DelegatorSummary memory) {
+        return L1ReadLibrary.delegatorSummary(address(this));
+    }
+
+    /// @inheritdoc IStakingVault
+    function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
+        return L1ReadLibrary.spotBalance(address(this), tokenId);
     }
 
     modifier whenNotPaused() {
