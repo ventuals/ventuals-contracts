@@ -68,7 +68,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         require(success, "Transfer failed"); // TODO: Change to typed error
 
         // Mint vHYPE
-        // IMPORTANT: We need to make sure that we transfer the HYPE to the staking vault before minting vHYPE, otherwise the exchange rate will be incorrect
+        // IMPORTANT: We need to make sure that we transfer the HYPE to the staking vault _before_ minting vHYPE, otherwise the exchange rate will be incorrect
         // We want the exchange rate to be calculated based on the total HYPE in the vault _after_ the deposit
         vHYPE.mint(msg.sender, HYPETovHYPE(amountToDeposit));
 
