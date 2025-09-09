@@ -7,6 +7,7 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ProtocolRegistry} from "./ProtocolRegistry.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {VHYPE} from "./VHYPE.sol";
 
 contract GenesisVaultManager is Initializable, UUPSUpgradeable {
@@ -55,19 +56,21 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         evmReserve = _evmReserve;
     }
 
+    /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
     function deposit() public payable canDeposit {
         uint256 requestedDepositAmount = msg.value;
         uint256 availableDepositAmount = vaultCapacity - totalBalance();
         uint256 amountToDeposit =
             requestedDepositAmount > availableDepositAmount ? availableDepositAmount : requestedDepositAmount;
 
-        // Mint vHYPE
-        uint256 mintAmount = amountToDeposit * exchangeRate() / 1e18;
-        vHYPE.mint(msg.sender, mintAmount);
-
         // Transfer HYPE to the staking vault (HyperEVM -> HyperEVM transfer)
         (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
         require(success, "Transfer failed"); // TODO: Change to typed error
+
+        // Mint vHYPE
+        // IMPORTANT: We need to make sure that we transfer the HYPE to the staking vault before minting vHYPE, otherwise the exchange rate will be incorrect
+        // We want the exchange rate to be calculated based on the total HYPE in the vault _after_ the deposit
+        vHYPE.mint(msg.sender, HYPETovHYPE(amountToDeposit));
 
         // Stake HYPE if needed
         uint256 stakingAmountLimit = amountToDeposit - evmReserve;
@@ -84,14 +87,45 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         }
     }
 
-    /// @notice Returns the exchange rate of vHYPE to HYPE (in 18 decimals)
-    /// @dev Ratio of vHYPE to total HYPE in the staking vault
+    /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
+    /// @param hypeAmount The HYPE amount to convert (in 18 decimals)
+    /// @return The vHYPE amount (in 18 decimals)
+    function HYPETovHYPE(uint256 hypeAmount) public view returns (uint256) {
+        uint256 _exchangeRate = exchangeRate();
+        if (_exchangeRate == 0) {
+            return 0;
+        }
+        return Math.mulDiv(hypeAmount, 1e18, _exchangeRate);
+    }
+
+    /// @notice Calculates the HYPE amount for a given vHYPE amount, based on the exchange rate
+    /// @param vHYPEAmount The vHYPE amount to convert (in 18 decimals)
+    /// @return The HYPE amount (in 18 decimals)
+    function vHYPEtoHYPE(uint256 vHYPEAmount) public view returns (uint256) {
+        uint256 _exchangeRate = exchangeRate();
+        if (_exchangeRate == 0) {
+            return 0;
+        }
+        return Math.mulDiv(vHYPEAmount, _exchangeRate, 1e18);
+    }
+
+    /// @notice Returns the exchange rate of HYPE to vHYPE (in 18 decimals)
+    /// @dev Ratio of total HYPE in the staking vault to vHYPE
     function exchangeRate() public view returns (uint256) {
         uint256 balance = totalBalance();
+        uint256 totalSupply = vHYPE.totalSupply();
+
+        // If we have no HYPE in the vault, the exchange rate is 0
         if (balance == 0) {
             return 0;
         }
-        return vHYPE.totalSupply() * 1e18 / balance;
+
+        // If we have no vHYPE in circulation, the exchange rate is 1
+        if (totalSupply == 0) {
+            return 1e18;
+        }
+
+        return Math.mulDiv(balance, 1e18, totalSupply);
     }
 
     /// @notice Returns the total HYPE balance in the vault (in 18 decimals)
