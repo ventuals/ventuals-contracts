@@ -4,17 +4,21 @@ pragma solidity ^0.8.27;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ProtocolRegistry} from "./ProtocolRegistry.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
+import {VHYPE} from "./VHYPE.sol";
 
 contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
 
+    // TODO: Update validator address
+    /// @dev The validator to delegate HYPE to
+    address public immutable VALIDATOR = 0x0000000000000000000000000000000000000000;
+
     ProtocolRegistry public protocolRegistry;
-    IERC20 public vHYPE;
+    VHYPE public vHYPE;
     IStakingVault public stakingVault;
 
     /// @notice The total HYPE capacity of the vault (in 18 decimals)
@@ -44,15 +48,40 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         __UUPSUpgradeable_init();
 
         protocolRegistry = ProtocolRegistry(_protocolRegistry);
-        vHYPE = IERC20(_vHYPE);
+        vHYPE = VHYPE(_vHYPE);
         stakingVault = IStakingVault(payable(_stakingVault));
 
         vaultCapacity = _vaultCapacity;
         evmReserve = _evmReserve;
     }
 
-    function deposit() public payable {
-        revert("TODO: Not implemented");
+    function deposit() public payable canDeposit {
+        uint256 requestedDepositAmount = msg.value;
+        uint256 availableDepositAmount = vaultCapacity - totalBalance();
+        uint256 amountToDeposit =
+            requestedDepositAmount > availableDepositAmount ? availableDepositAmount : requestedDepositAmount;
+
+        // Mint vHYPE
+        uint256 mintAmount = amountToDeposit * exchangeRate() / 1e18;
+        vHYPE.mint(msg.sender, mintAmount);
+
+        // Transfer HYPE to the staking vault (HyperEVM -> HyperEVM transfer)
+        (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
+        require(success, "Transfer failed"); // TODO: Change to typed error
+
+        // Stake HYPE if needed
+        uint256 stakingAmountLimit = amountToDeposit - evmReserve;
+        uint256 amountToStake = stakingAmountLimit - stakingAccountBalance();
+        if (amountToStake > 0) {
+            stakingVault.stakingDeposit(_convertTo8Decimals(amountToStake)); // HyperEVM -> HyperCore transfer
+            stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToStake), false); // Delegate HYPE to validator (on HyperCore)
+        }
+
+        // Refund any excess HYPE
+        if (requestedDepositAmount > amountToDeposit) {
+            (success,) = payable(msg.sender).call{value: requestedDepositAmount - amountToDeposit}("");
+            require(success, "Refund failed"); // TODO: Change to typed error
+        }
     }
 
     /// @notice Returns the exchange rate of vHYPE to HYPE (in 18 decimals)
@@ -105,6 +134,11 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         return uint256(amount) * 1e10;
     }
 
+    /// @dev Convert an amount from 18 decimals to 8 decimals. Used for converting HYPE values to 8 decimals before sending to HyperCore.
+    function _convertTo8Decimals(uint256 amount) internal pure returns (uint64) {
+        return uint64(amount / 1e10);
+    }
+
     /// @dev Function to receive HYPE when msg.data is empty
     receive() external payable {}
 
@@ -118,6 +152,12 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
 
     modifier onlyOwner() {
         require(protocolRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
+        _;
+    }
+
+    modifier canDeposit() {
+        uint256 balance = totalBalance();
+        require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         _;
     }
 }

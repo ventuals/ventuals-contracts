@@ -5,14 +5,14 @@ import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {GenesisVaultManager} from "../src/GenesisVaultManager.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
-import {vHYPE} from "../src/vHYPE.sol";
+import {VHYPE} from "../src/VHYPE.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 
 contract GenesisVaultManagerTest is Test {
     GenesisVaultManager genesisVaultManager;
     ProtocolRegistry protocolRegistry;
-    vHYPE vhypeToken;
+    VHYPE vHYPE;
     StakingVault stakingVault;
 
     address public owner = makeAddr("owner");
@@ -33,10 +33,10 @@ contract GenesisVaultManagerTest is Test {
         protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
 
         // Deploy vHYPE token
-        vHYPE vhypeImplementation = new vHYPE();
+        VHYPE vhypeImplementation = new VHYPE();
         bytes memory vhypeInitData = abi.encodeWithSelector(vHYPE.initialize.selector, address(protocolRegistry));
         ERC1967Proxy vhypeProxy = new ERC1967Proxy(address(vhypeImplementation), vhypeInitData);
-        vhypeToken = vHYPE(address(vhypeProxy));
+        vHYPE = VHYPE(address(vhypeProxy));
 
         // Deploy StakingVault
         StakingVault stakingVaultImplementation = new StakingVault();
@@ -50,7 +50,7 @@ contract GenesisVaultManagerTest is Test {
         bytes memory genesisVaultManagerInitData = abi.encodeWithSelector(
             GenesisVaultManager.initialize.selector,
             address(protocolRegistry),
-            address(vhypeToken),
+            address(vHYPE),
             address(stakingVault),
             VAULT_CAPACITY,
             EVM_RESERVE
@@ -72,7 +72,7 @@ contract GenesisVaultManagerTest is Test {
 
     function test_Initialize() public {
         assertEq(address(genesisVaultManager.protocolRegistry()), address(protocolRegistry));
-        assertEq(address(genesisVaultManager.vHYPE()), address(vhypeToken));
+        assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
         assertEq(genesisVaultManager.evmReserve(), EVM_RESERVE);
@@ -82,7 +82,7 @@ contract GenesisVaultManagerTest is Test {
     function test_CannotInitializeTwice() public {
         vm.expectRevert("InvalidInitialization()");
         genesisVaultManager.initialize(
-            address(protocolRegistry), address(vhypeToken), address(stakingVault), VAULT_CAPACITY, EVM_RESERVE
+            address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, EVM_RESERVE
         );
     }
 
@@ -186,7 +186,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mint some vHYPE tokens
         vm.prank(manager);
-        vhypeToken.mint(user, 2e18); // 2 vHYPE tokens
+        vHYPE.mint(user, 2e18); // 2 vHYPE tokens
 
         uint256 exchangeRate = genesisVaultManager.exchangeRate();
         // 2e18 (total supply) / 4e18 (total balance) = 0.5
@@ -216,7 +216,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mint some vHYPE tokens
         vm.prank(manager);
-        vhypeToken.mint(user, 2e18); // 2 vHYPE tokens
+        vHYPE.mint(user, 2e18); // 2 vHYPE tokens
 
         uint256 exchangeRate = genesisVaultManager.exchangeRate();
         assertEq(exchangeRate, 0);
