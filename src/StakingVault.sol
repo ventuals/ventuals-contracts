@@ -3,15 +3,15 @@ pragma solidity ^0.8.27;
 
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {ICoreWriter} from "./interfaces/ICoreWriter.sol";
 import {CoreWriterLibrary} from "./libraries/CoreWriterLibrary.sol";
+import {ProtocolRegistry} from "./ProtocolRegistry.sol";
 
-contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgradeable, IStakingVault {
-    bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
+contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
+    ProtocolRegistry public protocolRegistry;
 
     event Received(address indexed sender, uint256 amount);
 
@@ -20,13 +20,10 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
         _disableInitializers();
     }
 
-    function initialize(address defaultAdmin, address manager, address operator) public initializer {
-        __Pausable_init();
-        __AccessControl_init();
+    function initialize(address _protocolRegistry) public initializer {
+        __UUPSUpgradeable_init();
 
-        _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
-        _grantRole(MANAGER_ROLE, manager);
-        _grantRole(OPERATOR_ROLE, operator);
+        protocolRegistry = ProtocolRegistry(_protocolRegistry);
     }
 
     /// @inheritdoc IStakingVault
@@ -50,8 +47,8 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
     }
 
     /// @inheritdoc IStakingVault
-    function transferHype(uint256 amount) external onlyManager whenNotPaused {
-        (bool success,) = payable(msg.sender).call{value: amount}("");
+    function transferHype(address payable recipient, uint256 amount) external onlyManager whenNotPaused {
+        (bool success,) = recipient.call{value: amount}("");
         require(success, "Transfer failed");
     }
 
@@ -60,26 +57,23 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
         CoreWriterLibrary.addApiWallet(apiWalletAddress, name);
     }
 
-    function pause() external onlyAdmin {
-        _pause();
-    }
-
-    function unpause() external onlyAdmin {
-        _unpause();
-    }
-
-    modifier onlyAdmin() {
-        require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender), "Caller is not an admin");
+    modifier whenNotPaused() {
+        require(!protocolRegistry.isPaused(address(this)), "Contract is paused");
         _;
     }
 
     modifier onlyManager() {
-        require(hasRole(MANAGER_ROLE, msg.sender), "Caller is not a manager");
+        require(protocolRegistry.hasRole(protocolRegistry.MANAGER_ROLE(), msg.sender), "Caller is not a manager");
         _;
     }
 
     modifier onlyOperator() {
-        require(hasRole(OPERATOR_ROLE, msg.sender), "Caller is not an operator");
+        require(protocolRegistry.hasRole(protocolRegistry.OPERATOR_ROLE(), msg.sender), "Caller is not an operator");
+        _;
+    }
+
+    modifier onlyOwner() {
+        require(protocolRegistry.owner() == msg.sender, "Caller is not the owner");
         _;
     }
 
@@ -92,4 +86,9 @@ contract StakingVault is Initializable, PausableUpgradeable, AccessControlUpgrad
     fallback() external payable {
         emit Received(msg.sender, msg.value);
     }
+
+    /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
+    /// @dev DO NOT REMOVE THIS FUNCTION, OTHERWISE WE LOSE THE ABILITY TO UPGRADE THE CONTRACT
+    /// @param newImplementation The address of the new implementation
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

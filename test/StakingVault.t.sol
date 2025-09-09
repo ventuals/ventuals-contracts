@@ -7,21 +7,38 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
+import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 
 contract StakingVaultTest is Test {
+    ProtocolRegistry protocolRegistry;
     StakingVault stakingVault;
 
-    address public admin = address(0x1);
-    address public manager = address(0x2);
-    address public operator = address(0x3);
+    address public owner = makeAddr("owner");
+    address public manager = makeAddr("manager");
+    address public operator = makeAddr("operator");
 
     function setUp() public {
-        StakingVault implementation = new StakingVault();
-        bytes memory initData = abi.encodeWithSelector(StakingVault.initialize.selector, admin, manager, operator);
-        ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-        stakingVault = StakingVault(payable(proxy));
+        ProtocolRegistry protocolRegistryImplementation = new ProtocolRegistry();
+        bytes memory protocolRegistryInitData = abi.encodeWithSelector(ProtocolRegistry.initialize.selector, owner);
+        ERC1967Proxy protocolRegistryProxy =
+            new ERC1967Proxy(address(protocolRegistryImplementation), protocolRegistryInitData);
+        protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
+
+        StakingVault stakingVaultImplementation = new StakingVault();
+        bytes memory stakingVaultInitData =
+            abi.encodeWithSelector(StakingVault.initialize.selector, address(protocolRegistryProxy));
+        ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
+        stakingVault = StakingVault(payable(stakingVaultProxy));
+
+        vm.startPrank(owner);
+        protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), manager);
+        protocolRegistry.grantRole(protocolRegistry.OPERATOR_ROLE(), operator);
+        vm.stopPrank();
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Staking Deposit                    */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_StakingDeposit(uint64 weiAmount) public {
         vm.assume(weiAmount < type(uint64).max);
 
@@ -47,6 +64,18 @@ contract StakingVaultTest is Test {
         stakingVault.stakingDeposit(weiAmount);
     }
 
+    function test_StakingDeposit_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
+
+        vm.deal(notManager, 1e18);
+        vm.prank(notManager);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.stakingDeposit(1e10);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Staking Withdraw                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_StakingWithdraw(uint64 weiAmount) public {
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(weiAmount);
@@ -70,6 +99,17 @@ contract StakingVaultTest is Test {
         stakingVault.stakingWithdraw(weiAmount);
     }
 
+    function test_StakingWithdraw_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
+
+        vm.prank(notManager);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.stakingWithdraw(1e8);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Token Delegate                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) public {
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
@@ -93,6 +133,20 @@ contract StakingVaultTest is Test {
         stakingVault.tokenDelegate(validator, weiAmount, isUndelegate);
     }
 
+    function test_TokenDelegate_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
+
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        vm.prank(notManager);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.tokenDelegate(validator, weiAmount, false);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Spot Send                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_SpotSend(address destination, uint64 token, uint64 weiAmount) public {
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(destination, token, weiAmount);
@@ -116,16 +170,52 @@ contract StakingVaultTest is Test {
         stakingVault.spotSend(destination, token, weiAmount);
     }
 
-    function test_TransferHype(uint256 amount) public {
-        vm.deal(address(stakingVault), amount);
+    function test_SpotSend_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
 
-        vm.prank(manager);
-        stakingVault.transferHype(amount);
+        address destination = address(0x456);
+        uint64 token = 0;
+        uint64 weiAmount = 1e8;
 
-        assertEq(address(stakingVault).balance, 0);
-        assertEq(manager.balance, amount);
+        vm.prank(notManager);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.spotSend(destination, token, weiAmount);
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Transfer Hype                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_TransferHype(address payable recipient, uint256 amount) public {
+        vm.deal(address(stakingVault), amount);
+        uint256 vaultBalanceBefore = address(stakingVault).balance;
+        uint256 recipientBalanceBefore = recipient.balance;
+
+        vm.prank(manager);
+        stakingVault.transferHype(recipient, amount);
+
+        assertEq(address(stakingVault).balance, vaultBalanceBefore - amount);
+        assertEq(recipient.balance, recipientBalanceBefore + amount);
+    }
+
+    function test_TransferHype_NotManager(address notManager, address payable recipient, uint256 amount) public {
+        vm.assume(notManager != manager);
+        vm.assume(amount > 0);
+
+        vm.deal(address(stakingVault), amount);
+        uint256 vaultBalanceBefore = address(stakingVault).balance;
+        uint256 recipientBalanceBefore = recipient.balance;
+
+        vm.prank(notManager);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.transferHype(recipient, amount);
+
+        assertEq(address(stakingVault).balance, vaultBalanceBefore);
+        assertEq(recipient.balance, recipientBalanceBefore);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Add API Wallet                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_AddApiWallet(address apiWalletAddress, string memory name) public {
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(apiWalletAddress, name);
@@ -174,124 +264,23 @@ contract StakingVaultTest is Test {
         stakingVault.addApiWallet(apiWalletAddress, name);
     }
 
-    // Access Control Tests
-    function test_StakingDeposit_OnlyManager() public {
-        vm.deal(admin, 1e18);
-        vm.prank(admin);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.stakingDeposit(1e10);
+    function test_AddApiWallet_NotOperator(address notOperator) public {
+        vm.assume(notOperator != operator);
 
-        vm.deal(operator, 1e18);
-        vm.prank(operator);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.stakingDeposit(1e10);
-    }
-
-    function test_StakingWithdraw_OnlyManager() public {
-        vm.prank(admin);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.stakingWithdraw(1e8);
-
-        vm.prank(operator);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.stakingWithdraw(1e8);
-    }
-
-    function test_TokenDelegate_OnlyManager() public {
-        address validator = address(0x123);
-        uint64 weiAmount = 1e8;
-
-        vm.prank(admin);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.tokenDelegate(validator, weiAmount, false);
-
-        vm.prank(operator);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.tokenDelegate(validator, weiAmount, false);
-    }
-
-    function test_SpotSend_OnlyManager() public {
-        address destination = address(0x456);
-        uint64 token = 0;
-        uint64 weiAmount = 1e8;
-
-        vm.prank(admin);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.spotSend(destination, token, weiAmount);
-
-        vm.prank(operator);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.spotSend(destination, token, weiAmount);
-    }
-
-    function test_TransferHype_OnlyManager() public {
-        vm.deal(address(stakingVault), 1e18);
-        vm.prank(admin);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.transferHype(1e18);
-
-        vm.prank(operator);
-        vm.expectRevert("Caller is not a manager");
-        stakingVault.transferHype(1e18);
-    }
-
-    function test_AddApiWallet_OnlyOperator() public {
         address apiWalletAddress = address(0x789);
         string memory name = "TestWallet";
 
-        vm.prank(admin);
-        vm.expectRevert("Caller is not an operator");
-        stakingVault.addApiWallet(apiWalletAddress, name);
-
-        vm.prank(manager);
+        vm.prank(notOperator);
         vm.expectRevert("Caller is not an operator");
         stakingVault.addApiWallet(apiWalletAddress, name);
     }
 
-    function test_Pause_OnlyAdmin() public {
-        vm.prank(manager);
-        vm.expectRevert("Caller is not an admin");
-        stakingVault.pause();
-
-        vm.prank(operator);
-        vm.expectRevert("Caller is not an admin");
-        stakingVault.pause();
-    }
-
-    function test_Unpause_OnlyAdmin() public {
-        vm.prank(admin);
-        stakingVault.pause();
-
-        vm.prank(manager);
-        vm.expectRevert("Caller is not an admin");
-        stakingVault.unpause();
-
-        vm.prank(operator);
-        vm.expectRevert("Caller is not an admin");
-        stakingVault.unpause();
-    }
-
-    // Pause/Unpause Functionality Tests
-    function test_Pause_Success() public {
-        vm.prank(admin);
-        stakingVault.pause();
-
-        assertTrue(stakingVault.paused());
-    }
-
-    function test_Unpause_Success() public {
-        vm.prank(admin);
-        stakingVault.pause();
-
-        vm.prank(admin);
-        stakingVault.unpause();
-
-        assertFalse(stakingVault.paused());
-    }
-
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Pause                            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_FunctionsWhenPaused() public {
-        vm.prank(admin);
-        stakingVault.pause();
+        vm.prank(owner);
+        protocolRegistry.pause(address(stakingVault));
 
         vm.deal(manager, 1e18);
         vm.prank(manager);
@@ -308,6 +297,10 @@ contract StakingVaultTest is Test {
 
         vm.prank(manager);
         vm.expectRevert();
+        stakingVault.transferHype(payable(address(0x123)), 1e8);
+
+        vm.prank(manager);
+        vm.expectRevert();
         stakingVault.spotSend(address(0x456), 0, 1e8);
 
         vm.prank(operator);
@@ -315,68 +308,80 @@ contract StakingVaultTest is Test {
         stakingVault.addApiWallet(address(0x789), "TestWallet");
     }
 
-    // Initialization Tests
-    function test_Initialization() public view {
-        assertTrue(stakingVault.hasRole(stakingVault.DEFAULT_ADMIN_ROLE(), admin));
-        assertTrue(stakingVault.hasRole(stakingVault.MANAGER_ROLE(), manager));
-        assertTrue(stakingVault.hasRole(stakingVault.OPERATOR_ROLE(), operator));
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Upgradeability                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_UpgradeToAndCall_OnlyOwner() public {
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
 
-        assertFalse(stakingVault.paused());
+        vm.prank(owner);
+        stakingVault.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(stakingVault.protocolRegistry()), address(protocolRegistry));
+
+        // Check that the extra function is available
+        StakingVaultWithExtraFunction newProxy = StakingVaultWithExtraFunction(payable(address(stakingVault)));
+        assertTrue(newProxy.extraFunction());
     }
 
-    function test_RoleConstants() public view {
-        bytes32 expectedManagerRole = keccak256("MANAGER_ROLE");
-        bytes32 expectedOperatorRole = keccak256("OPERATOR_ROLE");
+    function test_UpgradeToAndCall_NotOwner(address notOwner) public {
+        vm.assume(notOwner != owner);
 
-        assertEq(stakingVault.MANAGER_ROLE(), expectedManagerRole);
-        assertEq(stakingVault.OPERATOR_ROLE(), expectedOperatorRole);
+        StakingVault newImplementation = new StakingVault();
+
+        vm.prank(notOwner);
+        vm.expectRevert("Caller is not the owner");
+        stakingVault.upgradeToAndCall(address(newImplementation), "");
+
+        // Check that the extra function is not available
+        StakingVaultWithExtraFunction newProxy = StakingVaultWithExtraFunction(payable(address(stakingVault)));
+        vm.expectRevert();
+        newProxy.extraFunction();
     }
 
-    // Edge Case Tests
-    function test_StakingDeposit_ZeroAmount() public {
-        bytes memory encodedAction = abi.encode(uint64(0));
-        bytes memory data = new bytes(4 + encodedAction.length);
-        data[0] = 0x01;
-        data[1] = 0x00;
-        data[2] = 0x00;
-        data[3] = 0x04;
-        for (uint256 i = 0; i < encodedAction.length; i++) {
-            data[4 + i] = encodedAction[i];
-        }
+    function test_ProtocolRegistryUpgradeToAndCall_NewOwner() public {
+        address originalOwner = owner;
+        address newOwner = makeAddr("newOwner");
 
-        vm.mockCall(
-            CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-            abi.encode()
-        );
+        // Transfer ownership using 2-step process
+        vm.prank(originalOwner);
+        protocolRegistry.transferOwnership(newOwner);
 
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+        vm.prank(newOwner);
+        protocolRegistry.acceptOwnership();
 
-        vm.prank(manager);
-        stakingVault.stakingDeposit(0);
+        // Verify ownership has been transferred
+        assertEq(protocolRegistry.owner(), newOwner);
+
+        // New owner upgrades the contract
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
+        vm.prank(newOwner);
+        stakingVault.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(stakingVault.protocolRegistry()), address(protocolRegistry));
+
+        // Check that the extra function is available
+        StakingVaultWithExtraFunction newProxy = StakingVaultWithExtraFunction(payable(address(stakingVault)));
+        assertTrue(newProxy.extraFunction());
+
+        // Verify that the old owner can no longer upgrade
+        StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction();
+        vm.prank(originalOwner);
+        vm.expectRevert("Caller is not the owner");
+        stakingVault.upgradeToAndCall(address(anotherImplementation), "");
     }
+}
 
-    function test_StakingWithdraw_ZeroAmount() public {
-        uint64 weiAmount = 0;
-        bytes memory encodedAction = abi.encode(weiAmount);
-        bytes memory data = new bytes(4 + encodedAction.length);
-        data[0] = 0x01;
-        data[1] = 0x00;
-        data[2] = 0x00;
-        data[3] = 0x05;
-        for (uint256 i = 0; i < encodedAction.length; i++) {
-            data[4 + i] = encodedAction[i];
-        }
+contract StakingVaultWithExtraFunction is StakingVault {
+    function extraFunction() public pure returns (bool) {
+        return true;
+    }
+}
 
-        vm.mockCall(
-            CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-            abi.encode()
-        );
-
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
-
-        vm.prank(manager);
-        stakingVault.stakingWithdraw(weiAmount);
+contract ProtocolRegistryWithExtraFunction is ProtocolRegistry {
+    function extraFunction() public pure returns (bool) {
+        return true;
     }
 }
