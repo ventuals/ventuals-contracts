@@ -2,13 +2,13 @@
 pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
-import {vHYPE} from "../src/vHYPE.sol";
+import {VHYPE} from "../src/VHYPE.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 
 contract vHYPETest is Test {
     ProtocolRegistry protocolRegistry;
-    vHYPE public token;
+    VHYPE public vHYPE;
 
     address public owner = makeAddr("owner");
     address public manager = makeAddr("manager");
@@ -20,10 +20,10 @@ contract vHYPETest is Test {
             new ERC1967Proxy(address(protocolRegistryImplementation), protocolRegistryInitData);
         protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
 
-        vHYPE implementation = new vHYPE();
-        bytes memory initData = abi.encodeWithSelector(vHYPE.initialize.selector, address(protocolRegistryProxy));
+        VHYPE implementation = new VHYPE();
+        bytes memory initData = abi.encodeWithSelector(VHYPE.initialize.selector, address(protocolRegistryProxy));
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-        token = vHYPE(address(proxy));
+        vHYPE = VHYPE(address(proxy));
 
         vm.startPrank(owner);
         protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), manager);
@@ -38,9 +38,9 @@ contract vHYPETest is Test {
         vm.assume(amount > 0);
 
         vm.prank(manager);
-        token.mint(user, amount);
-        assertEq(token.balanceOf(user), amount);
-        assertEq(token.totalSupply(), amount);
+        vHYPE.mint(user, amount);
+        assertEq(vHYPE.balanceOf(user), amount);
+        assertEq(vHYPE.totalSupply(), amount);
     }
 
     function test_Mint_NotManager(address user, uint256 amount) public {
@@ -50,7 +50,7 @@ contract vHYPETest is Test {
 
         vm.prank(user);
         vm.expectRevert();
-        token.mint(user, amount);
+        vHYPE.mint(user, amount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -62,13 +62,13 @@ contract vHYPETest is Test {
         vm.assume(amount > burnAmount);
 
         vm.prank(manager);
-        token.mint(user, amount);
+        vHYPE.mint(user, amount);
 
         vm.prank(user);
-        token.burn(burnAmount);
+        vHYPE.burn(burnAmount);
 
-        assertEq(token.balanceOf(user), amount - burnAmount);
-        assertEq(token.totalSupply(), amount - burnAmount);
+        assertEq(vHYPE.balanceOf(user), amount - burnAmount);
+        assertEq(vHYPE.totalSupply(), amount - burnAmount);
     }
 
     function test_CanBurnWithApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
@@ -78,17 +78,17 @@ contract vHYPETest is Test {
         vm.assume(amount > burnAmount);
 
         vm.prank(manager);
-        token.mint(user1, amount);
+        vHYPE.mint(user1, amount);
 
         vm.prank(user1);
-        token.approve(user2, burnAmount);
+        vHYPE.approve(user2, burnAmount);
 
         vm.prank(user2);
-        token.burnFrom(user1, burnAmount);
+        vHYPE.burnFrom(user1, burnAmount);
 
-        assertEq(token.balanceOf(user1), amount - burnAmount);
-        assertEq(token.totalSupply(), amount - burnAmount);
-        assertEq(token.allowance(user1, user2), 0);
+        assertEq(vHYPE.balanceOf(user1), amount - burnAmount);
+        assertEq(vHYPE.totalSupply(), amount - burnAmount);
+        assertEq(vHYPE.allowance(user1, user2), 0);
     }
 
     function test_CannotBurnMoreThanBalance(address user, uint256 amount, uint256 burnAmount) public {
@@ -97,11 +97,11 @@ contract vHYPETest is Test {
         vm.assume(burnAmount > amount);
 
         vm.prank(manager);
-        token.mint(user, amount);
+        vHYPE.mint(user, amount);
 
         vm.prank(user);
         vm.expectRevert();
-        token.burn(burnAmount);
+        vHYPE.burn(burnAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -115,13 +115,13 @@ contract vHYPETest is Test {
         address user2 = makeAddr("user2");
 
         vm.prank(manager);
-        token.mint(user1, amount);
+        vHYPE.mint(user1, amount);
 
         vm.prank(user1);
-        token.transfer(user2, transferAmount);
+        vHYPE.transfer(user2, transferAmount);
 
-        assertEq(token.balanceOf(user1), amount - transferAmount);
-        assertEq(token.balanceOf(user2), transferAmount);
+        assertEq(vHYPE.balanceOf(user1), amount - transferAmount);
+        assertEq(vHYPE.balanceOf(user2), transferAmount);
     }
 
     function test_ApproveAndTransferFrom(uint256 amount, uint256 transferAmount) public {
@@ -132,47 +132,47 @@ contract vHYPETest is Test {
         address user2 = makeAddr("user2");
 
         vm.prank(manager);
-        token.mint(user1, amount);
+        vHYPE.mint(user1, amount);
 
         vm.prank(user1);
-        token.approve(user2, transferAmount);
+        vHYPE.approve(user2, transferAmount);
 
         vm.prank(user2);
-        token.transferFrom(user1, user2, transferAmount);
+        vHYPE.transferFrom(user1, user2, transferAmount);
 
-        assertEq(token.balanceOf(user1), amount - transferAmount);
-        assertEq(token.balanceOf(user2), transferAmount);
-        assertEq(token.allowance(user1, user2), 0);
+        assertEq(vHYPE.balanceOf(user1), amount - transferAmount);
+        assertEq(vHYPE.balanceOf(user2), transferAmount);
+        assertEq(vHYPE.allowance(user1, user2), 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                 Tests: Upgradeability                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_UpgradeToAndCall_OnlyOwner() public {
-        vHYPEWithExtraFunction newImplementation = new vHYPEWithExtraFunction();
+        VHYPEWithExtraFunction newImplementation = new VHYPEWithExtraFunction();
 
         vm.prank(owner);
-        token.upgradeToAndCall(address(newImplementation), "");
+        vHYPE.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(token.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(vHYPE.protocolRegistry()), address(protocolRegistry));
 
         // Check that the extra function is available
-        vHYPEWithExtraFunction newProxy = vHYPEWithExtraFunction(payable(address(token)));
+        VHYPEWithExtraFunction newProxy = VHYPEWithExtraFunction(payable(address(vHYPE)));
         assertTrue(newProxy.extraFunction());
     }
 
     function test_UpgradeToAndCall_NotOwner(address notOwner) public {
         vm.assume(notOwner != owner);
 
-        vHYPEWithExtraFunction newImplementation = new vHYPEWithExtraFunction();
+        VHYPEWithExtraFunction newImplementation = new VHYPEWithExtraFunction();
 
         vm.prank(notOwner);
         vm.expectRevert("Caller is not the owner");
-        token.upgradeToAndCall(address(newImplementation), "");
+        vHYPE.upgradeToAndCall(address(newImplementation), "");
 
         // Check that the extra function is not available
-        vHYPEWithExtraFunction newProxy = vHYPEWithExtraFunction(payable(address(token)));
+        VHYPEWithExtraFunction newProxy = VHYPEWithExtraFunction(payable(address(vHYPE)));
         vm.expectRevert();
         newProxy.extraFunction();
     }
@@ -192,26 +192,26 @@ contract vHYPETest is Test {
         assertEq(protocolRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
-        vHYPEWithExtraFunction newImplementation = new vHYPEWithExtraFunction();
+        VHYPEWithExtraFunction newImplementation = new VHYPEWithExtraFunction();
         vm.prank(newOwner);
-        token.upgradeToAndCall(address(newImplementation), "");
+        vHYPE.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(token.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(vHYPE.protocolRegistry()), address(protocolRegistry));
 
         // Check that the extra function is available
-        vHYPEWithExtraFunction newProxy = vHYPEWithExtraFunction(payable(address(token)));
+        VHYPEWithExtraFunction newProxy = VHYPEWithExtraFunction(payable(address(vHYPE)));
         assertTrue(newProxy.extraFunction());
 
         // Verify that the old owner can no longer upgrade
-        vHYPEWithExtraFunction anotherImplementation = new vHYPEWithExtraFunction();
+        VHYPEWithExtraFunction anotherImplementation = new VHYPEWithExtraFunction();
         vm.prank(originalOwner);
         vm.expectRevert("Caller is not the owner");
-        token.upgradeToAndCall(address(anotherImplementation), "");
+        vHYPE.upgradeToAndCall(address(anotherImplementation), "");
     }
 }
 
-contract vHYPEWithExtraFunction is vHYPE {
+contract VHYPEWithExtraFunction is VHYPE {
     function extraFunction() public pure returns (bool) {
         return true;
     }
