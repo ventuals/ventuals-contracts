@@ -11,7 +11,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ProtocolRegistry} from "./ProtocolRegistry.sol";
 
-contract vHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUPSUpgradeable {
+contract VHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUPSUpgradeable {
     ProtocolRegistry public protocolRegistry;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
