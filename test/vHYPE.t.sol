@@ -144,4 +144,75 @@ contract vHYPETest is Test {
         assertEq(token.balanceOf(user2), transferAmount);
         assertEq(token.allowance(user1, user2), 0);
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Upgradeability                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_UpgradeToAndCall_OnlyOwner() public {
+        vHYPEWithExtraFunction newImplementation = new vHYPEWithExtraFunction();
+
+        vm.prank(owner);
+        token.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(token.protocolRegistry()), address(protocolRegistry));
+
+        // Check that the extra function is available
+        vHYPEWithExtraFunction newProxy = vHYPEWithExtraFunction(payable(address(token)));
+        assertTrue(newProxy.extraFunction());
+    }
+
+    function test_UpgradeToAndCall_NotOwner(address notOwner) public {
+        vm.assume(notOwner != owner);
+
+        vHYPEWithExtraFunction newImplementation = new vHYPEWithExtraFunction();
+
+        vm.prank(notOwner);
+        vm.expectRevert("Caller is not the owner");
+        token.upgradeToAndCall(address(newImplementation), "");
+
+        // Check that the extra function is not available
+        vHYPEWithExtraFunction newProxy = vHYPEWithExtraFunction(payable(address(token)));
+        vm.expectRevert();
+        newProxy.extraFunction();
+    }
+
+    function test_ProtocolRegistryUpgradeToAndCall_NewOwner() public {
+        address originalOwner = owner;
+        address newOwner = makeAddr("newOwner");
+
+        // Transfer ownership using 2-step process
+        vm.prank(originalOwner);
+        protocolRegistry.transferOwnership(newOwner);
+
+        vm.prank(newOwner);
+        protocolRegistry.acceptOwnership();
+
+        // Verify ownership has been transferred
+        assertEq(protocolRegistry.owner(), newOwner);
+
+        // New owner upgrades the contract
+        vHYPEWithExtraFunction newImplementation = new vHYPEWithExtraFunction();
+        vm.prank(newOwner);
+        token.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(token.protocolRegistry()), address(protocolRegistry));
+
+        // Check that the extra function is available
+        vHYPEWithExtraFunction newProxy = vHYPEWithExtraFunction(payable(address(token)));
+        assertTrue(newProxy.extraFunction());
+
+        // Verify that the old owner can no longer upgrade
+        vHYPEWithExtraFunction anotherImplementation = new vHYPEWithExtraFunction();
+        vm.prank(originalOwner);
+        vm.expectRevert("Caller is not the owner");
+        token.upgradeToAndCall(address(anotherImplementation), "");
+    }
+}
+
+contract vHYPEWithExtraFunction is vHYPE {
+    function extraFunction() public pure returns (bool) {
+        return true;
+    }
 }

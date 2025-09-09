@@ -328,7 +328,7 @@ contract StakingVaultTest is Test {
     function test_UpgradeToAndCall_NotOwner(address notOwner) public {
         vm.assume(notOwner != owner);
 
-        StakingVault newImplementation = new StakingVault();
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
 
         vm.prank(notOwner);
         vm.expectRevert("Caller is not the owner");
@@ -375,12 +375,6 @@ contract StakingVaultTest is Test {
 }
 
 contract StakingVaultWithExtraFunction is StakingVault {
-    function extraFunction() public pure returns (bool) {
-        return true;
-    }
-}
-
-contract ProtocolRegistryWithExtraFunction is ProtocolRegistry {
     function extraFunction() public pure returns (bool) {
         return true;
     }
