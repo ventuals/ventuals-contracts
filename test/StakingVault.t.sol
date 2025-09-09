@@ -339,9 +339,48 @@ contract StakingVaultTest is Test {
         vm.expectRevert();
         newProxy.extraFunction();
     }
+
+    function test_ProtocolRegistryUpgradeToAndCall_NewOwner() public {
+        address originalOwner = owner;
+        address newOwner = makeAddr("newOwner");
+
+        // Transfer ownership using 2-step process
+        vm.prank(originalOwner);
+        protocolRegistry.transferOwnership(newOwner);
+
+        vm.prank(newOwner);
+        protocolRegistry.acceptOwnership();
+
+        // Verify ownership has been transferred
+        assertEq(protocolRegistry.owner(), newOwner);
+
+        // New owner upgrades the contract
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
+        vm.prank(newOwner);
+        stakingVault.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(stakingVault.protocolRegistry()), address(protocolRegistry));
+
+        // Check that the extra function is available
+        StakingVaultWithExtraFunction newProxy = StakingVaultWithExtraFunction(payable(address(stakingVault)));
+        assertTrue(newProxy.extraFunction());
+
+        // Verify that the old owner can no longer upgrade
+        StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction();
+        vm.prank(originalOwner);
+        vm.expectRevert("Caller is not the owner");
+        stakingVault.upgradeToAndCall(address(anotherImplementation), "");
+    }
 }
 
 contract StakingVaultWithExtraFunction is StakingVault {
+    function extraFunction() public pure returns (bool) {
+        return true;
+    }
+}
+
+contract ProtocolRegistryWithExtraFunction is ProtocolRegistry {
     function extraFunction() public pure returns (bool) {
         return true;
     }
