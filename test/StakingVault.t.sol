@@ -9,6 +9,7 @@ import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
+import {Constants} from "../src/libraries/Constants.sol";
 
 contract StakingVaultTest is Test {
     ProtocolRegistry protocolRegistry;
@@ -290,9 +291,9 @@ contract StakingVaultTest is Test {
         });
         bytes memory encodedDelegatorSummary = abi.encode(mockDelegatorSummary);
         vm.mockCall(
-            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
-            abi.encode(address(stakingVault)),
-            encodedDelegatorSummary
+            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, // Precompile address
+            abi.encode(address(stakingVault)), // Calldata parameters
+            encodedDelegatorSummary // Return data
         );
 
         vm.expectCall(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)));
@@ -302,6 +303,32 @@ contract StakingVaultTest is Test {
         assertEq(result.undelegated, mockDelegatorSummary.undelegated);
         assertEq(result.totalPendingWithdrawal, mockDelegatorSummary.totalPendingWithdrawal);
         assertEq(result.nPendingWithdrawals, mockDelegatorSummary.nPendingWithdrawals);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Spot Balance                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SpotBalance() public {
+        // Mock the L1Read call
+        L1ReadLibrary.SpotBalance memory mockSpotBalance =
+            L1ReadLibrary.SpotBalance({total: 1e18, hold: 0, entryNtl: 0});
+        bytes memory encodedSpotBalance = abi.encode(mockSpotBalance);
+        vm.mockCall(
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, // Precompile address
+            abi.encode(address(stakingVault), Constants.HYPE_TOKEN_ID_MAINNET), // Calldata parameters
+            encodedSpotBalance // Return data
+        );
+
+        vm.expectCall(
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault), Constants.HYPE_TOKEN_ID_MAINNET)
+        );
+
+        L1ReadLibrary.SpotBalance memory result = stakingVault.spotBalance(Constants.HYPE_TOKEN_ID_MAINNET);
+        assertEq(result.total, mockSpotBalance.total);
+        assertEq(result.hold, mockSpotBalance.hold);
+        assertEq(result.entryNtl, mockSpotBalance.entryNtl);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

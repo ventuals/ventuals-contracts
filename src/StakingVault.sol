@@ -63,6 +63,11 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
         return L1ReadLibrary.delegatorSummary(address(this));
     }
 
+    /// @inheritdoc IStakingVault
+    function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
+        return L1ReadLibrary.spotBalance(address(this), tokenId);
+    }
+
     modifier whenNotPaused() {
         require(!protocolRegistry.isPaused(address(this)), "Contract is paused");
         _;
