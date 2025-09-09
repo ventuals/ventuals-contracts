@@ -9,7 +9,6 @@ import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
-import {Constants} from "../src/libraries/Constants.sol";
 
 contract StakingVaultTest is Test {
     ProtocolRegistry protocolRegistry;
@@ -318,16 +317,13 @@ contract StakingVaultTest is Test {
         bytes memory encodedSpotBalance = abi.encode(mockSpotBalance);
         vm.mockCall(
             L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, // Precompile address
-            abi.encode(address(stakingVault), Constants.HYPE_TOKEN_ID_MAINNET), // Calldata parameters
+            abi.encode(address(stakingVault), 1), // Calldata parameters
             encodedSpotBalance // Return data
         );
 
-        vm.expectCall(
-            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
-            abi.encode(address(stakingVault), Constants.HYPE_TOKEN_ID_MAINNET)
-        );
+        vm.expectCall(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault), 1));
 
-        L1ReadLibrary.SpotBalance memory result = stakingVault.spotBalance(Constants.HYPE_TOKEN_ID_MAINNET);
+        L1ReadLibrary.SpotBalance memory result = stakingVault.spotBalance(1);
         assertEq(result.total, mockSpotBalance.total);
         assertEq(result.hold, mockSpotBalance.hold);
         assertEq(result.entryNtl, mockSpotBalance.entryNtl);
