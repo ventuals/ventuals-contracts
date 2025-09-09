@@ -8,6 +8,8 @@ import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 import {VHYPE} from "../src/VHYPE.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {console} from "forge-std/console.sol";
 
 contract GenesisVaultManagerTest is Test {
     GenesisVaultManager genesisVaultManager;
@@ -163,7 +165,7 @@ contract GenesisVaultManagerTest is Test {
     /*                  Tests: Exchange Rate                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_ExchangeRate() public {
+    function test_ExchangeRate_AboveOne() public {
         // Mock total balance to be 4e18
         L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
             delegated: 2e8, // 2 HYPE
@@ -184,17 +186,47 @@ contract GenesisVaultManagerTest is Test {
             abi.encode(mockSpotBalance)
         );
 
-        // Mint some vHYPE tokens
+        // Mint 2 vHYPE tokens
         vm.prank(manager);
-        vHYPE.mint(user, 2e18); // 2 vHYPE tokens
+        vHYPE.mint(user, 2e18);
 
         uint256 exchangeRate = genesisVaultManager.exchangeRate();
-        // 2e18 (total supply) / 4e18 (total balance) = 0.5
+        // 4e18 (total balance) / 2e18 (total supply) = 2
+        assertEq(exchangeRate, 2e18);
+    }
+
+    function test_ExchangeRate_BelowOne() public {
+        // Mock total balance to be 4e18
+        L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
+            delegated: 2e8, // 2 HYPE
+            undelegated: 0,
+            totalPendingWithdrawal: 0,
+            nPendingWithdrawals: 0
+        });
+        vm.mockCall(
+            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault)),
+            abi.encode(mockDelegatorSummary)
+        );
+
+        L1ReadLibrary.SpotBalance memory mockSpotBalance = L1ReadLibrary.SpotBalance({total: 2e8, hold: 0, entryNtl: 0}); // 2 HYPE
+        vm.mockCall(
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault), HYPE_TOKEN_ID),
+            abi.encode(mockSpotBalance)
+        );
+
+        // Mint 8 vHYPE tokens
+        vm.prank(manager);
+        vHYPE.mint(user, 8e18);
+
+        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        // 4e18 (total balance) / 8e18 (total supply) = 0.5
         assertEq(exchangeRate, 0.5e18);
     }
 
     function test_ExchangeRate_ZeroBalance() public {
-        // Mock total balance to be non-zero
+        // Mock total balance to be zero
         L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
             delegated: 0,
             undelegated: 0,
@@ -244,8 +276,108 @@ contract GenesisVaultManagerTest is Test {
         );
 
         // No vHYPE tokens minted, so total supply is 0
+
         uint256 exchangeRate = genesisVaultManager.exchangeRate();
-        assertEq(exchangeRate, 0);
+        assertEq(exchangeRate, 1e18);
+    }
+
+    function test_ExchangeRate_BalanceMoreThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
+        vm.assume(totalBalance >= 1e10); // Minimum to survive division by 1e10
+        vm.assume(vHYPESupply > 0);
+        vm.assume(totalBalance > vHYPESupply);
+        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
+
+        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        assertGt(exchangeRate, 1e18); // exchange rate >= 1
+    }
+
+    function test_ExchangeRate_BalanceLessThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
+        vm.assume(totalBalance > 0);
+        vm.assume(vHYPESupply > 0);
+        vm.assume(totalBalance < vHYPESupply);
+        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
+
+        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        assertLt(exchangeRate, 1e18); // exchange rate <= 1
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*         Tests: HYPETovHYPE and vHYPEtoHYPE Functions       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_HYPETovHYPE_ExchangeRateAboveOne() public {
+        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+        assertEq(genesisVaultManager.HYPETovHYPE(2e18), 1e18);
+    }
+
+    function test_HYPETovHYPE_ExchangeRateBelowOne() public {
+        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 4e18 /* 4 vHYPE */ ); // exchange rate = 0.5
+        assertEq(genesisVaultManager.HYPETovHYPE(2e18), 4e18);
+    }
+
+    function test_HYPETovHYPE_ZeroAmount() public {
+        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+        assertEq(genesisVaultManager.HYPETovHYPE(0), 0);
+    }
+
+    function test_HYPETovHYPE_ZeroExchangeRate_ZeroBalance() public {
+        _mockBalancesForExchangeRate(0, /* 0 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 0
+        assertEq(genesisVaultManager.HYPETovHYPE(1e18), 0);
+    }
+
+    function test_HYPETovHYPE_OneExchangeRate_ZeroSupply() public {
+        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 0 /* 0 vHYPE */ ); // exchange rate = 1
+        assertEq(genesisVaultManager.HYPETovHYPE(2e18), 2e18);
+    }
+
+    function test_vHYPEtoHYPE_ExchangeRateAboveOne() public {
+        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 2e18);
+    }
+
+    function test_vHYPEtoHYPE_ExchangeRateBelowOne() public {
+        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 4e18 /* 4 vHYPE */ ); // exchange rate = 0.5
+        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 0.5e18);
+    }
+
+    function test_vHYPEtoHYPE_ZeroAmount() public {
+        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+        assertEq(genesisVaultManager.vHYPEtoHYPE(0), 0);
+    }
+
+    function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroBalance() public {
+        _mockBalancesForExchangeRate(0, /* 0 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 0
+        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 0);
+    }
+
+    function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroSupply() public {
+        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 0 /* 0 vHYPE */ ); // exchange rate = 1
+        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 1e18);
+    }
+
+    function test_HYPETovHYPE_vHYPEtoHYPE_Roundtrip(
+        uint256 totalBalance,
+        uint256 vHYPESupply,
+        uint256 hypeAmountToConvert
+    ) public {
+        vm.assume(hypeAmountToConvert > 0 && hypeAmountToConvert < 2_000_000 * 1e18);
+
+        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
+
+        // Here we bound the exchange rate to be between 0 and 1e15. Otherwise, we'll see large precision loss
+        // with extremely high exchange rates.
+        //
+        // Extremely high exchange rates are very unlikely to occur in practice. 1e15 is a very geneerous upper
+        // bound for the exchange rate (it's 1 million * 1 million, which would only occur if we've earned
+        // 1 million HYPE for every vHYPE minted).
+        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        vm.assume(exchangeRate > 0 && exchangeRate < 1e15);
+
+        uint256 vHYPEAmount = genesisVaultManager.HYPETovHYPE(hypeAmountToConvert);
+        uint256 convertedBackHYPE = genesisVaultManager.vHYPEtoHYPE(vHYPEAmount);
+
+        // Allow for 1-2 wei difference due to rounding
+        assertApproxEqAbs(convertedBackHYPE, hypeAmountToConvert, 2);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -357,6 +489,47 @@ contract GenesisVaultManagerTest is Test {
 
         assertTrue(success);
         assertEq(address(genesisVaultManager).balance, balanceBefore + amount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Helper Functions                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev Helper function to mock balances for testing exchange rate calculations
+    /// @param totalBalance The total balance of HYPE to mock (in 18 decimals)
+    /// @param vHYPESupply The total supply of vHYPE to mint (in 18 decimals)
+    function _mockBalancesForExchangeRate(uint256 totalBalance, uint256 vHYPESupply) internal {
+        vm.assume(totalBalance / 1e10 <= type(uint64).max);
+
+        // Mock delegator summary and spot balance to achieve the desired total balance
+        uint64 delegatedBalance = totalBalance > 0 ? uint64(totalBalance / 1e10) : 0; // Convert to 8 decimals
+
+        // Mock delegator summary
+        L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
+            delegated: delegatedBalance,
+            undelegated: 0,
+            totalPendingWithdrawal: 0,
+            nPendingWithdrawals: 0
+        });
+        vm.mockCall(
+            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault)),
+            abi.encode(mockDelegatorSummary)
+        );
+
+        // Mock spot balance; zero for simplicity
+        L1ReadLibrary.SpotBalance memory mockSpotBalance = L1ReadLibrary.SpotBalance({total: 0, hold: 0, entryNtl: 0});
+        vm.mockCall(
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault), HYPE_TOKEN_ID),
+            abi.encode(mockSpotBalance)
+        );
+
+        // Mint the desired total supply to owner
+        if (vHYPESupply > 0) {
+            vm.prank(manager);
+            vHYPE.mint(owner, vHYPESupply);
+        }
     }
 }
 
