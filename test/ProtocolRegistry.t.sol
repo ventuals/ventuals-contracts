@@ -166,11 +166,138 @@ contract ProtocolRegistryTest is Test {
         assertFalse(protocolRegistry.isPaused(fuzzContract));
     }
 
-    function test_AuthorizeUpgrade_OnlyOwner() public {
-        address newImplementation = address(0x999);
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Upgradeability                      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_UpgradeToAndCall_OnlyOwner() public {
+        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
+
+        vm.startPrank(owner);
+        protocolRegistry.upgradeToAndCall(address(newImplementation), "");
+        vm.stopPrank();
+
+        // Verify upgrade was successful by checking that it's still functional
+        assertTrue(protocolRegistry.hasRole(protocolRegistry.DEFAULT_ADMIN_ROLE(), owner));
+
+        // Check that the extra function is available
+        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        assertTrue(newProxy.extraFunction());
+    }
+
+    function test_UpgradeToAndCall_NotOwner() public {
+        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
 
         vm.startPrank(user);
         vm.expectRevert();
-        protocolRegistry.upgradeToAndCall(newImplementation, "");
+        protocolRegistry.upgradeToAndCall(address(newImplementation), "");
+
+        // Check that the extra function is not available
+        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        vm.expectRevert();
+        newProxy.extraFunction();
+    }
+
+    function test_UpgradeToAndCall_WithData() public {
+        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
+        bytes memory initData = abi.encodeWithSelector(ProtocolRegistry.grantRole.selector, MANAGER_ROLE, manager);
+
+        vm.startPrank(owner);
+        protocolRegistry.upgradeToAndCall(address(newImplementation), initData);
+
+        // Verify upgrade was successful and data was executed
+        assertTrue(protocolRegistry.hasRole(protocolRegistry.DEFAULT_ADMIN_ROLE(), owner));
+        assertTrue(protocolRegistry.hasRole(MANAGER_ROLE, manager));
+
+        // Check that the extra function is available
+        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        assertTrue(newProxy.extraFunction());
+    }
+
+    function test_UpgradeToAndCall_NotOwnerWithData() public {
+        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
+        bytes memory initData = abi.encodeWithSelector(ProtocolRegistry.grantRole.selector, MANAGER_ROLE, manager);
+
+        vm.startPrank(user);
+        vm.expectRevert();
+        protocolRegistry.upgradeToAndCall(address(newImplementation), initData);
+
+        // Check that the extra function is not available
+        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        vm.expectRevert();
+        newProxy.extraFunction();
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: TransferOwnership                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TransferOwnership_OnlyOwner() public {
+        address newOwner = makeAddr("newOwner");
+
+        vm.startPrank(owner);
+        protocolRegistry.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        // Check that pendingOwner is set but owner hasn't changed yet
+        assertEq(protocolRegistry.pendingOwner(), newOwner);
+        assertEq(protocolRegistry.owner(), owner);
+
+        // New owner accepts ownership
+        vm.startPrank(newOwner);
+        protocolRegistry.acceptOwnership();
+        vm.stopPrank();
+
+        // Check that ownership has transferred
+        assertEq(protocolRegistry.owner(), newOwner);
+        assertEq(protocolRegistry.pendingOwner(), address(0));
+    }
+
+    function test_TransferOwnership_NotOwner() public {
+        address newOwner = makeAddr("newOwner");
+
+        vm.startPrank(user);
+        vm.expectRevert();
+        protocolRegistry.transferOwnership(newOwner);
+        vm.stopPrank();
+    }
+
+    function test_AcceptOwnership_OnlyPendingOwner() public {
+        address newOwner = makeAddr("newOwner");
+
+        vm.startPrank(owner);
+        protocolRegistry.transferOwnership(newOwner);
+        vm.stopPrank();
+
+        // Try to accept ownership from wrong account
+        vm.startPrank(user);
+        vm.expectRevert();
+        protocolRegistry.acceptOwnership();
+        vm.stopPrank();
+
+        // Correct account accepts ownership
+        vm.startPrank(newOwner);
+        protocolRegistry.acceptOwnership();
+        vm.stopPrank();
+
+        assertEq(protocolRegistry.owner(), newOwner);
+    }
+
+    function test_RenounceOwnership_OnlyOwner() public {
+        vm.startPrank(owner);
+        protocolRegistry.renounceOwnership();
+        assertEq(protocolRegistry.owner(), address(0));
+    }
+
+    function test_RenounceOwnership_NotOwner() public {
+        vm.startPrank(user);
+        vm.expectRevert();
+        protocolRegistry.renounceOwnership();
+    }
+}
+
+contract ProtocolRegistryWithExtraFunction is ProtocolRegistry {
+    function extraFunction() public pure returns (bool) {
+        return true;
     }
 }
