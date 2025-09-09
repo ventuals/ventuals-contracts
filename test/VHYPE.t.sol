@@ -6,7 +6,7 @@ import {VHYPE} from "../src/VHYPE.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
 
-contract vHYPETest is Test {
+contract VHYPETest is Test {
     ProtocolRegistry protocolRegistry;
     VHYPE public vHYPE;
 
