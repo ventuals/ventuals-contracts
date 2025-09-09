@@ -170,7 +170,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
 
     /// @dev Convert an amount from 18 decimals to 8 decimals. Used for converting HYPE values to 8 decimals before sending to HyperCore.
     function _convertTo8Decimals(uint256 amount) internal pure returns (uint64) {
-        return uint64(amount / 1e10);
+        return SafeCast.toUint64(amount / 1e10);
     }
 
     /// @dev Function to receive HYPE when msg.data is empty
