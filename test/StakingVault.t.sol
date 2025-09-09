@@ -8,6 +8,7 @@ import {StakingVault} from "../src/StakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
+import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 
 contract StakingVaultTest is Test {
     ProtocolRegistry protocolRegistry;
@@ -273,6 +274,34 @@ contract StakingVaultTest is Test {
         vm.prank(notOperator);
         vm.expectRevert("Caller is not an operator");
         stakingVault.addApiWallet(apiWalletAddress, name);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Delegator Summary                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_DelegatorSummary() public {
+        // Mock the L1Read call
+        L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
+            delegated: 1e18,
+            undelegated: 0,
+            totalPendingWithdrawal: 0,
+            nPendingWithdrawals: 0
+        });
+        bytes memory encodedDelegatorSummary = abi.encode(mockDelegatorSummary);
+        vm.mockCall(
+            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault)),
+            encodedDelegatorSummary
+        );
+
+        vm.expectCall(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)));
+
+        L1ReadLibrary.DelegatorSummary memory result = stakingVault.delegatorSummary();
+        assertEq(result.delegated, mockDelegatorSummary.delegated);
+        assertEq(result.undelegated, mockDelegatorSummary.undelegated);
+        assertEq(result.totalPendingWithdrawal, mockDelegatorSummary.totalPendingWithdrawal);
+        assertEq(result.nPendingWithdrawals, mockDelegatorSummary.nPendingWithdrawals);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
