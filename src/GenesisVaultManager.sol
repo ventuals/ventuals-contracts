@@ -59,9 +59,9 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
     function deposit() public payable canDeposit {
         uint256 requestedDepositAmount = msg.value;
-        uint256 availableDepositAmount = vaultCapacity - totalBalance();
+        uint256 availableCapacity = vaultCapacity - totalBalance();
         uint256 amountToDeposit =
-            requestedDepositAmount > availableDepositAmount ? availableDepositAmount : requestedDepositAmount;
+            requestedDepositAmount > availableCapacity ? availableCapacity : requestedDepositAmount;
 
         // Mint vHYPE
         // IMPORTANT: We need to make sure that we mint the vHYPE _before_ transferring the HYPE to the staking vault,
@@ -76,7 +76,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         // Stake HYPE if needed
         uint256 stakingCapacity = vaultCapacity - evmReserve;
         uint256 stakingAccBalance = stakingAccountBalance();
-        uint256 amountToStake = stakingCapacity < stakingAccBalance ? 0 : stakingCapacity - stakingAccBalance;
+        uint256 availableStakingCapacity = stakingCapacity - stakingAccBalance;
+        uint256 amountToStake = availableStakingCapacity < amountToDeposit ? availableStakingCapacity : amountToDeposit;
         if (amountToStake > 0) {
             stakingVault.stakingDeposit(_convertTo8Decimals(amountToStake)); // HyperEVM -> HyperCore transfer
             stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToStake), false); // Delegate HYPE to validator (on HyperCore)
