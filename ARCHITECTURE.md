@@ -68,6 +68,29 @@ sequenceDiagram
     GVM-->>-User: Success
 ```
 
+## Protocol withdraw (single-step)
+
+Executes a single-step withdraw process if we leave HYPE as HyperEVM reserves.
+No HyperCore interactions are required.
+
+```mermaid
+%%{init: {'theme':'neo-dark'}}%%
+sequenceDiagram
+    participant Owner
+    participant GVM as GenesisVaultManager
+    participant SV as StakingVault
+
+    Note over Owner,SV: Withdrawal from Vault
+
+    Owner->>+GVM: protocolWithdraw(amount, purpose)
+
+    GVM->>GVM: cumulativeProtocolWithdrawals += amount
+    GVM->>SV: transferHype(payable(owner), amount)
+    SV->>Owner: Transfer HYPE to owner
+
+    GVM-->>-Owner: Withdraw complete
+```
+
 ## Protocol withdraw (multi-step)
 
 Executes a multi-step withdraw process if we stake all HYPE and don't leave any HYPE as HyperEVM reserves.
