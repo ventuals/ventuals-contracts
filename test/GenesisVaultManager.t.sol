@@ -23,8 +23,8 @@ contract GenesisVaultManagerTest is Test {
     address public user = makeAddr("user");
 
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
-    uint256 public constant VAULT_CAPACITY = 1000e18; // 1000 HYPE
-    uint256 public constant EVM_RESERVE = 100e18; // 100 HYPE
+    uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
+    uint256 public constant EVM_RESERVE = 200_000 * 1e18; // 200k HYPE
 
     function setUp() public {
         // Deploy ProtocolRegistry
@@ -385,7 +385,7 @@ contract GenesisVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_SetVaultCapacity_OnlyOwner() public {
-        uint256 newCapacity = 2000e18;
+        uint256 newCapacity = 1_500_000 * 1e18;
 
         vm.prank(owner);
         genesisVaultManager.setVaultCapacity(newCapacity);
@@ -394,7 +394,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetVaultCapacity_NotOwner() public {
-        uint256 newCapacity = 2000e18;
+        uint256 newCapacity = 1_500_000 * 1e18;
 
         vm.prank(user);
         vm.expectRevert("Caller is not the owner");
@@ -402,7 +402,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetVaultCapacity_MustBeGreaterThanEvmReserve() public {
-        uint256 invalidCapacity = 50e18; // Less than EVM_RESERVE (100e18)
+        uint256 invalidCapacity = 100_000 * 1e18; // Less than EVM_RESERVE (200_000 * 1e18)
 
         vm.prank(owner);
         vm.expectRevert("Vault capacity must be greater than EVM reserve");
@@ -410,7 +410,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetEvmReserve_OnlyOwner() public {
-        uint256 newReserve = 200e18;
+        uint256 newReserve = 100_000 * 1e18;
 
         vm.prank(owner);
         genesisVaultManager.setEvmReserve(newReserve);
@@ -419,7 +419,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetEvmReserve_NotOwner() public {
-        uint256 newReserve = 200e18;
+        uint256 newReserve = 100_000 * 1e18;
 
         vm.prank(user);
         vm.expectRevert("Caller is not the owner");
@@ -427,7 +427,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetEvmReserve_MustBeLessThanVaultCapacity() public {
-        uint256 invalidReserve = 1500e18; // Greater than VAULT_CAPACITY (1000e18)
+        uint256 invalidReserve = 2_000_000 * 1e18; // Greater than VAULT_CAPACITY (1_200_000 * 1e18)
 
         vm.prank(owner);
         vm.expectRevert("EVM reserve must be less than vault capacity");
