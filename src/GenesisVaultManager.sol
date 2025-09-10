@@ -117,14 +117,14 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         uint256 balance = totalBalance();
         uint256 totalSupply = vHYPE.totalSupply();
 
-        // If we have no HYPE in the vault, the exchange rate is 0
-        if (balance == 0) {
-            return 0;
-        }
-
         // If we have no vHYPE in circulation, the exchange rate is 1
         if (totalSupply == 0) {
             return 1e18;
+        }
+
+        // If we have no HYPE in the vault, the exchange rate is 0
+        if (balance == 0) {
+            return 0;
         }
 
         return Math.mulDiv(balance, 1e18, totalSupply);
