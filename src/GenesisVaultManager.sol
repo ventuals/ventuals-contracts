@@ -36,6 +36,14 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev This amount should be included in the exchange rate calculation
     uint256 public cumulativeProtocolWithdrawals;
 
+    /// @notice Emitted when HYPE is deposited into the vault
+    /// @param depositor The address that deposited the HYPE
+    /// @param minted The amount of vHYPE minted (in 18 decimals)
+    /// @param delegated The amount of HYPE delegated to validators (in 18 decimals)
+    /// @param notDelegated The amount of HYPE that was not delegated to validators (in 18 decimals)
+    /// @param refunded The amount of HYPE refunded (in 18 decimals)
+    event Deposit(address indexed depositor, uint256 minted, uint256 delegated, uint256 notDelegated, uint256 refunded);
+
     /// @notice Emitted when HYPE is withdrawn from the vault for protocol purposes
     /// @param sender The address that withdrew the HYPE
     /// @param amount The amount of HYPE withdrawn
@@ -77,7 +85,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         // IMPORTANT: We need to make sure that we mint the vHYPE _before_ transferring the HYPE to the staking vault,
         // otherwise the exchange rate will be incorrect. We want the exchange rate to be calculated based on the total
         // HYPE in the vault _before_ the deposit
-        vHYPE.mint(msg.sender, HYPETovHYPE(amountToDeposit));
+        uint256 amountToMint = HYPETovHYPE(amountToDeposit);
+        vHYPE.mint(msg.sender, amountToMint);
 
         // Transfer HYPE to the staking vault (HyperEVM -> HyperEVM transfer)
         (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
@@ -98,6 +107,14 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
             (success,) = payable(msg.sender).call{value: requestedDepositAmount - amountToDeposit}("");
             require(success, "Refund failed"); // TODO: Change to typed error
         }
+
+        emit Deposit(
+            msg.sender, /* depositor */
+            amountToMint, /* minted */
+            amountToStake, /* delegated */
+            amountToDeposit - amountToStake, /* notDelegated */
+            requestedDepositAmount - amountToDeposit /* refunded */
+        );
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
