@@ -142,7 +142,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @notice Returns the exchange rate of HYPE to vHYPE (in 18 decimals)
     /// @dev Ratio of total HYPE in the staking vault to vHYPE
     function exchangeRate() public view returns (uint256) {
-        uint256 balance = totalBalance() + cumulativeProtocolWithdrawals;
+        uint256 balance = totalBalance();
         uint256 totalSupply = vHYPE.totalSupply();
 
         // If we have no vHYPE in circulation, the exchange rate is 1
@@ -159,9 +159,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     /// @notice Returns the total HYPE balance in the vault (in 18 decimals)
-    /// @dev Sum of staking account balance (on HyperCore), spot account balance (on HyperCore), and contract balance (on HyperEVM)
+    /// @dev Sum of staking account balance (on HyperCore), spot account balance (on HyperCore), contract balance (on HyperEVM), and cumulative protocol withdrawals
     function totalBalance() public view returns (uint256) {
-        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance;
+        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance
+            + cumulativeProtocolWithdrawals;
     }
 
     /// @notice Total HYPE balance in the staking vault's staking account balance (in 18 decimals)
