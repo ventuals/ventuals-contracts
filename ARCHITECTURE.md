@@ -10,51 +10,59 @@ sequenceDiagram
     participant GVM as GenesisVaultManager
     participant vHYPE as vHYPE Token
     participant SV as StakingVault
-    participant HC as HyperCore
+    participant L1R as L1Read
+    participant HCSP as HyperCore Spot
+    participant HCST as HyperCore Staking
 
     User->>+GVM: deposit() {value: HYPE amount}
 
-    Note over GVM: Check canDeposit modifier
-    GVM->>GVM: Check vault capacity vs totalBalance()
+    Note over GVM: Check vault balance
 
-    Note over GVM: Calculate deposit amounts
-    GVM->>GVM: Calculate availableCapacity = vaultCapacity - totalBalance()
-    GVM->>GVM: amountToDeposit = min(requestedAmount, availableCapacity)
+    rect
+        Note over GVM,HCST: Aggregates balances across all accounts
 
-    Note over GVM: Mint vHYPE first (before transferring HYPE)
-    GVM->>GVM: Calculate amountToMint = HYPETovHYPE(amountToDeposit)
+        GVM->>+L1R: Get HyperCore balances
+        L1R->>+HCSP: Get spot balance
+        HCSP-->>-L1R: spot balance
+        L1R->>+HCST: Get staking balance
+        HCST-->>-L1R: staking balance
+        L1R-->>-GVM: HyperCore balances
+        GVM->>+SV: Get EVM balance
+        SV-->>-GVM: EVM balance
+        GVM->>GVM: Get protocol withdrawals
+        GVM->>GVM: totalBalance = HyperCore + EVM + protocol withdrawals
+    end
+
+    Note over GVM: Mint vHYPE
     GVM->>+vHYPE: mint(msg.sender, amountToMint)
-    vHYPE->>vHYPE: _mint(to, amount)
-    vHYPE-->>-GVM: Success
+    vHYPE-->>-User: vHYPE tokens
 
-    Note over GVM: Transfer HYPE to StakingVault
-    GVM->>+SV: call{value: amountToDeposit}("")
-    SV->>SV: receive() - emit Received event
-    SV-->>-GVM: Success
+    Note over GVM: Stake
 
-    alt amountToDeposit > 0
-        Note over GVM: Stake HYPE on HyperCore
-        GVM->>+SV: stakingDeposit(_convertTo8Decimals(amountToDeposit))
-        SV->>+HC: CoreWriterLibrary.stakingDeposit(weiAmount)
-        Note over HC: Transfer HYPE from HyperEVM to HyperCore Staking Account
-        HC-->>-SV: Success
+    rect
+        Note over GVM,HCST: Transfer and stake HYPE via StakingVault
+        GVM->>+SV: Transfer HYPE to EVM
         SV-->>-GVM: Success
+        GVM->>+SV: Transfer HYPE to Spot
+        SV->>+HCSP: Transfer HYPE to Spot
+        HCSP-->>-SV: Success
+        SV-->>-GVM: HYPE transferred to Spot
 
-        Note over GVM: Delegate HYPE to validator
-        GVM->>+SV: tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToDeposit), false)
-        SV->>+HC: CoreWriterLibrary.tokenDelegate(validator, weiAmount, false)
-        Note over HC: Delegate HYPE to specified validator
-        HC-->>-SV: Success
-        SV-->>-GVM: Success
+        GVM->>+SV: Transfer HYPE to Staking
+        SV->>+HCST: Transfer HYPE to Staking
+        HCST-->>-SV: Success
+        SV-->>-GVM: HYPE transferred to Staking
+
+        GVM->>+SV: Delegate HYPE
+        SV->>+HCST: Delegate HYPE
+        HCST-->>-SV: Success
+        SV-->>-GVM: HYPE delegated
     end
 
-    alt requestedAmount > amountToDeposit
+    alt requestedAmount > remainingCapacity
         Note over GVM: Refund excess HYPE
-        GVM->>User: call{value: excess}("") - Refund
+        GVM->>User: call{value: refund}("")
     end
-
-    Note over GVM: Emit Deposit event
-    GVM->>GVM: emit Deposit(depositor, minted, deposited, refunded)
 
     GVM-->>-User: Success
 ```
