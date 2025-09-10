@@ -63,18 +63,20 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         uint256 amountToDeposit =
             requestedDepositAmount > availableDepositAmount ? availableDepositAmount : requestedDepositAmount;
 
+        // Mint vHYPE
+        // IMPORTANT: We need to make sure that we mint the vHYPE _before_ transferring the HYPE to the staking vault,
+        // otherwise the exchange rate will be incorrect. We want the exchange rate to be calculated based on the total
+        // HYPE in the vault _before_ the deposit
+        vHYPE.mint(msg.sender, HYPETovHYPE(amountToDeposit));
+
         // Transfer HYPE to the staking vault (HyperEVM -> HyperEVM transfer)
         (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
         require(success, "Transfer failed"); // TODO: Change to typed error
 
-        // Mint vHYPE
-        // IMPORTANT: We need to make sure that we transfer the HYPE to the staking vault _before_ minting vHYPE, otherwise the exchange rate will be incorrect
-        // We want the exchange rate to be calculated based on the total HYPE in the vault _after_ the deposit
-        vHYPE.mint(msg.sender, HYPETovHYPE(amountToDeposit));
-
         // Stake HYPE if needed
-        uint256 stakingAmountLimit = amountToDeposit - evmReserve;
-        uint256 amountToStake = stakingAmountLimit - stakingAccountBalance();
+        uint256 stakingCapacity = vaultCapacity - evmReserve;
+        uint256 stakingAccBalance = stakingAccountBalance();
+        uint256 amountToStake = stakingCapacity < stakingAccBalance ? 0 : stakingCapacity - stakingAccBalance;
         if (amountToStake > 0) {
             stakingVault.stakingDeposit(_convertTo8Decimals(amountToStake)); // HyperEVM -> HyperCore transfer
             stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToStake), false); // Delegate HYPE to validator (on HyperCore)
