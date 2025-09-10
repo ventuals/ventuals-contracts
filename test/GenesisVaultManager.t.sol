@@ -72,7 +72,7 @@ contract GenesisVaultManagerTest is Test {
     /*                 Tests: Initialization                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_Initialize() public {
+    function test_Initialize() public view {
         assertEq(address(genesisVaultManager.protocolRegistry()), address(protocolRegistry));
         assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
