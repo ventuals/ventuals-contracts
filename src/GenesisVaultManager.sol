@@ -180,6 +180,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     /// @notice Withdraws HYPE for protocol purposes (e.g., seeding liquidity pools)
+    /// @dev Withdraws HYPE from the vault's EVM account (on HyperEVM)
     /// @param amount Amount to withdraw (in 18 decimals)
     /// @param purpose Description of withdrawal purpose
     function protocolWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
