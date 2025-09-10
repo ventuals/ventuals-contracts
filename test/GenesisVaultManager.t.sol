@@ -12,8 +12,6 @@ import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
-import {MockCoreWriterLibrary} from "./helpers/MockCoreWriterLibrary.sol";
-import {console} from "forge-std/console.sol";
 
 contract GenesisVaultManagerTest is Test {
     GenesisVaultManager genesisVaultManager;
@@ -89,6 +87,287 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.initialize(
             address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, EVM_RESERVE
         );
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     Tests: Deposit Function               */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_Deposit_FullDepositIntoEmptyVault() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check that we minted 1:1 vHYPE when vault is empty
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, depositAmount);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+
+        // Check user's HYPE balance was deducted
+        assertEq(user.balance, 0);
+    }
+
+    function test_Deposit_PartialDepositIntoEmptyVault() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        uint256 depositAmount = 1_500_000 * 1e18; // 1.5M HYPE (more than capacity)
+
+        // Mock staking vault calls
+        uint256 expectedStakeAmount = VAULT_CAPACITY - EVM_RESERVE;
+        _mockAndExpectStakingDepositCall(uint64(expectedStakeAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check that we minted 1:1 vHYPE when vault is empty
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, VAULT_CAPACITY);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), VAULT_CAPACITY); // Should be exactly equal
+
+        // Check user was refunded the excess
+        uint256 expectedRefund = depositAmount - VAULT_CAPACITY;
+        assertEq(user.balance, expectedRefund);
+    }
+
+    function test_Deposit_FullDeposit() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k HYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // 1:1 ratio
+
+        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check vHYPE was minted at 1:1 exchange rate
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, depositAmount);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+
+        // Check user's HYPE balance was deducted
+        assertEq(user.balance, 0);
+    }
+
+    function test_Deposit_PartialDeposit() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // 1:1 ratio
+
+        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted; and only 500k HYPE will be staked
+        uint256 depositAmount = 1_000_000 * 1e18;
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(500_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check vHYPE was minted at 1:1 exchange rate
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, 700_000 * 1e18);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18); // Should be exactly equal
+
+        // Check user was refunded the excess
+        assertEq(user.balance, 300_000 * 1e18);
+    }
+
+    function test_Deposit_ExchangeRateAboveOneFullDeposit() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 250_000 * 1e18; // 250k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 2
+
+        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, depositAmount / 2);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+
+        // Check user's HYPE balance was deducted
+        assertEq(user.balance, 0);
+    }
+
+    function test_Deposit_ExchangeRateAboveOnePartialDeposit() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 250_000 * 1e18; // 250k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 2
+
+        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted; and only 500k HYPE will be staked
+        uint256 depositAmount = 1_000_000 * 1e18;
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(500_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, 350_000 * 1e18);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18); // Should be exactly equal
+
+        // Check user was refunded the excess
+        assertEq(user.balance, 300_000 * 1e18);
+    }
+
+    function test_Deposit_ExchangeRateBelowOneFullDeposit() public {
+        uint256 existingBalance = 250_000 * 1e18; // 250k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 0.5
+
+        uint256 depositAmount = 250_000 * 1e18; // 250k HYPE
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, depositAmount * 2);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+
+        // Check user's HYPE balance was deducted
+        assertEq(user.balance, 0);
+    }
+
+    function test_Deposit_ExchangeRateBelowOnePartialDeposit() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 1_000_000 * 1e18; // 1M vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 0.5
+
+        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted; and only 500k HYPE will be staked
+        uint256 depositAmount = 1_000_000 * 1e18; // 1M HYPE
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(500_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.startPrank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+        assertEq(userVHYPEBalance, 700_000 * 2 * 1e18);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18); // Should be exactly equal
+
+        // Check user was refunded the excess
+        assertEq(user.balance, 300_000 * 1e18);
+    }
+
+    function test_Deposit_NoStakingWhenAtStakingCapacity() public {
+        // Reached staking capacity, but not the total vault capacity. All HYPE will be kept for EVM reserves.
+
+        uint256 stakingCapacity = VAULT_CAPACITY - EVM_RESERVE; // 1M HYPE
+        uint256 existingSupply = stakingCapacity;
+        _mockBalancesForExchangeRate(stakingCapacity, existingSupply);
+
+        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
+
+        // Should NOT call staking functions since staking balance is already at capacity
+        vm.expectCall(
+            address(stakingVault),
+            abi.encodeWithSelector(stakingVault.stakingDeposit.selector),
+            0 // Expect 0 calls
+        );
+
+        vm.deal(user, depositAmount);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // vHYPE should be minted at 1:1 exchange rate
+        uint256 expectedVHYPE = (depositAmount * 1e18) / 1e18;
+        assertEq(vHYPE.balanceOf(user), expectedVHYPE);
+    }
+
+    function test_Deposit_RevertWhenVaultFull(uint256 depositAmount) public {
+        _mockBalancesForExchangeRate(VAULT_CAPACITY, VAULT_CAPACITY);
+
+        vm.deal(user, depositAmount);
+        vm.prank(user);
+        vm.expectRevert("Vault is full");
+        genesisVaultManager.deposit{value: depositAmount}();
+    }
+
+    function test_Deposit_ZeroAmount() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
+
+        vm.prank(user);
+        genesisVaultManager.deposit{value: 0}();
+
+        // No vHYPE should be minted
+        assertEq(vHYPE.balanceOf(user), 0);
+    }
+
+    function test_Deposit_RevertWhenTransferFails() public {
+        // Upgrade staking vault to a version that rejects transfers
+        StakingVaultThatRejectsTransfers newImplementation = new StakingVaultThatRejectsTransfers();
+        vm.prank(owner);
+        stakingVault.upgradeToAndCall(address(newImplementation), "");
+
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
+
+        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+
+        vm.deal(user, depositAmount);
+        vm.prank(user);
+        vm.expectRevert("Transfer failed");
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check that no vHYPE was minted
+        assertEq(vHYPE.balanceOf(user), 0);
+    }
+
+    function test_Deposit_RevertWhenRefundFails() public {
+        uint256 existingBalance = 1_000_000 * 1e18; // 1M HYPE
+        uint256 existingSupply = 1_000_000 * 1e18; // 1M vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
+
+        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+
+        // Create a contract that rejects refunds
+        ContractThatRejectsTransfers contractThatRejectsTransfers = new ContractThatRejectsTransfers();
+
+        vm.deal(address(contractThatRejectsTransfers), depositAmount);
+        vm.prank(address(contractThatRejectsTransfers));
+        vm.expectRevert("Refund failed");
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check that no vHYPE was minted
+        assertEq(vHYPE.balanceOf(address(contractThatRejectsTransfers)), 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -495,344 +774,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     Tests: Deposit Function               */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function test_Deposit_FullDepositIntoEmptyVault() public {
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
-        vm.deal(user, depositAmount);
-
-        // Mock empty vault balances (0 balances)
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
-        // Mock staking vault calls
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check that we minted 1:1 vHYPE when vault is empty
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 500_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 500_000 * 1e18);
-
-        // Check user's HYPE balance was deducted
-        assertEq(user.balance, 0);
-    }
-
-    function test_Deposit_PartialDepositIntoEmptyVault() public {
-        uint256 depositAmount = 1_500_000 * 1e18; // 1.5M HYPE (more than capacity)
-        vm.deal(user, depositAmount);
-
-        uint256 expectedRefund = depositAmount - VAULT_CAPACITY;
-
-        // Mock empty vault balances (0 balances)
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
-        // Mock staking vault calls
-        uint256 expectedStakeAmount = VAULT_CAPACITY - EVM_RESERVE;
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(expectedStakeAmount / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(expectedStakeAmount / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false
-        );
-
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check that we minted 1:1 vHYPE when vault is empty
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, VAULT_CAPACITY);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), VAULT_CAPACITY);
-
-        // Check user was refunded the excess
-        assertEq(user.balance, expectedRefund);
-    }
-
-    function test_Deposit_FullDeposit() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
-        vm.deal(user, depositAmount);
-
-        // Setup existing balance (mock as staking balance)
-        _mockBalancesForExchangeRate(existingBalance, 500_000 * 1e18); // 1:1 ratio
-
-        // Mock staking vault calls
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check vHYPE was minted at 1:1 exchange rate
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, depositAmount);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount);
-
-        // Check user's HYPE balance was deducted
-        assertEq(user.balance, 0);
-    }
-
-    function test_Deposit_PartialDeposit() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 depositAmount = 1_000_000 * 1e18; // 1M HYPE
-        vm.deal(user, depositAmount);
-
-        // Setup existing balance (mock as staking balance)
-        _mockBalancesForExchangeRate(existingBalance, 500_000 * 1e18); // 1:1 ratio
-
-        // Mock staking vault calls
-        uint256 expectedStakeAmount = 500_000 * 1e18;
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(expectedStakeAmount / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(expectedStakeAmount / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false
-        );
-
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check vHYPE was minted at 1:1 exchange rate
-        assertEq(vHYPE.balanceOf(user), 700_000 * 1e18);
-
-        // Check user was refunded the excess
-        assertEq(user.balance, 300_000 * 1e18);
-    }
-
-    function test_Deposit_ExchangeRateAboveOneFullDeposit() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 vHYPESupply = 250_000 * 1e18; // 250k vHYPE (exchange rate = 2)
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        // Mock staking vault calls
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-
-        vm.deal(user, depositAmount);
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 250_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 500_000 * 1e18);
-
-        // Check user's HYPE balance was deducted
-        assertEq(user.balance, 0);
-    }
-
-    function test_Deposit_ExchangeRateAboveOnePartialDeposit() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 vHYPESupply = 250_000 * 1e18; // 250k vHYPE (exchange rate = 2)
-        uint256 depositAmount = 1_000_000 * 1e18; // 1M HYPE
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        // Mock staking vault calls
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(500_000 * 1e18 / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(500_000 * 1e18 / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false
-        );
-
-        vm.deal(user, depositAmount);
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 350_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18);
-
-        // Check user was refunded the excess
-        assertEq(user.balance, 300_000 * 1e18);
-    }
-
-    function test_Deposit_ExchangeRateBelowOneFullDeposit() public {
-        uint256 existingBalance = 250_000 * 1e18; // 250k HYPE
-        uint256 vHYPESupply = 500_000 * 1e18; // 500k vHYPE (exchange rate = 0.5)
-        uint256 depositAmount = 250_000 * 1e18; // 250k HYPE
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        // Mock staking vault calls
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(depositAmount / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false
-        );
-
-        vm.deal(user, depositAmount);
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 500_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 250_000 * 1e18);
-
-        // Check user's HYPE balance was deducted
-        assertEq(user.balance, 0);
-    }
-
-    function test_Deposit_ExchangeRateBelowOnePartialDeposit() public {
-        // We expect 700k HYPE to be accepted; 300k refunded. Of the accepted 700k HYPE, 500k HYPE to be staked
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 vHYPESupply = 1_000_000 * 1e18; // 1M vHYPE (exchange rate = 0.5)
-        uint256 depositAmount = 1_000_000 * 1e18; // 1M HYPE
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        // Mock staking vault calls
-        MockCoreWriterLibrary.mockStakingDeposit(vm, uint64(500_000 * 1e18 / 1e10));
-        MockCoreWriterLibrary.mockTokenDelegate(
-            vm, genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false
-        );
-        MockCoreWriterLibrary.expectStakingDepositCall(vm, uint64(500_000 * 1e18 / 1e10));
-        MockCoreWriterLibrary.expectTokenDelegateCall(
-            vm, genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false
-        );
-
-        vm.deal(user, depositAmount);
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 1_400_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18);
-
-        // Check user was refunded the excess
-        assertEq(user.balance, 300_000 * 1e18);
-    }
-
-    function test_Deposit_NoStakingWhenAtCapacity() public {
-        uint256 stakingCapacity = VAULT_CAPACITY - EVM_RESERVE; // 1M HYPE
-        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
-
-        // Setup scenario where staking is already at capacity
-        _mockBalancesForExchangeRate(stakingCapacity, stakingCapacity);
-        vm.deal(user, depositAmount);
-
-        // Should NOT call staking functions since staking balance is already at capacity
-        vm.expectCall(
-            address(stakingVault),
-            abi.encodeWithSelector(stakingVault.stakingDeposit.selector),
-            0 // Expect 0 calls
-        );
-
-        vm.prank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // vHYPE should still be minted
-        uint256 expectedVHYPE = (depositAmount * 1e18) / 1e18; // 1:1 exchange rate
-        assertEq(vHYPE.balanceOf(user), expectedVHYPE);
-    }
-
-    function test_Deposit_RevertWhenVaultFull(uint256 depositAmount) public {
-        // Fill the vault to capacity
-        _mockBalancesForExchangeRate(VAULT_CAPACITY, VAULT_CAPACITY);
-
-        vm.deal(user, depositAmount);
-
-        vm.prank(user);
-        vm.expectRevert("Vault is full");
-        genesisVaultManager.deposit{value: depositAmount}();
-    }
-
-    function test_Deposit_ZeroAmount() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 vHYPESupply = 250_000 * 1e18; // 250k vHYPE (exchange rate = 2)
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        vm.prank(user);
-        genesisVaultManager.deposit{value: 0}();
-
-        // No vHYPE should be minted
-        assertEq(vHYPE.balanceOf(user), 0);
-    }
-
-    function test_Deposit_RevertWhenTransferFails() public {
-        // Upgrade staking vault to a version that rejects transfers
-        StakingVaultThatRejectsTransfers newImplementation = new StakingVaultThatRejectsTransfers();
-        vm.prank(owner);
-        stakingVault.upgradeToAndCall(address(newImplementation), "");
-
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 vHYPESupply = 250_000 * 1e18; // 250k vHYPE (exchange rate = 2)
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        vm.deal(user, depositAmount);
-        vm.prank(user);
-        vm.expectRevert("Transfer failed");
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check that no vHYPE was minted
-        assertEq(vHYPE.balanceOf(user), 0);
-    }
-
-    function test_Deposit_RevertWhenRefundFails() public {
-        uint256 existingBalance = 1_000_000 * 1e18; // 1M HYPE
-        uint256 vHYPESupply = 1_000_000 * 1e18; // 1M vHYPE (exchange rate = 1)
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
-
-        // Create a contract that rejects refunds
-        ContractThatRejectsTransfers contractThatRejectsTransfers = new ContractThatRejectsTransfers();
-        vm.deal(address(contractThatRejectsTransfers), depositAmount);
-
-        // Setup vault balances
-        _mockBalancesForExchangeRate(existingBalance, vHYPESupply);
-
-        vm.deal(address(contractThatRejectsTransfers), depositAmount);
-        vm.prank(address(contractThatRejectsTransfers));
-        vm.expectRevert("Refund failed");
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check that no vHYPE was minted
-        assertEq(vHYPE.balanceOf(address(contractThatRejectsTransfers)), 0);
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Helper Functions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -855,6 +796,8 @@ contract GenesisVaultManagerTest is Test {
         }
     }
 
+    /// @dev Helper function to mock delegator summary for testing staking deposit calls
+    /// @param delegated The delegated balance to mock (in 8 decimals)
     function _mockDelegatorSummary(uint64 delegated) internal {
         vm.mockCall(
             L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
@@ -870,12 +813,50 @@ contract GenesisVaultManagerTest is Test {
         );
     }
 
+    /// @dev Helper function to mock spot balance for testing staking deposit calls
+    /// @param total The total balance to mock (in 8 decimals)
     function _mockSpotBalance(uint64 total) internal {
         vm.mockCall(
             L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
             abi.encode(address(stakingVault), HYPE_TOKEN_ID),
             abi.encode(L1ReadLibrary.SpotBalance({total: total, hold: 0, entryNtl: 0}))
         );
+    }
+
+    function _mockAndExpectStakingDepositCall(uint64 weiAmount) internal {
+        bytes memory encodedAction = abi.encode(weiAmount);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x04; // Staking deposit action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+    }
+
+    function _mockAndExpectTokenDelegateCall(address validator, uint64 weiAmount, bool isUndelegate) internal {
+        bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 }
 
