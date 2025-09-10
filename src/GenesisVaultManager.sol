@@ -32,6 +32,16 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev This amount will not be transferred to the vault's staking account, nor staked with validators.
     uint256 public evmReserve;
 
+    /// @notice Total HYPE that has been withdrawn from the vault for protocol purposes (e.g., liquidity pools)
+    /// @dev This amount should be included in the exchange rate calculation
+    uint256 public cumulativeProtocolWithdrawals;
+
+    /// @notice Emitted when HYPE is withdrawn from the vault for protocol purposes
+    /// @param sender The address that withdrew the HYPE
+    /// @param amount The amount of HYPE withdrawn
+    /// @param purpose The purpose of the withdrawal
+    event ProtocolWithdrawal(address indexed sender, uint256 amount, string purpose);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
         HYPE_TOKEN_ID = _hypeTokenId;
@@ -115,7 +125,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @notice Returns the exchange rate of HYPE to vHYPE (in 18 decimals)
     /// @dev Ratio of total HYPE in the staking vault to vHYPE
     function exchangeRate() public view returns (uint256) {
-        uint256 balance = totalBalance();
+        uint256 balance = totalBalance() + cumulativeProtocolWithdrawals;
         uint256 totalSupply = vHYPE.totalSupply();
 
         // If we have no vHYPE in circulation, the exchange rate is 1
@@ -150,6 +160,18 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     function spotAccountBalance() public view returns (uint256) {
         L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(HYPE_TOKEN_ID);
         return _convertTo18Decimals(spotBalance.total);
+    }
+
+    /// @notice Withdraws HYPE for protocol purposes (e.g., seeding liquidity pools)
+    /// @param amount Amount to withdraw (in 18 decimals)
+    /// @param purpose Description of withdrawal purpose
+    function protocolWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
+        require(address(stakingVault).balance >= amount, "Insufficient EVM balance"); // TODO: Change to typed error
+
+        cumulativeProtocolWithdrawals += amount;
+        stakingVault.transferHype(payable(msg.sender), amount);
+
+        emit ProtocolWithdrawal(msg.sender, amount, purpose);
     }
 
     /// @notice Sets the vault capacity (in 18 decimals)
