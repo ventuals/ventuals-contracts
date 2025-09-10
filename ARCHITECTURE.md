@@ -67,3 +67,60 @@ sequenceDiagram
 
     GVM-->>-User: Success
 ```
+
+## Protocol withdraw (multi-step)
+
+Executes a multi-step withdraw process if we stake all HYPE and don't leave any HYPE as HyperEVM reserves.
+
+```mermaid
+%%{init: {'theme':'neo-dark'}}%%
+sequenceDiagram
+    participant Owner
+    participant GVM as GenesisVaultManager
+    participant SV as StakingVault
+    participant HCST as HyperCore Staking
+    participant HCSP as HyperCore Spot
+
+    Note over Owner,HCSP: Step 1: Queue Staking Withdrawal
+
+    Owner->>+GVM: protocolQueueStakingWithdraw(amount, purpose)
+
+    GVM->>+SV: tokenDelegate(VALIDATOR, amount, true) (undelegates)
+    SV->>+HCST: CoreWriter.tokenDelegate(validator, amount, true)
+    Note over HCST: Immediately undelegate HYPE from validator
+    HCST-->>-SV: Success
+    SV-->>-GVM: Success
+
+    GVM->>+SV: stakingWithdraw(amount)
+    SV->>+HCST: CoreWriter.stakingWithdraw(amount)
+    Note over HCST: Queue withdrawal (7-day delay)
+    HCST-->>-SV: Success
+    SV-->>-GVM: Success
+
+    GVM-->>-Owner: Success
+
+    Note over Owner,HCSP: 7 days later...
+
+    Note over Owner,HCSP: Step 2: Transfer from HyperCore Spot to HyperEVM
+
+    Owner->>+GVM: protocolSpotToEvmWithdraw(amount, purpose)
+
+
+    GVM->>+SV: spotSend(0x2222...2222, HYPE_TOKEN_ID, amount)
+    SV->>+HCSP: CoreWriter.spotSend(0x2222...2222, HYPE_TOKEN_ID, amount)
+    Note over HCSP: Transfer HYPE from HyperCore Spot to HyperEVM
+    HCSP-->>-SV: Success
+    SV-->>-GVM: Success
+
+    GVM-->>-Owner: Success
+
+    Note over Owner,HCSP: Step 3: Final Withdrawal from Vault
+
+    Owner->>+GVM: protocolWithdraw(amount, purpose)
+
+    GVM->>GVM: cumulativeProtocolWithdrawals += amount
+    GVM->>SV: transferHype(payable(owner), amount)
+    SV->>Owner: Transfer HYPE to owner
+
+    GVM-->>-Owner: Withdraw complete
+```
