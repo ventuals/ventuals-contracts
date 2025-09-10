@@ -27,6 +27,9 @@ contract GenesisVaultManagerTest is Test {
     uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
     uint256 public constant EVM_RESERVE = 200_000 * 1e18; // 200k HYPE
 
+    // Events
+    event ProtocolWithdrawal(address indexed sender, uint256 amount, string purpose);
+
     function setUp() public {
         // Deploy ProtocolRegistry
         ProtocolRegistry protocolRegistryImplementation = new ProtocolRegistry();
@@ -714,6 +717,156 @@ contract GenesisVaultManagerTest is Test {
         vm.prank(owner);
         vm.expectRevert("EVM reserve must be less than vault capacity");
         genesisVaultManager.setEvmReserve(invalidReserve);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*       Tests: Protocol Withdrawals and Cumulative Logic     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_ProtocolWithdraw_OnlyOwner() public {
+        uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE
+
+        // Give the staking vault some balance
+        vm.deal(address(stakingVault), withdrawAmount);
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolWithdrawal(owner, withdrawAmount, "Seeding liquidity pool");
+        genesisVaultManager.protocolWithdraw(withdrawAmount, "Seeding liquidity pool");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), withdrawAmount);
+    }
+
+    function test_ProtocolWithdraw_NotOwner() public {
+        uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE
+
+        vm.deal(address(stakingVault), withdrawAmount);
+
+        vm.prank(user);
+        vm.expectRevert("Caller is not the owner");
+        genesisVaultManager.protocolWithdraw(withdrawAmount, "Unauthorized withdrawal");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 0);
+    }
+
+    function test_ProtocolWithdraw_InsufficientEvmBalance() public {
+        uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE
+
+        // Don't give staking vault enough balance (it has 0)
+
+        vm.prank(owner);
+        vm.expectRevert("Insufficient EVM balance");
+        genesisVaultManager.protocolWithdraw(withdrawAmount, "Should fail");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 0);
+    }
+
+    function test_ProtocolWithdraw_MultipleWithdrawals() public {
+        uint256 firstWithdraw = 50_000 * 1e18;
+        uint256 secondWithdraw = 75_000 * 1e18;
+        uint256 totalWithdraws = firstWithdraw + secondWithdraw;
+
+        vm.deal(address(stakingVault), totalWithdraws);
+
+        // First withdrawal
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolWithdrawal(owner, firstWithdraw, "First withdrawal");
+        genesisVaultManager.protocolWithdraw(firstWithdraw, "First withdrawal");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), firstWithdraw);
+
+        // Second withdrawal
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolWithdrawal(owner, secondWithdraw, "Second withdrawal");
+        genesisVaultManager.protocolWithdraw(secondWithdraw, "Second withdrawal");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), totalWithdraws);
+    }
+
+    function test_ProtocolWithdraw_OneToOneExchangeRate() public {
+        uint256 stakingBalance = 1_000_000 * 1e18; // 1M HYPE staked
+        vm.deal(address(stakingVault), 200_000 * 1e18); // 200k HYPE unstaked
+        uint256 existingSupply = 1_200_000 * 1e18; // 1.2M vHYPE
+        _mockBalancesForExchangeRate(stakingBalance, existingSupply);
+
+        assertEq(genesisVaultManager.exchangeRate(), 1e18); // 1:1 exchange rate
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 0);
+
+        vm.startPrank(owner);
+        genesisVaultManager.protocolWithdraw(200_000 * 1e18, "Protocol withdrawal");
+
+        assertEq(genesisVaultManager.exchangeRate(), 1e18); // 1:1 exchange rate
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 200_000 * 1e18);
+    }
+
+    function test_ProtocolWithdraw_AboveOneExchangeRate() public {
+        uint256 stakingBalance = 1_800_000 * 1e18; // 1.8M HYPE staked
+        vm.deal(address(stakingVault), 200_000 * 1e18); // 200k HYPE unstaked
+        uint256 existingSupply = 1_000_000 * 1e18; // 1M vHYPE
+        _mockBalancesForExchangeRate(stakingBalance, existingSupply);
+
+        assertEq(genesisVaultManager.exchangeRate(), 2e18); // 2:1 exchange rate
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 0);
+
+        vm.startPrank(owner);
+        genesisVaultManager.protocolWithdraw(200_000 * 1e18, "Protocol withdrawal");
+
+        assertEq(genesisVaultManager.exchangeRate(), 2e18); // 2:1 exchange rate
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 200_000 * 1e18);
+    }
+
+    function test_ProtocolWithdraw_BelowOneExchangeRate() public {
+        uint256 stakingBalance = 1_800_000 * 1e18; // 1.8M HYPE staked
+        vm.deal(address(stakingVault), 200_000 * 1e18); // 200k HYPE unstaked
+        uint256 existingSupply = 4_000_000 * 1e18; // 1M vHYPE
+        _mockBalancesForExchangeRate(stakingBalance, existingSupply);
+
+        assertEq(genesisVaultManager.exchangeRate(), 0.5e18); // 1:2 exchange rate
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 0);
+
+        vm.startPrank(owner);
+        genesisVaultManager.protocolWithdraw(200_000 * 1e18, "Protocol withdrawal");
+
+        assertEq(genesisVaultManager.exchangeRate(), 0.5e18); // 1:2 exchange rate
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 200_000 * 1e18);
+    }
+
+    function test_ProtocolWithdraw_WithZeroStakingBalance() public {
+        uint256 stakingBalance = 0; // No staking balance
+        vm.deal(address(stakingVault), 200_000 * 1e18); // 200k HYPE unstaked
+        uint256 existingSupply = 1_200_000 * 1e18; // 1.2M vHYPE
+        _mockBalancesForExchangeRate(stakingBalance, existingSupply);
+
+        assertEq(genesisVaultManager.exchangeRate(), Math.mulDiv(1e18, 1, 6)); // 1:6 exchange rate
+
+        vm.prank(owner);
+        genesisVaultManager.protocolWithdraw(200_000 * 1e18, "All withdrawn");
+
+        assertEq(genesisVaultManager.exchangeRate(), Math.mulDiv(1e18, 1, 6)); // 1:6 exchange rate
+    }
+
+    function test_ProtocolWithdraw_ZeroAmount() public {
+        vm.deal(address(stakingVault), 1e18);
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolWithdrawal(owner, 0, "Zero withdrawal");
+        genesisVaultManager.protocolWithdraw(0, "Zero withdrawal");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), 0);
+    }
+
+    function test_ProtocolWithdraw_EmptyPurposeString() public {
+        uint256 withdrawAmount = 10_000 * 1e18;
+        vm.deal(address(stakingVault), withdrawAmount);
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit ProtocolWithdrawal(owner, withdrawAmount, "");
+        genesisVaultManager.protocolWithdraw(withdrawAmount, "");
+
+        assertEq(genesisVaultManager.cumulativeProtocolWithdrawals(), withdrawAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
