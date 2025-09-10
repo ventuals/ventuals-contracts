@@ -24,13 +24,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
 
     /// @notice The total HYPE capacity of the vault (in 18 decimals)
     /// @dev This is the total amount of HYPE that can be deposited into the vault.
-    /// @dev All HYPE will be moved to the vault's staking account and staked with validators (on HyperCore), except for the evmReserve amount (on HyperEVM).
+    /// @dev All HYPE will be moved to the vault's staking account and staked with validators (on HyperCore).
     uint256 public vaultCapacity;
-
-    /// @notice The HYPE amount to keep in the vault's EVM account (in 18 decimals)
-    /// @dev This is the amount of HYPE to keep in the vault's EVM account (on HyperEVM)
-    /// @dev This amount will not be transferred to the vault's staking account, nor staked with validators.
-    uint256 public evmReserve;
 
     /// @notice Total HYPE that has been withdrawn from the vault for protocol purposes (e.g., liquidity pools)
     /// @dev This amount should be included in the exchange rate calculation
@@ -39,10 +34,9 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
-    /// @param delegated The amount of HYPE delegated to validators (in 18 decimals)
-    /// @param notDelegated The amount of HYPE that was not delegated to validators (in 18 decimals)
+    /// @param deposited The amount of HYPE deposited (in 18 decimals)
     /// @param refunded The amount of HYPE refunded (in 18 decimals)
-    event Deposit(address indexed depositor, uint256 minted, uint256 delegated, uint256 notDelegated, uint256 refunded);
+    event Deposit(address indexed depositor, uint256 minted, uint256 deposited, uint256 refunded);
 
     /// @notice Emitted when HYPE is undelegated and queued for withdrawal for protocol purposes
     /// @param sender The address that withdrew the HYPE
@@ -69,13 +63,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(
-        address _protocolRegistry,
-        address _vHYPE,
-        address _stakingVault,
-        uint256 _vaultCapacity,
-        uint256 _evmReserve
-    ) public initializer {
+    function initialize(address _protocolRegistry, address _vHYPE, address _stakingVault, uint256 _vaultCapacity)
+        public
+        initializer
+    {
         __UUPSUpgradeable_init();
 
         protocolRegistry = ProtocolRegistry(_protocolRegistry);
@@ -83,7 +74,6 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         stakingVault = IStakingVault(payable(_stakingVault));
 
         vaultCapacity = _vaultCapacity;
-        evmReserve = _evmReserve;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -104,14 +94,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
         require(success, "Transfer failed"); // TODO: Change to typed error
 
-        // Stake HYPE if needed
-        uint256 stakingCapacity = vaultCapacity - evmReserve;
-        uint256 stakingAccBalance = stakingAccountBalance();
-        uint256 availableStakingCapacity = stakingCapacity - stakingAccBalance;
-        uint256 amountToStake = availableStakingCapacity < amountToDeposit ? availableStakingCapacity : amountToDeposit;
-        if (amountToStake > 0) {
-            stakingVault.stakingDeposit(_convertTo8Decimals(amountToStake)); // HyperEVM -> HyperCore transfer
-            stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToStake), false); // Delegate HYPE to validator (on HyperCore)
+        // Stake HYPE
+        if (amountToDeposit > 0) {
+            stakingVault.stakingDeposit(_convertTo8Decimals(amountToDeposit)); // HyperEVM -> HyperCore transfer
+            stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToDeposit), false); // Delegate HYPE to validator (on HyperCore)
         }
 
         // Refund any excess HYPE
@@ -123,8 +109,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         emit Deposit(
             msg.sender, /* depositor */
             amountToMint, /* minted */
-            amountToStake, /* delegated */
-            amountToDeposit - amountToStake, /* notDelegated */
+            amountToDeposit, /* deposited */
             requestedDepositAmount - amountToDeposit /* refunded */
         );
     }
@@ -242,15 +227,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @notice Sets the vault capacity (in 18 decimals)
     /// @dev Vault capacity is the total amount of HYPE that can be deposited into the staking vault
     function setVaultCapacity(uint256 _vaultCapacity) public onlyOwner {
-        require(_vaultCapacity > evmReserve, "Vault capacity must be greater than EVM reserve"); // TODO: Change to typed error
         vaultCapacity = _vaultCapacity;
-    }
-
-    /// @notice Sets the EVM reserve (in 18 decimals)
-    /// @dev EVM reserve is the amount of HYPE to keep in the vault's EVM account (on HyperEVM)
-    function setEvmReserve(uint256 _evmReserve) public onlyOwner {
-        require(_evmReserve < vaultCapacity, "EVM reserve must be less than vault capacity"); // TODO: Change to typed error
-        evmReserve = _evmReserve;
     }
 
     /// @dev Convert an amount from 8 decimals to 18 decimals. Used for converting HYPE values from HyperCore to 18 decimals.
