@@ -18,7 +18,7 @@ sequenceDiagram
 
     Note over GVM: Check vault balance
 
-    rect
+    rect rgb(240, 248, 255)
         Note over GVM,HCST: Aggregates balances across all accounts
 
         GVM->>+L1R: Get HyperCore balances
@@ -39,7 +39,7 @@ sequenceDiagram
 
     Note over GVM: Stake
 
-    rect
+    rect rgb(240, 248, 255)
         Note over GVM,HCST: Transfer and stake HYPE via StakingVault
         GVM->>+SV: Transfer HYPE to EVM
         SV-->>-GVM: Success
