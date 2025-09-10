@@ -89,12 +89,12 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
     }
 
     /// @dev Function to receive HYPE when msg.data is empty
-    receive() external payable {
+    receive() external payable virtual {
         emit Received(msg.sender, msg.value);
     }
 
     /// @dev Fallback function to receive HYPE when msg.data is not empty
-    fallback() external payable {
+    fallback() external payable virtual {
         emit Received(msg.sender, msg.value);
     }
 
