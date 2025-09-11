@@ -74,19 +74,19 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         uint256 amountToMint = HYPETovHYPE(amountToDeposit);
         vHYPE.mint(msg.sender, amountToMint);
 
-        // Transfer HYPE to the staking vault (HyperEVM -> HyperEVM transfer)
-        (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
-        require(success, "Transfer failed"); // TODO: Change to typed error
-
         // Stake HYPE
         if (amountToDeposit > 0) {
-            stakingVault.stakingDeposit(_convertTo8Decimals(amountToDeposit)); // HyperEVM -> HyperCore transfer
-            stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToDeposit), false); // Delegate HYPE to validator (on HyperCore)
+            (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}(""); // HyperEVM -> HyperEVM
+            require(success, "Transfer failed"); // TODO: Change to typed error
+
+            stakingVault.transferHypeToCore(amountToDeposit); // HyperEVM -> HyperCore spot
+            stakingVault.stakingDeposit(_convertTo8Decimals(amountToDeposit)); // HyperCore spot -> HyperCore staking
+            stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToDeposit), false); // Delegate HYPE to validator (from HyperCore staking)
         }
 
         // Refund any excess HYPE
         if (requestedDepositAmount > amountToDeposit) {
-            (success,) = payable(msg.sender).call{value: requestedDepositAmount - amountToDeposit}("");
+            (bool success,) = payable(msg.sender).call{value: requestedDepositAmount - amountToDeposit}("");
             require(success, "Refund failed"); // TODO: Change to typed error
         }
 
