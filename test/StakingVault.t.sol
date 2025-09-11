@@ -253,6 +253,7 @@ contract StakingVaultTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TransferHype(address payable recipient, uint256 amount) public {
         vm.assume(recipient != address(stakingVault));
+        vm.assume(recipient != address(roleRegistry));
         assumeNotPrecompile(recipient);
 
         vm.deal(address(stakingVault), amount);
