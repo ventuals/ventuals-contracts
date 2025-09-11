@@ -9,15 +9,9 @@ import {L1ReadAdapter} from "./utils/L1ReadAdapter.sol";
 /// @dev Usage: forge script PrintAccountBalances --rpc-url testnet --skip-simulation --disable-code-size-limit
 contract PrintAccountBalances is Script {
     function run() public {
-        address account = vm.envAddress("ACCOUNT");
-        if (account == address(0)) {
-            account = vm.parseAddress(vm.prompt("Enter account address"));
-            require(account != address(0), "Invalid account address");
-        }
-        string memory name = vm.envString("NAME");
-        if (bytes(name).length == 0) {
-            name = vm.prompt("Enter name (optional)");
-        }
+        address account = vm.parseAddress(vm.prompt("Enter account address"));
+        require(account != address(0), "Invalid account address");
+        string memory name = vm.prompt("Enter name (optional)");
         L1ReadAdapter.initialize();
         printAccountBalances(account, name);
     }

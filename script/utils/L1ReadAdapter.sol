@@ -13,21 +13,9 @@ library L1ReadAdapter {
     function initialize() external {
         Vm vm = Vm(VM_ADDRESS);
 
-        // Position
-        vm.allowCheatcodes(L1ReadLibrary.POSITION_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.POSITION_PRECOMPILE_ADDRESS, address(new RpcCallPosition()).code);
-
         // Spot balance
         vm.allowCheatcodes(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS);
         vm.etch(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, address(new RpcCallSpotBalance()).code);
-
-        // Vault equity
-        vm.allowCheatcodes(L1ReadLibrary.VAULT_EQUITY_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.VAULT_EQUITY_PRECOMPILE_ADDRESS, address(new RpcCallVaultEquity()).code);
-
-        // Withdrawable
-        vm.allowCheatcodes(L1ReadLibrary.WITHDRAWABLE_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.WITHDRAWABLE_PRECOMPILE_ADDRESS, address(new RpcCallWithdrawable()).code);
 
         // Delegations
         vm.allowCheatcodes(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS);
@@ -37,47 +25,9 @@ library L1ReadAdapter {
         vm.allowCheatcodes(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS);
         vm.etch(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, address(new RpcCallDelegatorSummary()).code);
 
-        // Mark price
-        vm.allowCheatcodes(L1ReadLibrary.MARK_PX_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.MARK_PX_PRECOMPILE_ADDRESS, address(new RpcCallMarkPx()).code);
-
-        // Oracle price
-        vm.allowCheatcodes(L1ReadLibrary.ORACLE_PX_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.ORACLE_PX_PRECOMPILE_ADDRESS, address(new RpcCallOraclePx()).code);
-
-        // Spot price
-        vm.allowCheatcodes(L1ReadLibrary.SPOT_PX_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.SPOT_PX_PRECOMPILE_ADDRESS, address(new RpcCallSpotPx()).code);
-
         // L1 block number
         vm.allowCheatcodes(L1ReadLibrary.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS);
         vm.etch(L1ReadLibrary.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, address(new RpcCallL1BlockNumber()).code);
-
-        // Perp asset info
-        vm.allowCheatcodes(L1ReadLibrary.PERP_ASSET_INFO_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.PERP_ASSET_INFO_PRECOMPILE_ADDRESS, address(new RpcCallPerpAssetInfo()).code);
-
-        // Spot info
-        vm.allowCheatcodes(L1ReadLibrary.SPOT_INFO_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.SPOT_INFO_PRECOMPILE_ADDRESS, address(new RpcCallSpotInfo()).code);
-
-        // Token info
-        vm.allowCheatcodes(L1ReadLibrary.TOKEN_INFO_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.TOKEN_INFO_PRECOMPILE_ADDRESS, address(new RpcCallTokenInfo()).code);
-
-        // Token supply
-        vm.allowCheatcodes(L1ReadLibrary.TOKEN_SUPPLY_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.TOKEN_SUPPLY_PRECOMPILE_ADDRESS, address(new RpcCallTokenSupply()).code);
-
-        // BBO
-        vm.allowCheatcodes(L1ReadLibrary.BBO_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.BBO_PRECOMPILE_ADDRESS, address(new RpcCallBbo()).code);
-
-        // Account margin summary
-        vm.allowCheatcodes(L1ReadLibrary.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS);
-        vm.etch(
-            L1ReadLibrary.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS, address(new RpcCallAccountMarginSummary()).code
-        );
 
         // Core user exists
         vm.allowCheatcodes(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS);
