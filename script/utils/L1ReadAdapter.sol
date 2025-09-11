@@ -75,7 +75,9 @@ library L1ReadAdapter {
 
         // Account margin summary
         vm.allowCheatcodes(L1ReadLibrary.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS);
-        vm.etch(L1ReadLibrary.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS, address(new RpcCallAccountMarginSummary()).code);
+        vm.etch(
+            L1ReadLibrary.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS, address(new RpcCallAccountMarginSummary()).code
+        );
 
         // Core user exists
         vm.allowCheatcodes(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS);
