@@ -25,7 +25,6 @@ contract GenesisVaultManagerTest is Test {
 
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
-    uint256 public constant EVM_RESERVE = 200_000 * 1e18; // 200k HYPE
 
     // Events
     event ProtocolWithdrawal(address indexed sender, uint256 amount, string purpose);
@@ -58,8 +57,7 @@ contract GenesisVaultManagerTest is Test {
             address(protocolRegistry),
             address(vHYPE),
             address(stakingVault),
-            VAULT_CAPACITY,
-            EVM_RESERVE
+            VAULT_CAPACITY
         );
         ERC1967Proxy genesisVaultManagerProxy =
             new ERC1967Proxy(address(genesisVaultManagerImplementation), genesisVaultManagerInitData);
@@ -81,15 +79,12 @@ contract GenesisVaultManagerTest is Test {
         assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
-        assertEq(genesisVaultManager.evmReserve(), EVM_RESERVE);
         assertEq(genesisVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
     function test_CannotInitializeTwice() public {
         vm.expectRevert("InvalidInitialization()");
-        genesisVaultManager.initialize(
-            address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, EVM_RESERVE
-        );
+        genesisVaultManager.initialize(address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -126,7 +121,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 depositAmount = 1_500_000 * 1e18; // 1.5M HYPE (more than capacity)
 
         // Mock staking vault calls
-        uint256 expectedStakeAmount = VAULT_CAPACITY - EVM_RESERVE;
+        uint256 expectedStakeAmount = VAULT_CAPACITY;
         _mockAndExpectStakingDepositCall(uint64(expectedStakeAmount / 1e10));
         _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false);
 
@@ -144,7 +139,7 @@ contract GenesisVaultManagerTest is Test {
         assertEq(user.balance, expectedRefund);
     }
 
-    function test_Deposit_FullDeposit() public {
+    function test_Deposit_FullDepositIntoVaultWithExistingBalance() public {
         uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
         uint256 existingSupply = 500_000 * 1e18; // 500k HYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // 1:1 ratio
@@ -168,17 +163,17 @@ contract GenesisVaultManagerTest is Test {
         assertEq(user.balance, 0);
     }
 
-    function test_Deposit_PartialDeposit() public {
+    function test_Deposit_PartialDepositIntoVaultWithExistingBalance() public {
         uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
         uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // 1:1 ratio
 
-        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted; and only 500k HYPE will be staked
+        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted
         uint256 depositAmount = 1_000_000 * 1e18;
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(500_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(700_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -221,12 +216,12 @@ contract GenesisVaultManagerTest is Test {
         uint256 existingSupply = 250_000 * 1e18; // 250k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 2
 
-        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted; and only 500k HYPE will be staked
+        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted
         uint256 depositAmount = 1_000_000 * 1e18;
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(500_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(700_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -268,12 +263,12 @@ contract GenesisVaultManagerTest is Test {
         uint256 existingSupply = 1_000_000 * 1e18; // 1M vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 0.5
 
-        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted; and only 500k HYPE will be staked
+        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted
         uint256 depositAmount = 1_000_000 * 1e18; // 1M HYPE
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(500_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(500_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(700_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -285,31 +280,6 @@ contract GenesisVaultManagerTest is Test {
 
         // Check user was refunded the excess
         assertEq(user.balance, 300_000 * 1e18);
-    }
-
-    function test_Deposit_NoStakingWhenAtStakingCapacity() public {
-        // Reached staking capacity, but not the total vault capacity. All HYPE will be kept for EVM reserves.
-
-        uint256 stakingCapacity = VAULT_CAPACITY - EVM_RESERVE; // 1M HYPE
-        uint256 existingSupply = stakingCapacity;
-        _mockBalancesForExchangeRate(stakingCapacity, existingSupply);
-
-        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
-
-        // Should NOT call staking functions since staking balance is already at capacity
-        vm.expectCall(
-            address(stakingVault),
-            abi.encodeWithSelector(stakingVault.stakingDeposit.selector),
-            0 // Expect 0 calls
-        );
-
-        vm.deal(user, depositAmount);
-        vm.prank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // vHYPE should be minted at 1:1 exchange rate
-        uint256 expectedVHYPE = (depositAmount * 1e18) / 1e18;
-        assertEq(vHYPE.balanceOf(user), expectedVHYPE);
     }
 
     function test_Deposit_RevertWhenVaultFull(uint256 depositAmount) public {
@@ -363,6 +333,10 @@ contract GenesisVaultManagerTest is Test {
 
         // Create a contract that rejects refunds
         ContractThatRejectsTransfers contractThatRejectsTransfers = new ContractThatRejectsTransfers();
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(200_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(200_000 * 1e18 / 1e10), false);
 
         vm.deal(address(contractThatRejectsTransfers), depositAmount);
         vm.prank(address(contractThatRejectsTransfers));
@@ -666,7 +640,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*             Tests: Vault Capacity and EVM Reserve          */
+    /*                    Tests: Vault Capacity                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_SetVaultCapacity_OnlyOwner() public {
@@ -684,39 +658,6 @@ contract GenesisVaultManagerTest is Test {
         vm.prank(user);
         vm.expectRevert("Caller is not the owner");
         genesisVaultManager.setVaultCapacity(newCapacity);
-    }
-
-    function test_SetVaultCapacity_MustBeGreaterThanEvmReserve() public {
-        uint256 invalidCapacity = 100_000 * 1e18; // Less than EVM_RESERVE (200_000 * 1e18)
-
-        vm.prank(owner);
-        vm.expectRevert("Vault capacity must be greater than EVM reserve");
-        genesisVaultManager.setVaultCapacity(invalidCapacity);
-    }
-
-    function test_SetEvmReserve_OnlyOwner() public {
-        uint256 newReserve = 100_000 * 1e18;
-
-        vm.prank(owner);
-        genesisVaultManager.setEvmReserve(newReserve);
-
-        assertEq(genesisVaultManager.evmReserve(), newReserve);
-    }
-
-    function test_SetEvmReserve_NotOwner() public {
-        uint256 newReserve = 100_000 * 1e18;
-
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
-        genesisVaultManager.setEvmReserve(newReserve);
-    }
-
-    function test_SetEvmReserve_MustBeLessThanVaultCapacity() public {
-        uint256 invalidReserve = 2_000_000 * 1e18; // Greater than VAULT_CAPACITY (1_200_000 * 1e18)
-
-        vm.prank(owner);
-        vm.expectRevert("EVM reserve must be less than vault capacity");
-        genesisVaultManager.setEvmReserve(invalidReserve);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -882,7 +823,6 @@ contract GenesisVaultManagerTest is Test {
         // Verify upgrade preserved state
         assertEq(address(genesisVaultManager.protocolRegistry()), address(protocolRegistry));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
-        assertEq(genesisVaultManager.evmReserve(), EVM_RESERVE);
 
         // Check that the extra function is available
         GenesisVaultManagerWithExtraFunction newProxy =
