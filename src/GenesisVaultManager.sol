@@ -9,8 +9,11 @@ import {ProtocolRegistry} from "./ProtocolRegistry.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {VHYPE} from "./VHYPE.sol";
+import {Converters} from "./libraries/Converters.sol";
 
 contract GenesisVaultManager is Initializable, UUPSUpgradeable {
+    using Converters for *;
+
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
 
@@ -80,8 +83,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
             require(success, "Transfer failed"); // TODO: Change to typed error
 
             stakingVault.transferHypeToCore(amountToDeposit); // HyperEVM -> HyperCore spot
-            stakingVault.stakingDeposit(_convertTo8Decimals(amountToDeposit)); // HyperCore spot -> HyperCore staking
-            stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amountToDeposit), false); // Delegate HYPE to validator (from HyperCore staking)
+            stakingVault.stakingDeposit(amountToDeposit.to8Decimals()); // HyperCore spot -> HyperCore staking
+            stakingVault.tokenDelegate(VALIDATOR, amountToDeposit.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
         }
 
         // Refund any excess HYPE
@@ -149,15 +152,15 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev Uses L1Read precompiles to get the delegator summary for the staking vault from HyperCore
     function stakingAccountBalance() public view returns (uint256) {
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
-        return _convertTo18Decimals(delegatorSummary.delegated) + _convertTo18Decimals(delegatorSummary.undelegated)
-            + _convertTo18Decimals(delegatorSummary.totalPendingWithdrawal);
+        return delegatorSummary.delegated.to18Decimals() + delegatorSummary.undelegated.to18Decimals()
+            + delegatorSummary.totalPendingWithdrawal.to18Decimals();
     }
 
     /// @notice Total HYPE balance in the staking vault's spot account balance (in 18 decimals)
     /// @dev Uses L1Read precompiles to get the spot balance for the staking vault from HyperCore
     function spotAccountBalance() public view returns (uint256) {
         L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(HYPE_TOKEN_ID);
-        return _convertTo18Decimals(spotBalance.total);
+        return spotBalance.total.to18Decimals();
     }
 
     /// @notice Execute an emergency staking withdraw
@@ -170,14 +173,14 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         require(bytes(purpose).length > 0, "Purpose must be set"); // TODO: Change to typed error
 
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
-        require(delegatorSummary.delegated >= _convertTo8Decimals(amount), "Insufficient delegated balance"); // TODO: Change to typed error
+        require(delegatorSummary.delegated >= amount.to8Decimals(), "Insufficient delegated balance"); // TODO: Change to typed error
 
         // Immediately undelegate HYPE
-        stakingVault.tokenDelegate(VALIDATOR, _convertTo8Decimals(amount), true);
+        stakingVault.tokenDelegate(VALIDATOR, amount.to8Decimals(), true);
 
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
-        stakingVault.stakingWithdraw(_convertTo8Decimals(amount));
+        stakingVault.stakingWithdraw(amount.to8Decimals());
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
@@ -185,16 +188,6 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev Vault capacity is the total amount of HYPE that can be deposited into the staking vault
     function setVaultCapacity(uint256 _vaultCapacity) public onlyOwner {
         vaultCapacity = _vaultCapacity;
-    }
-
-    /// @dev Convert an amount from 8 decimals to 18 decimals. Used for converting HYPE values from HyperCore to 18 decimals.
-    function _convertTo18Decimals(uint64 amount) internal pure returns (uint256) {
-        return uint256(amount) * 1e10;
-    }
-
-    /// @dev Convert an amount from 18 decimals to 8 decimals. Used for converting HYPE values to 8 decimals before sending to HyperCore.
-    function _convertTo8Decimals(uint256 amount) internal pure returns (uint64) {
-        return SafeCast.toUint64(amount / 1e10);
     }
 
     /// @dev Function to receive HYPE when msg.data is empty
