@@ -194,6 +194,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @param amount The amount of HYPE being moved (in 18 decimals)
     function redelegateStake(address fromValidator, address toValidator, uint256 amount) external onlyOwner {
         require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
+        require(fromValidator != toValidator, "From and to validators cannot be the same"); // TODO: Change to typed error
 
         stakingVault.tokenDelegate(fromValidator, amount.to8Decimals(), true);
         stakingVault.tokenDelegate(toValidator, amount.to8Decimals(), false);

@@ -695,6 +695,56 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Redelegate Stake                    */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
+
+    function test_RedelegateStake_OnlyOwner() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+
+        // Mock the undelegate call (from validator)
+        _mockAndExpectTokenDelegateCall(fromValidator, uint64(amount / 1e10), true);
+        // Mock the delegate call (to validator)
+        _mockAndExpectTokenDelegateCall(toValidator, uint64(amount / 1e10), false);
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit RedelegateStake(fromValidator, toValidator, amount);
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+    }
+
+    function test_RedelegateStake_NotOwner() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint256 amount = 100_000 * 1e18;
+
+        vm.prank(user);
+        vm.expectRevert("Caller is not the owner");
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+    }
+
+    function test_RedelegateStake_ZeroAmount() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+
+        vm.prank(owner);
+        vm.expectRevert("Amount must be greater than 0");
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, 0);
+    }
+
+    function test_RedelegateStake_SameValidator() public {
+        address validator = makeAddr("validator");
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+
+        vm.prank(owner);
+        vm.expectRevert("From and to validators cannot be the same");
+        genesisVaultManager.redelegateStake(validator, validator, amount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                 Tests: Emergency Withdraw                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
