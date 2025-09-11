@@ -3,10 +3,10 @@ pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
+import {RoleRegistry} from "../src/RoleRegistry.sol";
 
-contract ProtocolRegistryTest is Test {
-    ProtocolRegistry protocolRegistry;
+contract RoleRegistryTest is Test {
+    RoleRegistry roleRegistry;
 
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
@@ -18,10 +18,10 @@ contract ProtocolRegistryTest is Test {
     address public contractToTest = makeAddr("contractToTest");
 
     function setUp() public {
-        ProtocolRegistry implementation = new ProtocolRegistry();
-        bytes memory initData = abi.encodeWithSelector(ProtocolRegistry.initialize.selector, owner);
+        RoleRegistry implementation = new RoleRegistry();
+        bytes memory initData = abi.encodeWithSelector(RoleRegistry.initialize.selector, owner);
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
-        protocolRegistry = ProtocolRegistry(address(proxy));
+        roleRegistry = RoleRegistry(address(proxy));
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -29,17 +29,17 @@ contract ProtocolRegistryTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_Initialize_OwnerAndAdmin() public view {
-        assertEq(protocolRegistry.owner(), owner);
-        assertTrue(protocolRegistry.hasRole(protocolRegistry.DEFAULT_ADMIN_ROLE(), owner));
+        assertEq(roleRegistry.owner(), owner);
+        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), owner));
     }
 
     function test_Initialize_CannotInitializeTwice() public {
         vm.expectRevert();
-        protocolRegistry.initialize(owner);
+        roleRegistry.initialize(owner);
     }
 
     function test_Initialize_DefaultPauseState(address fuzzContract) public view {
-        assertFalse(protocolRegistry.isPaused(fuzzContract));
+        assertFalse(roleRegistry.isPaused(fuzzContract));
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -48,8 +48,8 @@ contract ProtocolRegistryTest is Test {
 
     function test_GrantRole_OnlyOwner(bytes32 role) public {
         vm.startPrank(owner);
-        protocolRegistry.grantRole(role, manager);
-        assertTrue(protocolRegistry.hasRole(role, manager));
+        roleRegistry.grantRole(role, manager);
+        assertTrue(roleRegistry.hasRole(role, manager));
     }
 
     function test_GrantRole_NotOwner(bytes32 role, address fuzzUser) public {
@@ -57,65 +57,65 @@ contract ProtocolRegistryTest is Test {
 
         vm.startPrank(fuzzUser);
         vm.expectRevert();
-        protocolRegistry.grantRole(role, manager);
+        roleRegistry.grantRole(role, manager);
     }
 
     function test_RevokeRole_OnlyOwner(bytes32 role) public {
         vm.startPrank(owner);
-        protocolRegistry.grantRole(role, manager);
-        assertTrue(protocolRegistry.hasRole(role, manager));
+        roleRegistry.grantRole(role, manager);
+        assertTrue(roleRegistry.hasRole(role, manager));
 
-        protocolRegistry.revokeRole(role, manager);
-        assertFalse(protocolRegistry.hasRole(role, manager));
+        roleRegistry.revokeRole(role, manager);
+        assertFalse(roleRegistry.hasRole(role, manager));
     }
 
     function test_RevokeRole_NotOwner(bytes32 role, address fuzzUser) public {
         vm.assume(fuzzUser != owner);
 
         vm.startPrank(owner);
-        protocolRegistry.grantRole(role, manager);
-        assertTrue(protocolRegistry.hasRole(role, manager));
+        roleRegistry.grantRole(role, manager);
+        assertTrue(roleRegistry.hasRole(role, manager));
 
         vm.startPrank(fuzzUser);
         vm.expectRevert();
-        protocolRegistry.revokeRole(role, manager);
-        assertTrue(protocolRegistry.hasRole(role, manager));
+        roleRegistry.revokeRole(role, manager);
+        assertTrue(roleRegistry.hasRole(role, manager));
     }
 
     function test_GrantAndRevokeRole(bytes32 role, address fuzzUser) public {
-        vm.assume(!protocolRegistry.hasRole(role, fuzzUser));
+        vm.assume(!roleRegistry.hasRole(role, fuzzUser));
 
         vm.startPrank(owner);
-        protocolRegistry.grantRole(role, fuzzUser);
-        assertTrue(protocolRegistry.hasRole(role, fuzzUser));
+        roleRegistry.grantRole(role, fuzzUser);
+        assertTrue(roleRegistry.hasRole(role, fuzzUser));
 
         vm.startPrank(owner);
-        protocolRegistry.revokeRole(role, fuzzUser);
-        assertFalse(protocolRegistry.hasRole(role, fuzzUser));
+        roleRegistry.revokeRole(role, fuzzUser);
+        assertFalse(roleRegistry.hasRole(role, fuzzUser));
     }
 
     function test_GrantRole_SameUserMultipleRoles(bytes32 role1, bytes32 role2, address fuzzUser) public {
         vm.assume(role1 != role2);
 
         vm.startPrank(owner);
-        protocolRegistry.grantRole(role1, fuzzUser);
-        protocolRegistry.grantRole(role2, fuzzUser);
+        roleRegistry.grantRole(role1, fuzzUser);
+        roleRegistry.grantRole(role2, fuzzUser);
 
-        assertTrue(protocolRegistry.hasRole(role1, fuzzUser));
-        assertTrue(protocolRegistry.hasRole(role2, fuzzUser));
+        assertTrue(roleRegistry.hasRole(role1, fuzzUser));
+        assertTrue(roleRegistry.hasRole(role2, fuzzUser));
     }
 
     function test_RevokeRole_OneOfMultiple(bytes32 role1, bytes32 role2, address fuzzUser) public {
         vm.assume(role1 != role2);
 
         vm.startPrank(owner);
-        protocolRegistry.grantRole(role1, fuzzUser);
-        protocolRegistry.grantRole(role2, fuzzUser);
+        roleRegistry.grantRole(role1, fuzzUser);
+        roleRegistry.grantRole(role2, fuzzUser);
 
-        protocolRegistry.revokeRole(role1, fuzzUser);
+        roleRegistry.revokeRole(role1, fuzzUser);
 
-        assertFalse(protocolRegistry.hasRole(role1, fuzzUser));
-        assertTrue(protocolRegistry.hasRole(role2, fuzzUser));
+        assertFalse(roleRegistry.hasRole(role1, fuzzUser));
+        assertTrue(roleRegistry.hasRole(role2, fuzzUser));
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -124,9 +124,9 @@ contract ProtocolRegistryTest is Test {
 
     function test_Pause_OnlyOwner(address fuzzContract) public {
         vm.startPrank(owner);
-        assertFalse(protocolRegistry.isPaused(fuzzContract));
-        protocolRegistry.pause(fuzzContract);
-        assertTrue(protocolRegistry.isPaused(fuzzContract));
+        assertFalse(roleRegistry.isPaused(fuzzContract));
+        roleRegistry.pause(fuzzContract);
+        assertTrue(roleRegistry.isPaused(fuzzContract));
     }
 
     function test_Pause_NotOwner(address fuzzContract, address fuzzUser) public {
@@ -134,36 +134,36 @@ contract ProtocolRegistryTest is Test {
 
         vm.startPrank(fuzzUser);
         vm.expectRevert();
-        protocolRegistry.pause(fuzzContract);
-        assertFalse(protocolRegistry.isPaused(fuzzContract));
+        roleRegistry.pause(fuzzContract);
+        assertFalse(roleRegistry.isPaused(fuzzContract));
     }
 
     function test_Unpause_OnlyOwner(address fuzzContract) public {
         vm.startPrank(owner);
-        protocolRegistry.pause(fuzzContract);
-        assertTrue(protocolRegistry.isPaused(fuzzContract));
-        protocolRegistry.unpause(fuzzContract);
-        assertFalse(protocolRegistry.isPaused(contractToTest));
+        roleRegistry.pause(fuzzContract);
+        assertTrue(roleRegistry.isPaused(fuzzContract));
+        roleRegistry.unpause(fuzzContract);
+        assertFalse(roleRegistry.isPaused(contractToTest));
     }
 
     function test_Unpause_NotOwner(address fuzzContract, address fuzzUser) public {
         vm.assume(fuzzUser != owner);
 
         vm.startPrank(owner);
-        protocolRegistry.pause(fuzzContract);
-        assertTrue(protocolRegistry.isPaused(fuzzContract));
+        roleRegistry.pause(fuzzContract);
+        assertTrue(roleRegistry.isPaused(fuzzContract));
 
         vm.startPrank(fuzzUser);
         vm.expectRevert();
-        protocolRegistry.unpause(fuzzContract);
+        roleRegistry.unpause(fuzzContract);
     }
 
     function test_PauseAndUnpause(address fuzzContract) public {
         vm.startPrank(owner);
-        protocolRegistry.pause(fuzzContract);
-        assertTrue(protocolRegistry.isPaused(fuzzContract));
-        protocolRegistry.unpause(fuzzContract);
-        assertFalse(protocolRegistry.isPaused(fuzzContract));
+        roleRegistry.pause(fuzzContract);
+        assertTrue(roleRegistry.isPaused(fuzzContract));
+        roleRegistry.unpause(fuzzContract);
+        assertFalse(roleRegistry.isPaused(fuzzContract));
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -171,59 +171,59 @@ contract ProtocolRegistryTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_UpgradeToAndCall_OnlyOwner() public {
-        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
+        RoleRegistryWithExtraFunction newImplementation = new RoleRegistryWithExtraFunction();
 
         vm.startPrank(owner);
-        protocolRegistry.upgradeToAndCall(address(newImplementation), "");
+        roleRegistry.upgradeToAndCall(address(newImplementation), "");
         vm.stopPrank();
 
         // Verify upgrade was successful by checking that it's still functional
-        assertTrue(protocolRegistry.hasRole(protocolRegistry.DEFAULT_ADMIN_ROLE(), owner));
+        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), owner));
 
         // Check that the extra function is available
-        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
         assertTrue(newProxy.extraFunction());
     }
 
     function test_UpgradeToAndCall_NotOwner() public {
-        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
+        RoleRegistryWithExtraFunction newImplementation = new RoleRegistryWithExtraFunction();
 
         vm.startPrank(user);
         vm.expectRevert();
-        protocolRegistry.upgradeToAndCall(address(newImplementation), "");
+        roleRegistry.upgradeToAndCall(address(newImplementation), "");
 
         // Check that the extra function is not available
-        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
         vm.expectRevert();
         newProxy.extraFunction();
     }
 
     function test_UpgradeToAndCall_WithData() public {
-        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
-        bytes memory initData = abi.encodeWithSelector(ProtocolRegistry.grantRole.selector, MANAGER_ROLE, manager);
+        RoleRegistryWithExtraFunction newImplementation = new RoleRegistryWithExtraFunction();
+        bytes memory initData = abi.encodeWithSelector(RoleRegistry.grantRole.selector, MANAGER_ROLE, manager);
 
         vm.startPrank(owner);
-        protocolRegistry.upgradeToAndCall(address(newImplementation), initData);
+        roleRegistry.upgradeToAndCall(address(newImplementation), initData);
 
         // Verify upgrade was successful and data was executed
-        assertTrue(protocolRegistry.hasRole(protocolRegistry.DEFAULT_ADMIN_ROLE(), owner));
-        assertTrue(protocolRegistry.hasRole(MANAGER_ROLE, manager));
+        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), owner));
+        assertTrue(roleRegistry.hasRole(MANAGER_ROLE, manager));
 
         // Check that the extra function is available
-        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
         assertTrue(newProxy.extraFunction());
     }
 
     function test_UpgradeToAndCall_NotOwnerWithData() public {
-        ProtocolRegistryWithExtraFunction newImplementation = new ProtocolRegistryWithExtraFunction();
-        bytes memory initData = abi.encodeWithSelector(ProtocolRegistry.grantRole.selector, MANAGER_ROLE, manager);
+        RoleRegistryWithExtraFunction newImplementation = new RoleRegistryWithExtraFunction();
+        bytes memory initData = abi.encodeWithSelector(RoleRegistry.grantRole.selector, MANAGER_ROLE, manager);
 
         vm.startPrank(user);
         vm.expectRevert();
-        protocolRegistry.upgradeToAndCall(address(newImplementation), initData);
+        roleRegistry.upgradeToAndCall(address(newImplementation), initData);
 
         // Check that the extra function is not available
-        ProtocolRegistryWithExtraFunction newProxy = ProtocolRegistryWithExtraFunction(address(protocolRegistry));
+        RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
         vm.expectRevert();
         newProxy.extraFunction();
     }
@@ -236,21 +236,21 @@ contract ProtocolRegistryTest is Test {
         address newOwner = makeAddr("newOwner");
 
         vm.startPrank(owner);
-        protocolRegistry.transferOwnership(newOwner);
+        roleRegistry.transferOwnership(newOwner);
         vm.stopPrank();
 
         // Check that pendingOwner is set but owner hasn't changed yet
-        assertEq(protocolRegistry.pendingOwner(), newOwner);
-        assertEq(protocolRegistry.owner(), owner);
+        assertEq(roleRegistry.pendingOwner(), newOwner);
+        assertEq(roleRegistry.owner(), owner);
 
         // New owner accepts ownership
         vm.startPrank(newOwner);
-        protocolRegistry.acceptOwnership();
+        roleRegistry.acceptOwnership();
         vm.stopPrank();
 
         // Check that ownership has transferred
-        assertEq(protocolRegistry.owner(), newOwner);
-        assertEq(protocolRegistry.pendingOwner(), address(0));
+        assertEq(roleRegistry.owner(), newOwner);
+        assertEq(roleRegistry.pendingOwner(), address(0));
     }
 
     function test_TransferOwnership_NotOwner() public {
@@ -258,7 +258,7 @@ contract ProtocolRegistryTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert();
-        protocolRegistry.transferOwnership(newOwner);
+        roleRegistry.transferOwnership(newOwner);
         vm.stopPrank();
     }
 
@@ -266,37 +266,37 @@ contract ProtocolRegistryTest is Test {
         address newOwner = makeAddr("newOwner");
 
         vm.startPrank(owner);
-        protocolRegistry.transferOwnership(newOwner);
+        roleRegistry.transferOwnership(newOwner);
         vm.stopPrank();
 
         // Try to accept ownership from wrong account
         vm.startPrank(user);
         vm.expectRevert();
-        protocolRegistry.acceptOwnership();
+        roleRegistry.acceptOwnership();
         vm.stopPrank();
 
         // Correct account accepts ownership
         vm.startPrank(newOwner);
-        protocolRegistry.acceptOwnership();
+        roleRegistry.acceptOwnership();
         vm.stopPrank();
 
-        assertEq(protocolRegistry.owner(), newOwner);
+        assertEq(roleRegistry.owner(), newOwner);
     }
 
     function test_RenounceOwnership_OnlyOwner() public {
         vm.startPrank(owner);
-        protocolRegistry.renounceOwnership();
-        assertEq(protocolRegistry.owner(), address(0));
+        roleRegistry.renounceOwnership();
+        assertEq(roleRegistry.owner(), address(0));
     }
 
     function test_RenounceOwnership_NotOwner() public {
         vm.startPrank(user);
         vm.expectRevert();
-        protocolRegistry.renounceOwnership();
+        roleRegistry.renounceOwnership();
     }
 }
 
-contract ProtocolRegistryWithExtraFunction is ProtocolRegistry {
+contract RoleRegistryWithExtraFunction is RoleRegistry {
     function extraFunction() public pure returns (bool) {
         return true;
     }

@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {GenesisVaultManager} from "../src/GenesisVaultManager.sol";
-import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
+import {RoleRegistry} from "../src/RoleRegistry.sol";
 import {VHYPE} from "../src/VHYPE.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
@@ -17,7 +17,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 contract GenesisVaultManagerTest is Test {
     GenesisVaultManager genesisVaultManager;
-    ProtocolRegistry protocolRegistry;
+    RoleRegistry roleRegistry;
     VHYPE vHYPE;
     StakingVault stakingVault;
 
@@ -33,23 +33,22 @@ contract GenesisVaultManagerTest is Test {
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
     function setUp() public {
-        // Deploy ProtocolRegistry
-        ProtocolRegistry protocolRegistryImplementation = new ProtocolRegistry();
-        bytes memory protocolRegistryInitData = abi.encodeWithSelector(ProtocolRegistry.initialize.selector, owner);
-        ERC1967Proxy protocolRegistryProxy =
-            new ERC1967Proxy(address(protocolRegistryImplementation), protocolRegistryInitData);
-        protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
+        // Deploy RoleRegistry
+        RoleRegistry roleRegistryImplementation = new RoleRegistry();
+        bytes memory roleRegistryInitData = abi.encodeWithSelector(RoleRegistry.initialize.selector, owner);
+        ERC1967Proxy roleRegistryProxy = new ERC1967Proxy(address(roleRegistryImplementation), roleRegistryInitData);
+        roleRegistry = RoleRegistry(address(roleRegistryProxy));
 
         // Deploy vHYPE token
         VHYPE vhypeImplementation = new VHYPE();
-        bytes memory vhypeInitData = abi.encodeWithSelector(vHYPE.initialize.selector, address(protocolRegistry));
+        bytes memory vhypeInitData = abi.encodeWithSelector(vHYPE.initialize.selector, address(roleRegistry));
         ERC1967Proxy vhypeProxy = new ERC1967Proxy(address(vhypeImplementation), vhypeInitData);
         vHYPE = VHYPE(address(vhypeProxy));
 
         // Deploy StakingVault
         StakingVault stakingVaultImplementation = new StakingVault();
         bytes memory stakingVaultInitData =
-            abi.encodeWithSelector(StakingVault.initialize.selector, address(protocolRegistry));
+            abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistry));
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
@@ -57,7 +56,7 @@ contract GenesisVaultManagerTest is Test {
         GenesisVaultManager genesisVaultManagerImplementation = new GenesisVaultManager(HYPE_TOKEN_ID);
         bytes memory genesisVaultManagerInitData = abi.encodeWithSelector(
             GenesisVaultManager.initialize.selector,
-            address(protocolRegistry),
+            address(roleRegistry),
             address(vHYPE),
             address(stakingVault),
             VAULT_CAPACITY,
@@ -69,8 +68,8 @@ contract GenesisVaultManagerTest is Test {
 
         // Setup roles
         vm.startPrank(owner);
-        protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), address(genesisVaultManager));
-        protocolRegistry.grantRole(protocolRegistry.OPERATOR_ROLE(), operator);
+        roleRegistry.grantRole(roleRegistry.MANAGER_ROLE(), address(genesisVaultManager));
+        roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
 
         // Mock HYPE system contract
@@ -83,7 +82,7 @@ contract GenesisVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_Initialize() public view {
-        assertEq(address(genesisVaultManager.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
         assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
@@ -93,7 +92,7 @@ contract GenesisVaultManagerTest is Test {
     function test_CannotInitializeTwice() public {
         vm.expectRevert("InvalidInitialization()");
         genesisVaultManager.initialize(
-            address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, defaultValidator
+            address(roleRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, defaultValidator
         );
     }
 
@@ -805,7 +804,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(genesisVaultManager.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
 
         // Check that the extra function is available

@@ -4,29 +4,28 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {VHYPE} from "../src/VHYPE.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
+import {RoleRegistry} from "../src/RoleRegistry.sol";
 
 contract VHYPETest is Test {
-    ProtocolRegistry protocolRegistry;
+    RoleRegistry roleRegistry;
     VHYPE public vHYPE;
 
     address public owner = makeAddr("owner");
     address public manager = makeAddr("manager");
 
     function setUp() public {
-        ProtocolRegistry protocolRegistryImplementation = new ProtocolRegistry();
-        bytes memory protocolRegistryInitData = abi.encodeWithSelector(ProtocolRegistry.initialize.selector, owner);
-        ERC1967Proxy protocolRegistryProxy =
-            new ERC1967Proxy(address(protocolRegistryImplementation), protocolRegistryInitData);
-        protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
+        RoleRegistry roleRegistryImplementation = new RoleRegistry();
+        bytes memory roleRegistryInitData = abi.encodeWithSelector(RoleRegistry.initialize.selector, owner);
+        ERC1967Proxy roleRegistryProxy = new ERC1967Proxy(address(roleRegistryImplementation), roleRegistryInitData);
+        roleRegistry = RoleRegistry(address(roleRegistryProxy));
 
         VHYPE implementation = new VHYPE();
-        bytes memory initData = abi.encodeWithSelector(VHYPE.initialize.selector, address(protocolRegistryProxy));
+        bytes memory initData = abi.encodeWithSelector(VHYPE.initialize.selector, address(roleRegistryProxy));
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         vHYPE = VHYPE(address(proxy));
 
         vm.startPrank(owner);
-        protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), manager);
+        roleRegistry.grantRole(roleRegistry.MANAGER_ROLE(), manager);
         vm.stopPrank();
     }
 
@@ -155,7 +154,7 @@ contract VHYPETest is Test {
         vHYPE.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(vHYPE.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(vHYPE.roleRegistry()), address(roleRegistry));
 
         // Check that the extra function is available
         VHYPEWithExtraFunction newProxy = VHYPEWithExtraFunction(payable(address(vHYPE)));
@@ -183,13 +182,13 @@ contract VHYPETest is Test {
 
         // Transfer ownership using 2-step process
         vm.prank(originalOwner);
-        protocolRegistry.transferOwnership(newOwner);
+        roleRegistry.transferOwnership(newOwner);
 
         vm.prank(newOwner);
-        protocolRegistry.acceptOwnership();
+        roleRegistry.acceptOwnership();
 
         // Verify ownership has been transferred
-        assertEq(protocolRegistry.owner(), newOwner);
+        assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
         VHYPEWithExtraFunction newImplementation = new VHYPEWithExtraFunction();
@@ -197,7 +196,7 @@ contract VHYPETest is Test {
         vHYPE.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(vHYPE.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(vHYPE.roleRegistry()), address(roleRegistry));
 
         // Check that the extra function is available
         VHYPEWithExtraFunction newProxy = VHYPEWithExtraFunction(payable(address(vHYPE)));
