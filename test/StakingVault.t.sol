@@ -7,11 +7,11 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
-import {ProtocolRegistry} from "../src/ProtocolRegistry.sol";
+import {RoleRegistry} from "../src/RoleRegistry.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 
 contract StakingVaultTest is Test {
-    ProtocolRegistry protocolRegistry;
+    RoleRegistry roleRegistry;
     StakingVault stakingVault;
 
     address public owner = makeAddr("owner");
@@ -19,21 +19,20 @@ contract StakingVaultTest is Test {
     address public operator = makeAddr("operator");
 
     function setUp() public {
-        ProtocolRegistry protocolRegistryImplementation = new ProtocolRegistry();
-        bytes memory protocolRegistryInitData = abi.encodeWithSelector(ProtocolRegistry.initialize.selector, owner);
-        ERC1967Proxy protocolRegistryProxy =
-            new ERC1967Proxy(address(protocolRegistryImplementation), protocolRegistryInitData);
-        protocolRegistry = ProtocolRegistry(address(protocolRegistryProxy));
+        RoleRegistry roleRegistryImplementation = new RoleRegistry();
+        bytes memory roleRegistryInitData = abi.encodeWithSelector(RoleRegistry.initialize.selector, owner);
+        ERC1967Proxy roleRegistryProxy = new ERC1967Proxy(address(roleRegistryImplementation), roleRegistryInitData);
+        roleRegistry = RoleRegistry(address(roleRegistryProxy));
 
         StakingVault stakingVaultImplementation = new StakingVault();
         bytes memory stakingVaultInitData =
-            abi.encodeWithSelector(StakingVault.initialize.selector, address(protocolRegistryProxy));
+            abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistryProxy));
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
         vm.startPrank(owner);
-        protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), manager);
-        protocolRegistry.grantRole(protocolRegistry.OPERATOR_ROLE(), operator);
+        roleRegistry.grantRole(roleRegistry.MANAGER_ROLE(), manager);
+        roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
     }
 
@@ -239,7 +238,7 @@ contract StakingVaultTest is Test {
 
         // Pause the contract
         vm.prank(owner);
-        protocolRegistry.pause(address(stakingVault));
+        roleRegistry.pause(address(stakingVault));
 
         vm.prank(manager);
         vm.expectRevert(); // Should revert when paused
@@ -401,7 +400,7 @@ contract StakingVaultTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_FunctionsWhenPaused() public {
         vm.prank(owner);
-        protocolRegistry.pause(address(stakingVault));
+        roleRegistry.pause(address(stakingVault));
 
         vm.deal(address(stakingVault), 1e18);
 
@@ -444,7 +443,7 @@ contract StakingVaultTest is Test {
         stakingVault.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(stakingVault.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(stakingVault.roleRegistry()), address(roleRegistry));
 
         // Check that the extra function is available
         StakingVaultWithExtraFunction newProxy = StakingVaultWithExtraFunction(payable(address(stakingVault)));
@@ -472,13 +471,13 @@ contract StakingVaultTest is Test {
 
         // Transfer ownership using 2-step process
         vm.prank(originalOwner);
-        protocolRegistry.transferOwnership(newOwner);
+        roleRegistry.transferOwnership(newOwner);
 
         vm.prank(newOwner);
-        protocolRegistry.acceptOwnership();
+        roleRegistry.acceptOwnership();
 
         // Verify ownership has been transferred
-        assertEq(protocolRegistry.owner(), newOwner);
+        assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
         StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
@@ -486,7 +485,7 @@ contract StakingVaultTest is Test {
         stakingVault.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(stakingVault.protocolRegistry()), address(protocolRegistry));
+        assertEq(address(stakingVault.roleRegistry()), address(roleRegistry));
 
         // Check that the extra function is available
         StakingVaultWithExtraFunction newProxy = StakingVaultWithExtraFunction(payable(address(stakingVault)));

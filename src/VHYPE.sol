@@ -9,21 +9,21 @@ import {ERC20PausableUpgradeable} from
     "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {ProtocolRegistry} from "./ProtocolRegistry.sol";
+import {RoleRegistry} from "./RoleRegistry.sol";
 
 contract VHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUPSUpgradeable {
-    ProtocolRegistry public protocolRegistry;
+    RoleRegistry public roleRegistry;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _protocolRegistry) public initializer {
+    function initialize(address _roleRegistry) public initializer {
         __ERC20_init("vHYPE", "vHYPE");
         __ERC20Burnable_init();
 
-        protocolRegistry = ProtocolRegistry(_protocolRegistry);
+        roleRegistry = RoleRegistry(_roleRegistry);
     }
 
     function mint(address to, uint256 amount) public onlyManager {
@@ -35,12 +35,12 @@ contract VHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUP
     }
 
     modifier onlyManager() {
-        require(protocolRegistry.hasRole(protocolRegistry.MANAGER_ROLE(), msg.sender), "Caller is not a manager");
+        require(roleRegistry.hasRole(roleRegistry.MANAGER_ROLE(), msg.sender), "Caller is not a manager");
         _;
     }
 
     modifier onlyOwner() {
-        require(protocolRegistry.owner() == msg.sender, "Caller is not the owner");
+        require(roleRegistry.owner() == msg.sender, "Caller is not the owner");
         _;
     }
 

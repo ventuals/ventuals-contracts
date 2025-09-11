@@ -5,7 +5,7 @@ import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Ini
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {ProtocolRegistry} from "./ProtocolRegistry.sol";
+import {RoleRegistry} from "./RoleRegistry.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {VHYPE} from "./VHYPE.sol";
@@ -20,7 +20,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The default validator to delegate HYPE to
     address public defaultValidator;
 
-    ProtocolRegistry public protocolRegistry;
+    RoleRegistry public roleRegistry;
     VHYPE public vHYPE;
     IStakingVault public stakingVault;
 
@@ -56,7 +56,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     function initialize(
-        address _protocolRegistry,
+        address _roleRegistry,
         address _vHYPE,
         address _stakingVault,
         uint256 _vaultCapacity,
@@ -64,7 +64,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     ) public initializer {
         __UUPSUpgradeable_init();
 
-        protocolRegistry = ProtocolRegistry(_protocolRegistry);
+        roleRegistry = RoleRegistry(_roleRegistry);
         vHYPE = VHYPE(_vHYPE);
         stakingVault = IStakingVault(payable(_stakingVault));
 
@@ -234,7 +234,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     fallback() external payable {}
 
     modifier onlyOwner() {
-        require(protocolRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
+        require(roleRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
         _;
     }
 
