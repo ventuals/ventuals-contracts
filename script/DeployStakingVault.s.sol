@@ -7,14 +7,16 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {console} from "forge-std/console.sol";
 
 contract DeployStakingVault is Script {
-    address public constant ROLE_REGISTRY = address(0x812C84b0AFED921D3F686b8A39c0e0282D918b8a);
-
     function run() public {
+        address roleRegistry = vm.envAddress("ROLE_REGISTRY");
+        require(roleRegistry != address(0), "RoleRegistry address is not set");
+
         vm.startBroadcast();
 
         StakingVault implementation = new StakingVault();
-        bytes memory initData = abi.encodeWithSelector(StakingVault.initialize.selector, ROLE_REGISTRY);
+        bytes memory initData = abi.encodeWithSelector(StakingVault.initialize.selector, roleRegistry);
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
+        console.log("Using RoleRegistry at:", roleRegistry);
         console.log("StakingVault (proxy) deployed to:", address(proxy));
         console.log("StakingVault (implementation) deployed to:", address(implementation));
 

@@ -7,14 +7,16 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {console} from "forge-std/console.sol";
 
 contract DeployRoleRegistry is Script {
-    address public constant OWNER = address(0x71D9eD6c257fB7872E1AB289ABfC374B5d1C61bC);
-
     function run() public {
+        address owner = vm.envAddress("OWNER");
+        require(owner != address(0), "Owner address is not set");
+
         vm.startBroadcast();
 
         RoleRegistry implementation = new RoleRegistry();
-        bytes memory initData = abi.encodeWithSelector(RoleRegistry.initialize.selector, OWNER);
+        bytes memory initData = abi.encodeWithSelector(RoleRegistry.initialize.selector, owner);
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
+        console.log("Owner:", owner);
         console.log("RoleRegistry (proxy) deployed to:", address(proxy));
         console.log("RoleRegistry (implementation) deployed to:", address(implementation));
 
