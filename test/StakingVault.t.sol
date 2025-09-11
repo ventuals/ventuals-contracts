@@ -184,6 +184,72 @@ contract StakingVaultTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                Tests: Transfer Hype To Core                */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_TransferHypeToCore(uint256 amount) public {
+        vm.deal(address(stakingVault), amount);
+        uint256 vaultBalanceBefore = address(stakingVault).balance;
+        uint256 systemAddressBalanceBefore = stakingVault.HYPE_SYSTEM_ADDRESS().balance;
+
+        vm.prank(manager);
+        stakingVault.transferHypeToCore(amount);
+
+        assertEq(address(stakingVault).balance, vaultBalanceBefore - amount);
+        assertEq(stakingVault.HYPE_SYSTEM_ADDRESS().balance, systemAddressBalanceBefore + amount);
+    }
+
+    function test_TransferHypeToCore_ZeroAmount() public {
+        uint256 vaultBalance = 1e18;
+        vm.deal(address(stakingVault), vaultBalance);
+        uint256 systemAddressBalanceBefore = stakingVault.HYPE_SYSTEM_ADDRESS().balance;
+
+        vm.prank(manager);
+        stakingVault.transferHypeToCore(0);
+
+        assertEq(address(stakingVault).balance, vaultBalance);
+        assertEq(stakingVault.HYPE_SYSTEM_ADDRESS().balance, systemAddressBalanceBefore);
+    }
+
+    function test_TransferHypeToCore_InsufficientBalance() public {
+        uint256 vaultBalance = 1e18;
+        uint256 transferAmount = 2e18; // More than vault balance
+        vm.deal(address(stakingVault), vaultBalance);
+
+        vm.prank(manager);
+        vm.expectRevert(); // Should revert due to insufficient balance
+        stakingVault.transferHypeToCore(transferAmount);
+    }
+
+    function test_TransferHypeToCore_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
+        uint256 amount = 1e18;
+        vm.deal(address(stakingVault), amount);
+
+        vm.prank(notManager);
+        vm.expectRevert("Caller is not a manager");
+        stakingVault.transferHypeToCore(amount);
+
+        // Balance should remain unchanged
+        assertEq(address(stakingVault).balance, amount);
+    }
+
+    function test_TransferHypeToCore_WhenPaused() public {
+        uint256 amount = 1e18;
+        vm.deal(address(stakingVault), amount);
+
+        // Pause the contract
+        vm.prank(owner);
+        protocolRegistry.pause(address(stakingVault));
+
+        vm.prank(manager);
+        vm.expectRevert(); // Should revert when paused
+        stakingVault.transferHypeToCore(amount);
+
+        // Balance should remain unchanged
+        assertEq(address(stakingVault).balance, amount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Transfer Hype                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TransferHype(address payable recipient, uint256 amount) public {
@@ -337,7 +403,8 @@ contract StakingVaultTest is Test {
         vm.prank(owner);
         protocolRegistry.pause(address(stakingVault));
 
-        vm.deal(manager, 1e18);
+        vm.deal(address(stakingVault), 1e18);
+
         vm.prank(manager);
         vm.expectRevert();
         stakingVault.stakingDeposit(1e10);
@@ -349,6 +416,10 @@ contract StakingVaultTest is Test {
         vm.prank(manager);
         vm.expectRevert();
         stakingVault.tokenDelegate(address(0x123), 1e8, false);
+
+        vm.prank(manager);
+        vm.expectRevert();
+        stakingVault.transferHypeToCore(1e8);
 
         vm.prank(manager);
         vm.expectRevert();

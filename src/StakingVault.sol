@@ -12,6 +12,8 @@ import {ProtocolRegistry} from "./ProtocolRegistry.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 
 contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
+    address public immutable HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
+
     ProtocolRegistry public protocolRegistry;
 
     event Received(address indexed sender, uint256 amount);
@@ -48,9 +50,15 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
     }
 
     /// @inheritdoc IStakingVault
+    function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
+        (bool success,) = payable(HYPE_SYSTEM_ADDRESS).call{value: amount}("");
+        require(success, "Failed to transfer HYPE to HyperCore"); // TODO: Change to typed error
+    }
+
+    /// @inheritdoc IStakingVault
     function transferHype(address payable recipient, uint256 amount) external onlyManager whenNotPaused {
         (bool success,) = recipient.call{value: amount}("");
-        require(success, "Transfer failed");
+        require(success, "Transfer failed"); // TODO: Change to typed error
     }
 
     /// @inheritdoc IStakingVault
@@ -69,32 +77,32 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
     }
 
     modifier whenNotPaused() {
-        require(!protocolRegistry.isPaused(address(this)), "Contract is paused");
+        require(!protocolRegistry.isPaused(address(this)), "Contract is paused"); // TODO: Change to typed error
         _;
     }
 
     modifier onlyManager() {
-        require(protocolRegistry.hasRole(protocolRegistry.MANAGER_ROLE(), msg.sender), "Caller is not a manager");
+        require(protocolRegistry.hasRole(protocolRegistry.MANAGER_ROLE(), msg.sender), "Caller is not a manager"); // TODO: Change to typed error
         _;
     }
 
     modifier onlyOperator() {
-        require(protocolRegistry.hasRole(protocolRegistry.OPERATOR_ROLE(), msg.sender), "Caller is not an operator");
+        require(protocolRegistry.hasRole(protocolRegistry.OPERATOR_ROLE(), msg.sender), "Caller is not an operator"); // TODO: Change to typed error
         _;
     }
 
     modifier onlyOwner() {
-        require(protocolRegistry.owner() == msg.sender, "Caller is not the owner");
+        require(protocolRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
         _;
     }
 
     /// @dev Function to receive HYPE when msg.data is empty
-    receive() external payable {
+    receive() external payable virtual {
         emit Received(msg.sender, msg.value);
     }
 
     /// @dev Fallback function to receive HYPE when msg.data is not empty
-    fallback() external payable {
+    fallback() external payable virtual {
         emit Received(msg.sender, msg.value);
     }
 
