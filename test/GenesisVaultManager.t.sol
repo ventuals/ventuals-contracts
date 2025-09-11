@@ -315,6 +315,26 @@ contract GenesisVaultManagerTest is Test {
         assertEq(vHYPE.balanceOf(user), 0);
     }
 
+    function test_Deposit_RevertWhenContractPaused() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
+
+        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(genesisVaultManager));
+
+        vm.deal(user, depositAmount);
+        vm.prank(user);
+        vm.expectRevert("Contract is paused");
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check that no vHYPE was minted
+        assertEq(vHYPE.balanceOf(user), 0);
+    }
+
     function test_Deposit_RevertWhenTransferFails() public {
         // Upgrade staking vault to a version that rejects transfers
         StakingVaultThatRejectsTransfers newImplementation = new StakingVaultThatRejectsTransfers();

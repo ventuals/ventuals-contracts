@@ -73,7 +73,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
-    function deposit() public payable canDeposit {
+    function deposit() public payable canDeposit whenNotPaused {
         uint256 requestedDepositAmount = msg.value;
         uint256 availableCapacity = vaultCapacity - totalBalance();
         uint256 amountToDeposit =
@@ -241,6 +241,11 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     modifier canDeposit() {
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
+        _;
+    }
+
+    modifier whenNotPaused() {
+        require(!roleRegistry.isPaused(address(this)), "Contract is paused"); // TODO: Change to typed error
         _;
     }
 }
