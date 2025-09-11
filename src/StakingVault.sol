@@ -51,12 +51,16 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
+        require(address(this).balance >= amount, "Staking vault does not have enough HYPE to transfer");
+
         (bool success,) = payable(HYPE_SYSTEM_ADDRESS).call{value: amount}("");
         require(success, "Failed to transfer HYPE to HyperCore"); // TODO: Change to typed error
     }
 
     /// @inheritdoc IStakingVault
     function transferHype(address payable recipient, uint256 amount) external onlyManager whenNotPaused {
+        require(address(this).balance >= amount, "Staking vault does not have enough HYPE to transfer");
+
         (bool success,) = recipient.call{value: amount}("");
         require(success, "Transfer failed"); // TODO: Change to typed error
     }
