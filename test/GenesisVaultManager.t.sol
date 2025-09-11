@@ -674,6 +674,27 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Default Validator                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetDefaultValidator_OnlyOwner() public {
+        address newValidator = makeAddr("newValidator");
+
+        vm.prank(owner);
+        genesisVaultManager.setDefaultValidator(newValidator);
+
+        assertEq(genesisVaultManager.defaultValidator(), newValidator);
+    }
+
+    function test_SetDefaultValidator_NotOwner() public {
+        address newValidator = makeAddr("newValidator");
+
+        vm.prank(user);
+        vm.expectRevert("Caller is not the owner");
+        genesisVaultManager.setDefaultValidator(newValidator);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                 Tests: Emergency Withdraw                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
