@@ -27,10 +27,6 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev All HYPE will be moved to the vault's staking account and staked with validators (on HyperCore).
     uint256 public vaultCapacity;
 
-    /// @notice Total HYPE that has been withdrawn from the vault for protocol purposes (e.g., liquidity pools)
-    /// @dev This amount should be included in the exchange rate calculation
-    uint256 public cumulativeProtocolWithdrawals;
-
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -38,23 +34,11 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @param refunded The amount of HYPE refunded (in 18 decimals)
     event Deposit(address indexed depositor, uint256 minted, uint256 deposited, uint256 refunded);
 
-    /// @notice Emitted when HYPE is undelegated and queued for withdrawal for protocol purposes
-    /// @param sender The address that withdrew the HYPE
+    /// @notice Emitted when an emergency staking withdraw is executed
+    /// @param sender The address that executed the emergency withdraw
     /// @param amount The amount of HYPE withdrawn
     /// @param purpose The purpose of the withdrawal
-    event ProtocolQueueStakingWithdraw(address indexed sender, uint256 amount, string purpose);
-
-    /// @notice Emitted when HYPE is withdrawn from the vault's HyperCore Spot account to the vault's HyperEVM account for protocol purposes
-    /// @param sender The address that withdrew the HYPE
-    /// @param amount The amount of HYPE withdrawn
-    /// @param purpose The purpose of the withdrawal
-    event ProtocolSpotToEvmWithdraw(address indexed sender, uint256 amount, string purpose);
-
-    /// @notice Emitted when HYPE is withdrawn from the vault for protocol purposes
-    /// @param sender The address that withdrew the HYPE
-    /// @param amount The amount of HYPE withdrawn
-    /// @param purpose The purpose of the withdrawal
-    event ProtocolWithdrawal(address indexed sender, uint256 amount, string purpose);
+    event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -156,10 +140,9 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     /// @notice Returns the total HYPE balance in the vault (in 18 decimals)
-    /// @dev Sum of staking account balance (on HyperCore), spot account balance (on HyperCore), contract balance (on HyperEVM), and cumulative protocol withdrawals
+    /// @dev Sum of staking account balance (on HyperCore), spot account balance (on HyperCore), contract balance (on HyperEVM)
     function totalBalance() public view returns (uint256) {
-        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance
-            + cumulativeProtocolWithdrawals;
+        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance;
     }
 
     /// @notice Total HYPE balance in the staking vault's staking account balance (in 18 decimals)
@@ -177,11 +160,15 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         return _convertTo18Decimals(spotBalance.total);
     }
 
-    /// @notice Immediately undelegates HYPE and queues a staking withdraw (on HyperCore) for protocol purposes
+    /// @notice Execute an emergency staking withdraw
+    /// @dev Immediately undelegates HYPE and initiates a staking withdraw
     /// @dev Amount will be available in the StakingVault's spot account balance after 7 days.
     /// @param amount Amount to withdraw (in 18 decimals)
     /// @param purpose Description of withdrawal purpose
-    function protocolQueueStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
+    function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
+        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
+        require(bytes(purpose).length > 0, "Purpose must be set"); // TODO: Change to typed error
+
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
         require(delegatorSummary.delegated >= _convertTo8Decimals(amount), "Insufficient delegated balance"); // TODO: Change to typed error
 
@@ -191,37 +178,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
         stakingVault.stakingWithdraw(_convertTo8Decimals(amount));
-        emit ProtocolQueueStakingWithdraw(msg.sender, amount, purpose);
-
-        // cumulativeProtocolWithdrawals is not updated, since HYPE remains in the staking vault's staking/spot accounts on HyperCore
-    }
-
-    /// @notice Transfers HYPE from the vaults's HyperCore Spot account to the vault's HyperEVM account, for protocol purposes
-    /// @param amount Amount to withdraw (in 18 decimals)
-    /// @param purpose Description of withdrawal purpose
-    function protocolSpotToEvmWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
-        L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(HYPE_TOKEN_ID);
-        require(spotBalance.total >= _convertTo8Decimals(amount), "Insufficient spot balance"); // TODO: Change to typed error
-
-        // See https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/hypercore-less-than-greater-than-hyperevm-transfers#transferring-hype
-        // To send HYPE from HyperCore Spot to HyperEVM, we need to set the destination to the HYPE system address (0x2222222222222222222222222222222222222222)
-        stakingVault.spotSend(0x2222222222222222222222222222222222222222, HYPE_TOKEN_ID, _convertTo8Decimals(amount));
-        emit ProtocolSpotToEvmWithdraw(msg.sender, amount, purpose);
-
-        // cumulativeProtocolWithdrawals is not updated, since HYPE remains in the vault's account on HyperEVM
-    }
-
-    /// @notice Withdraws HYPE from the vault's HyperEVM account for protocol purposes
-    /// @param amount Amount to withdraw (in 18 decimals)
-    /// @param purpose Description of withdrawal purpose
-    function protocolWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
-        require(address(stakingVault).balance >= amount, "Insufficient EVM balance"); // TODO: Change to typed error
-
-        // We update cumulativeProtocolWithdrawals here, since we're withdrawing HYPE out of the vault's accounts
-        cumulativeProtocolWithdrawals += amount;
-        stakingVault.transferHype(payable(msg.sender), amount);
-
-        emit ProtocolWithdrawal(msg.sender, amount, purpose);
+        emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
     /// @notice Sets the vault capacity (in 18 decimals)
