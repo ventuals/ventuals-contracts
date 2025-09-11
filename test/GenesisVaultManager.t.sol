@@ -12,6 +12,8 @@ import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Vm} from "forge-std/Vm.sol";
 
 contract GenesisVaultManagerTest is Test {
     GenesisVaultManager genesisVaultManager;
@@ -68,6 +70,10 @@ contract GenesisVaultManagerTest is Test {
         protocolRegistry.grantRole(protocolRegistry.MANAGER_ROLE(), address(genesisVaultManager));
         protocolRegistry.grantRole(protocolRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
+
+        // Mock HYPE system contract
+        MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
+        vm.etch(0x2222222222222222222222222222222222222222, address(mockHypeSystemContract).code);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -107,6 +113,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Check that we minted 1:1 vHYPE when vault is empty
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
+
         assertEq(userVHYPEBalance, depositAmount);
         assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
 
@@ -898,5 +905,31 @@ contract ContractThatRejectsTransfers {
 
     fallback() external payable {
         revert("Transfer rejected");
+    }
+}
+
+contract MockHypeSystemContract {
+    /// @dev Cheat code address.
+    /// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
+    address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
+
+    uint64 public constant HYPE_TOKEN_ID = 150;
+
+    receive() external payable {
+        uint64 amount = SafeCast.toUint64(msg.value / 1e10);
+
+        // When we receive HYPE, we want to add it to the spot balance to simulate a "transfer" to the address's
+        // spot account
+        L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(msg.sender, HYPE_TOKEN_ID);
+        L1ReadLibrary.SpotBalance memory newSpotBalance = L1ReadLibrary.SpotBalance({
+            total: spotBalance.total + amount,
+            hold: spotBalance.hold,
+            entryNtl: spotBalance.entryNtl
+        });
+        Vm(VM_ADDRESS).mockCall(
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
+            abi.encode(msg.sender, HYPE_TOKEN_ID),
+            abi.encode(newSpotBalance)
+        );
     }
 }
