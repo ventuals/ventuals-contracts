@@ -1,0 +1,148 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+import {console} from "forge-std/console.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {L1ReadLibrary} from "../../src/libraries/L1ReadLibrary.sol";
+
+/// @dev Cheat code address.
+/// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
+address constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
+
+library L1ReadAdapter {
+    function initialize() external {
+        Vm vm = Vm(VM_ADDRESS);
+
+        // Spot balance
+        vm.allowCheatcodes(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS);
+        vm.etch(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, address(new RpcCallSpotBalance()).code);
+
+        // Delegations
+        vm.allowCheatcodes(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS);
+        vm.etch(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, address(new RpcCallDelegations()).code);
+
+        // Delegator summary
+        vm.allowCheatcodes(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS);
+        vm.etch(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, address(new RpcCallDelegatorSummary()).code);
+
+        // L1 block number
+        vm.allowCheatcodes(L1ReadLibrary.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS);
+        vm.etch(L1ReadLibrary.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, address(new RpcCallL1BlockNumber()).code);
+
+        // Core user exists
+        vm.allowCheatcodes(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS);
+        vm.etch(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, address(new RpcCallCoreUserExists()).code);
+    }
+}
+
+contract BaseRpcCall {
+    function rpcCall(address to, bytes calldata data) internal returns (bytes memory) {
+        Vm vm = Vm(VM_ADDRESS);
+        string memory params =
+            string(abi.encodePacked("[{\"to\": \"", vm.toString(to), "\", \"data\": \"", vm.toString(data), "\"}]"));
+        bytes memory ethCallResult = vm.rpc("eth_call", params);
+        return ethCallResult;
+    }
+}
+
+contract RpcCallPosition is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.POSITION_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallSpotBalance is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallVaultEquity is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.VAULT_EQUITY_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallWithdrawable is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.WITHDRAWABLE_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallDelegations is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallDelegatorSummary is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallMarkPx is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.MARK_PX_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallOraclePx is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.ORACLE_PX_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallSpotPx is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.SPOT_PX_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallL1BlockNumber is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.L1_BLOCK_NUMBER_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallPerpAssetInfo is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.PERP_ASSET_INFO_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallSpotInfo is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.SPOT_INFO_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallTokenInfo is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.TOKEN_INFO_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallTokenSupply is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.TOKEN_SUPPLY_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallBbo is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.BBO_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallAccountMarginSummary is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.ACCOUNT_MARGIN_SUMMARY_PRECOMPILE_ADDRESS, data);
+    }
+}
+
+contract RpcCallCoreUserExists is BaseRpcCall {
+    fallback(bytes calldata data) external payable returns (bytes memory) {
+        return rpcCall(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, data);
+    }
+}
