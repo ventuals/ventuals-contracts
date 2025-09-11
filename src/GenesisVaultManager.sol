@@ -17,9 +17,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
 
-    // TODO: Update validator address
-    /// @dev The validator to delegate HYPE to
-    address public immutable VALIDATOR = 0x0000000000000000000000000000000000000000;
+    /// @dev The default validator to delegate HYPE to
+    address public defaultValidator;
 
     ProtocolRegistry public protocolRegistry;
     VHYPE public vHYPE;
@@ -37,6 +36,12 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @param refunded The amount of HYPE refunded (in 18 decimals)
     event Deposit(address indexed depositor, uint256 minted, uint256 deposited, uint256 refunded);
 
+    /// @notice Emitted when an HYPE stake is moved from one validator to another
+    /// @param fromValidator The validator from which the HYPE stake is being moved
+    /// @param toValidator The validator to which the HYPE stake is being moved
+    /// @param amount The amount of HYPE being moved (in 18 decimals)
+    event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
+
     /// @notice Emitted when an emergency staking withdraw is executed
     /// @param sender The address that executed the emergency withdraw
     /// @param amount The amount of HYPE withdrawn
@@ -50,10 +55,13 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address _protocolRegistry, address _vHYPE, address _stakingVault, uint256 _vaultCapacity)
-        public
-        initializer
-    {
+    function initialize(
+        address _protocolRegistry,
+        address _vHYPE,
+        address _stakingVault,
+        uint256 _vaultCapacity,
+        address _defaultValidator
+    ) public initializer {
         __UUPSUpgradeable_init();
 
         protocolRegistry = ProtocolRegistry(_protocolRegistry);
@@ -61,6 +69,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         stakingVault = IStakingVault(payable(_stakingVault));
 
         vaultCapacity = _vaultCapacity;
+        defaultValidator = _defaultValidator;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -84,7 +93,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
 
             stakingVault.transferHypeToCore(amountToDeposit); // HyperEVM -> HyperCore spot
             stakingVault.stakingDeposit(amountToDeposit.to8Decimals()); // HyperCore spot -> HyperCore staking
-            stakingVault.tokenDelegate(VALIDATOR, amountToDeposit.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
+            stakingVault.tokenDelegate(defaultValidator, amountToDeposit.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
         }
 
         // Refund any excess HYPE
@@ -163,6 +172,34 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         return spotBalance.total.to18Decimals();
     }
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       Owner Actions                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Sets the vault capacity (in 18 decimals)
+    /// @dev Vault capacity is the total amount of HYPE that can be deposited into the staking vault
+    function setVaultCapacity(uint256 _vaultCapacity) public onlyOwner {
+        vaultCapacity = _vaultCapacity;
+    }
+
+    /// @notice Sets the default validator to delegate HYPE to
+    /// @param _defaultValidator The default validator to delegate HYPE to
+    function setDefaultValidator(address _defaultValidator) public onlyOwner {
+        defaultValidator = _defaultValidator;
+    }
+
+    /// @notice Moves an HYPE stake from one validator to another
+    /// @param fromValidator The validator from which the HYPE stake is being moved
+    /// @param toValidator The validator to which the HYPE stake is being moved
+    /// @param amount The amount of HYPE being moved (in 18 decimals)
+    function redelegateStake(address fromValidator, address toValidator, uint256 amount) external onlyOwner {
+        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
+
+        stakingVault.tokenDelegate(fromValidator, amount.to8Decimals(), true);
+        stakingVault.tokenDelegate(toValidator, amount.to8Decimals(), false);
+        emit RedelegateStake(fromValidator, toValidator, amount);
+    }
+
     /// @notice Execute an emergency staking withdraw
     /// @dev Immediately undelegates HYPE and initiates a staking withdraw
     /// @dev Amount will be available in the StakingVault's spot account balance after 7 days.
@@ -176,7 +213,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         require(delegatorSummary.delegated >= amount.to8Decimals(), "Insufficient delegated balance"); // TODO: Change to typed error
 
         // Immediately undelegate HYPE
-        stakingVault.tokenDelegate(VALIDATOR, amount.to8Decimals(), true);
+        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), true);
 
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
@@ -184,22 +221,16 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
-    /// @notice Sets the vault capacity (in 18 decimals)
-    /// @dev Vault capacity is the total amount of HYPE that can be deposited into the staking vault
-    function setVaultCapacity(uint256 _vaultCapacity) public onlyOwner {
-        vaultCapacity = _vaultCapacity;
-    }
+    /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
+    /// @dev DO NOT REMOVE THIS FUNCTION, OTHERWISE WE LOSE THE ABILITY TO UPGRADE THE CONTRACT
+    /// @param newImplementation The address of the new implementation
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /// @dev Function to receive HYPE when msg.data is empty
     receive() external payable {}
 
     /// @dev Fallback function to receive HYPE when msg.data is not empty
     fallback() external payable {}
-
-    /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
-    /// @dev DO NOT REMOVE THIS FUNCTION, OTHERWISE WE LOSE THE ABILITY TO UPGRADE THE CONTRACT
-    /// @param newImplementation The address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     modifier onlyOwner() {
         require(protocolRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error

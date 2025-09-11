@@ -25,6 +25,7 @@ contract GenesisVaultManagerTest is Test {
     address public operator = makeAddr("operator");
     address public user = makeAddr("user");
 
+    address public defaultValidator = makeAddr("defaultValidator");
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
 
@@ -59,7 +60,8 @@ contract GenesisVaultManagerTest is Test {
             address(protocolRegistry),
             address(vHYPE),
             address(stakingVault),
-            VAULT_CAPACITY
+            VAULT_CAPACITY,
+            defaultValidator
         );
         ERC1967Proxy genesisVaultManagerProxy =
             new ERC1967Proxy(address(genesisVaultManagerImplementation), genesisVaultManagerInitData);
@@ -90,7 +92,9 @@ contract GenesisVaultManagerTest is Test {
 
     function test_CannotInitializeTwice() public {
         vm.expectRevert("InvalidInitialization()");
-        genesisVaultManager.initialize(address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY);
+        genesisVaultManager.initialize(
+            address(protocolRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, defaultValidator
+        );
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -105,7 +109,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -130,7 +134,9 @@ contract GenesisVaultManagerTest is Test {
         // Mock staking vault calls
         uint256 expectedStakeAmount = VAULT_CAPACITY;
         _mockAndExpectStakingDepositCall(uint64(expectedStakeAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(expectedStakeAmount / 1e10), false);
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(expectedStakeAmount / 1e10), false
+        );
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -155,7 +161,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -180,7 +186,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(700_000 * 1e18 / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(700_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -204,7 +210,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -228,7 +234,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(700_000 * 1e18 / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(700_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -251,7 +257,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(depositAmount / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -275,7 +281,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(700_000 * 1e18 / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(700_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -343,7 +349,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(200_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), uint64(200_000 * 1e18 / 1e10), false);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(200_000 * 1e18 / 1e10), false);
 
         vm.deal(address(contractThatRejectsTransfers), depositAmount);
         vm.prank(address(contractThatRejectsTransfers));
@@ -677,7 +683,7 @@ contract GenesisVaultManagerTest is Test {
 
         _mockDelegatorSummary(withdrawWeiAmount);
         _mockAndExpectStakingWithdrawCall(withdrawWeiAmount);
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.VALIDATOR(), withdrawWeiAmount, true);
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), withdrawWeiAmount, true);
 
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
