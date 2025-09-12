@@ -38,6 +38,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The cumulative amount of HYPE deposited by each address
     mapping(address => uint256) public depositsByAddress;
 
+    uint256 public lastHyperCoreTransferBlockNumber;
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -99,14 +101,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         uint256 amountToMint = HYPETovHYPE(amountToDeposit);
         vHYPE.mint(msg.sender, amountToMint);
 
-        // Stake HYPE
+        // Transfer HYPE to staking vault (HyperEVM -> HyperEVM)
         if (amountToDeposit > 0) {
-            (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}(""); // HyperEVM -> HyperEVM
+            (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
             require(success, "Transfer failed"); // TODO: Change to typed error
-
-            stakingVault.transferHypeToCore(amountToDeposit); // HyperEVM -> HyperCore spot
-            stakingVault.stakingDeposit(amountToDeposit.to8Decimals()); // HyperCore spot -> HyperCore staking
-            stakingVault.tokenDelegate(defaultValidator, amountToDeposit.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
         }
 
         // Refund any excess HYPE
@@ -238,6 +236,25 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         whitelistDepositLimits[depositor] = limit;
     }
 
+    /// @notice Transfers all HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @dev This function is called by the operator
+    function transferToHyperCoreAndDelegate() public onlyOperator {
+        uint256 amount = address(stakingVault).balance;
+        transferToHyperCoreAndDelegate(amount);
+    }
+
+    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @dev This function is called by the operator
+    /// @param amount The amount of HYPE to transfer (in 18 decimals)
+    function transferToHyperCoreAndDelegate(uint256 amount) public onlyOperator {
+        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
+        stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
+        stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
+        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
+
+        lastHyperCoreTransferBlockNumber = block.number;
+    }
+
     /// @notice Moves an HYPE stake from one validator to another
     /// @param fromValidator The validator from which the HYPE stake is being moved
     /// @param toValidator The validator to which the HYPE stake is being moved
@@ -283,12 +300,24 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev Fallback function to receive HYPE when msg.data is not empty
     fallback() external payable {}
 
+    modifier onlyOperator() {
+        require(roleRegistry.hasRole(roleRegistry.OPERATOR_ROLE(), msg.sender), "Caller is not an operator"); // TODO: Change to typed error
+        _;
+    }
+
     modifier onlyOwner() {
         require(roleRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
         _;
     }
 
     modifier canDeposit() {
+        // We prevent deposits for one block if there was a HyperEVM -> HyperCore transfer that happened earlier
+        // in the block. When a HyperEVM -> HyperCore transfer occurs, the account balance state changes are not
+        // reflected via L1Read precompiles until the beginning of the next block.
+        require(
+            block.number > lastHyperCoreTransferBlockNumber + 1,
+            "Cannot deposit until HyperCore transfer is complete at the end of the next block"
+        );
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
