@@ -12,9 +12,11 @@ contract DeployGenesisVaultManager is Script {
         address vHYPE = vm.envAddress("VHYPE");
         address stakingVault = vm.envAddress("STAKING_VAULT");
         bool isTestnet = vm.envBool("IS_TESTNET");
+        address defaultValidator = vm.envAddress("DEFAULT_VALIDATOR");
         require(roleRegistry != address(0), "RoleRegistry address is not set");
         require(vHYPE != address(0), "vHYPE address is not set");
         require(stakingVault != address(0), "StakingVault address is not set");
+        require(defaultValidator != address(0), "DefaultValidator address is not set");
 
         vm.startBroadcast();
 
@@ -26,7 +28,7 @@ contract DeployGenesisVaultManager is Script {
             vHYPE,
             stakingVault,
             1_200_000 * 1e18,
-            0x946bF3135c7D15E4462b510f74B6e304AABb5B21
+            defaultValidator
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Using RoleRegistry at:", roleRegistry);
