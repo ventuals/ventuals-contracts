@@ -22,21 +22,21 @@ library CoreWriterLibrary {
     /// @param validator The validator address to delegate or undelegate to
     /// @param weiAmount The amount of wei to delegate or undelegate (8 decimals)
     /// @param isUndelegate Whether to undelegate or delegate
-    function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external {
+    function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) internal {
         bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
         _sendRawAction(CORE_WRITER_VERSION, TOKEN_DELEGATE, encodedAction);
     }
 
     /// @dev Sends a staking deposit action to CoreWriter
     /// @param weiAmount The amount of wei to deposit (8 decimals)
-    function stakingDeposit(uint64 weiAmount) external {
+    function stakingDeposit(uint64 weiAmount) internal {
         bytes memory encodedAction = abi.encode(weiAmount);
         _sendRawAction(CORE_WRITER_VERSION, STAKING_DEPOSIT, encodedAction);
     }
 
     /// @dev Sends a staking withdraw action to CoreWriter
     /// @param weiAmount The amount of wei to withdraw (8 decimals)
-    function stakingWithdraw(uint64 weiAmount) external {
+    function stakingWithdraw(uint64 weiAmount) internal {
         bytes memory encodedAction = abi.encode(weiAmount);
         _sendRawAction(CORE_WRITER_VERSION, STAKING_WITHDRAW, encodedAction);
     }
@@ -45,7 +45,7 @@ library CoreWriterLibrary {
     /// @param destination The destination address to send the spot to
     /// @param token The token to send
     /// @param weiAmount The amount of wei to send. Should be in HyperCore decimals (e.g. 8 decimals for HYPE)
-    function spotSend(address destination, uint64 token, uint64 weiAmount) external {
+    function spotSend(address destination, uint64 token, uint64 weiAmount) internal {
         bytes memory encodedAction = abi.encode(destination, token, weiAmount);
         _sendRawAction(CORE_WRITER_VERSION, SPOT_SEND, encodedAction);
     }
@@ -53,7 +53,7 @@ library CoreWriterLibrary {
     /// @dev Sends an add API wallet action to CoreWriter
     /// @param apiWalletAddress The API wallet address to add
     /// @param name The name of the API wallet. If empty, then this becomes the main API wallet / agent
-    function addApiWallet(address apiWalletAddress, string calldata name) external {
+    function addApiWallet(address apiWalletAddress, string calldata name) internal {
         bytes memory encodedAction = abi.encode(apiWalletAddress, name);
         _sendRawAction(CORE_WRITER_VERSION, ADD_API_WALLET, encodedAction);
     }
