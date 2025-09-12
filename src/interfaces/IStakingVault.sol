@@ -4,6 +4,12 @@ pragma solidity ^0.8.27;
 import {L1ReadLibrary} from "../libraries/L1ReadLibrary.sol";
 
 interface IStakingVault {
+    /// @notice Thrown when trying to transfer HYPE that exceeds the StakingVault balance.
+    error InsufficientHYPEBalance();
+
+    /// @notice Thrown if HYPE transfer fails to given recipient for specified amount.
+    error TransferFailed(address recipient, uint256 amount);
+
     /// @dev Deposit HYPE from spot to staking account on HyperCore
     /// @param weiAmount The amount of wei to deposit (8 decimals)
     function stakingDeposit(uint64 weiAmount) external;
