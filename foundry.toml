@@ -11,4 +11,7 @@ remappings = [
 mainnet = "https://rpc.hyperliquid.xyz/evm"
 testnet = "https://rpc.hyperliquid-testnet.xyz/evm"
 
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}" }
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
