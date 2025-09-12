@@ -3,6 +3,7 @@ pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {GenesisVaultManager} from "../src/GenesisVaultManager.sol";
 import {RoleRegistry} from "../src/RoleRegistry.sol";
 import {VHYPE} from "../src/VHYPE.sol";
@@ -90,7 +91,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_CannotInitializeTwice() public {
-        vm.expectRevert("InvalidInitialization()");
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
         genesisVaultManager.initialize(
             address(roleRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, defaultValidator
         );
