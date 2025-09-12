@@ -38,6 +38,9 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The cumulative amount of HYPE deposited by each address
     mapping(address => uint256) depositsByAddress;
 
+    /// @dev The block number of the last deposit
+    uint256 public lastDepositBlockNumber;
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -289,6 +292,15 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     modifier canDeposit() {
+        // NOTE: We only want to allow one deposit per block. This is
+        // because the L1Read precompiles are only guaranteed to match
+        // the latest HyperCore state at the _beginning_ of the EVM block.
+        // If any HyperEVM -> HyperCore transactions are included in the
+        // same block as the deposit, the L1Read precompiles will not
+        // reflect the updated state.
+        require(block.number > lastDepositBlockNumber, "Deposit must be at least 1 block apart"); // TODO: Change to typed error
+        lastDepositBlockNumber = block.number;
+
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
