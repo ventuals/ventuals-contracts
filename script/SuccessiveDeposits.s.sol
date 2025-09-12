@@ -2,8 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Script} from "forge-std/Script.sol";
-import {StakingVault} from "../src/StakingVault.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {GenesisVaultManager} from "../src/GenesisVaultManager.sol";
 import {console} from "forge-std/console.sol";
 
 contract SuccessiveDeposits {
@@ -11,7 +10,7 @@ contract SuccessiveDeposits {
 
     event GenesisVaultManagerTotalBalance(uint256 totalBalance, string message);
 
-    constructor(address _genesisVaultManager) {
+    constructor(address payable _genesisVaultManager) {
         genesisVaultManager = GenesisVaultManager(_genesisVaultManager);
     }
 
@@ -35,7 +34,7 @@ contract DeploySuccessiveDeposits is Script {
 
         vm.startBroadcast();
 
-        SuccessiveDeposits successiveDeposits = new SuccessiveDeposits(genesisVaultManagerAddress);
+        SuccessiveDeposits successiveDeposits = new SuccessiveDeposits(payable(genesisVaultManagerAddress));
         console.log("SuccessiveDeposits deployed to:", address(successiveDeposits));
 
         vm.stopBroadcast();
@@ -49,8 +48,8 @@ contract RunSuccessiveDeposits is Script {
 
         vm.startBroadcast();
 
-        SuccessiveDeposits successiveDeposits = SuccessiveDeposits(successiveDepositsAddress);
-        successiveDeposits.successiveDeposits{value: 0.05}();
+        SuccessiveDeposits successiveDeposits = SuccessiveDeposits(payable(successiveDepositsAddress));
+        successiveDeposits.successiveDeposits{value: 0.05 ether}();
 
         vm.stopBroadcast();
     }
