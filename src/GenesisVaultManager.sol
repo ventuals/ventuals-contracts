@@ -29,8 +29,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The default validator to delegate HYPE to
     address public defaultValidator;
 
-    /// @dev The maximum amount of HYPE that can be deposited by an address
-    uint256 public depositLimitPerAddress;
+    /// @dev The default maximum amount of HYPE that can be deposited for each address (in 18 decimals)
+    uint256 public defaultDepositLimit;
 
     /// @dev A whitelist of addresses that have higher deposit limits
     mapping(address => uint256) whitelistDepositLimits;
@@ -70,7 +70,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         address _stakingVault,
         uint256 _vaultCapacity,
         address _defaultValidator,
-        uint256 _depositLimitPerAddress
+        uint256 _defaultDepositLimit
     ) public initializer {
         __UUPSUpgradeable_init();
 
@@ -80,7 +80,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
 
         vaultCapacity = _vaultCapacity;
         defaultValidator = _defaultValidator;
-        depositLimitPerAddress = _depositLimitPerAddress;
+        defaultDepositLimit = _defaultDepositLimit;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -191,7 +191,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     function remainingDepositLimit(address depositor) public view returns (uint256) {
         uint256 depositLimit = whitelistDepositLimits[depositor];
         if (depositLimit == 0) {
-            depositLimit = depositLimitPerAddress;
+            depositLimit = defaultDepositLimit;
         }
         return depositLimit - depositsByAddress[depositor];
     }
@@ -212,16 +212,16 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         defaultValidator = _defaultValidator;
     }
 
-    /// @notice Sets the deposit limit per address (in 18 decimals)
-    /// @param _depositLimitPerAddress The deposit limit per address (in 18 decimals)
-    function setDepositLimitPerAddress(uint256 _depositLimitPerAddress) public onlyOwner {
-        depositLimitPerAddress = _depositLimitPerAddress;
+    /// @notice Sets the default deposit limit per address (in 18 decimals)
+    /// @param _defaultDepositLimit The default deposit limit per address (in 18 decimals)
+    function setDefaultDepositLimit(uint256 _defaultDepositLimit) public onlyOwner {
+        defaultDepositLimit = _defaultDepositLimit;
     }
 
     /// @notice Whitelists a deposit limit for an address (in 18 decimals)
     /// @param depositor The address to whitelist a custom deposit limit for
     /// @param limit The deposit limit (in 18 decimals)
-    function whitelistDepositLimit(address depositor, uint256 limit) public onlyOwner {
+    function setWhitelistDepositLimit(address depositor, uint256 limit) public onlyOwner {
         whitelistDepositLimits[depositor] = limit;
     }
 
