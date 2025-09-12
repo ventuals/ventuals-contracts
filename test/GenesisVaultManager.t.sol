@@ -977,6 +977,59 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, whitelistLimit);
     }
 
+    function test_SetWhitelistDepositLimit_HigherThanDepositedAmount() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+
+        // Whitelist the user with higher limit
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(whitelistLimit / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(whitelistLimit / 1e10), false);
+
+        vm.deal(whitelistedUser, whitelistLimit);
+        vm.prank(whitelistedUser);
+        genesisVaultManager.deposit{value: whitelistLimit}();
+
+        // Setting limit to same amount should succeed
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit * 2);
+    }
+
+    function test_SetWhitelistDepositLimit_LowerThanDepositedAmount() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+
+        // Whitelist the user with higher limit
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(whitelistLimit / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(whitelistLimit / 1e10), false);
+
+        vm.deal(whitelistedUser, whitelistLimit);
+        vm.prank(whitelistedUser);
+        genesisVaultManager.deposit{value: whitelistLimit}();
+
+        // Setting limit to same amount should succeed
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // Setting limit to lower amount should revert
+        vm.prank(owner);
+        vm.expectRevert("Amount deposited exceeds new limit");
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, 0);
+    }
+
     function test_SetWhitelistDepositLimit_ZeroReturnsToDefault() public {
         address userToWhitelist = makeAddr("userToWhitelist");
 

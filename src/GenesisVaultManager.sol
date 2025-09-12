@@ -193,7 +193,12 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         if (depositLimit == 0) {
             depositLimit = defaultDepositLimit;
         }
-        return depositLimit - depositsByAddress[depositor];
+        (bool success, uint256 remaining) = Math.trySub(depositLimit, depositsByAddress[depositor]);
+        if (!success) {
+            // This should never happen; it could only happen if the depositor exceeded their deposit limit somehow
+            return 0;
+        }
+        return remaining;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -222,6 +227,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @param depositor The address to whitelist a custom deposit limit for
     /// @param limit The deposit limit (in 18 decimals)
     function setWhitelistDepositLimit(address depositor, uint256 limit) public onlyOwner {
+        uint256 amountDeposited = depositsByAddress[depositor];
+        require(amountDeposited <= limit, "Amount deposited exceeds new limit");
         whitelistDepositLimits[depositor] = limit;
     }
 
