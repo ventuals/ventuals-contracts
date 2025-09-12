@@ -193,9 +193,17 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         if (depositLimit == 0) {
             depositLimit = defaultDepositLimit;
         }
+
+        // IMPORTANT: We need to prevent possible underflow here. This may happen if we lower the default
+        // deposit limit after a user has already deposited more than the new limit.
+        //
+        // Example:
+        // - Default deposit limit is 100 HYPE
+        // - User deposits 150 HYPE
+        // - We lower the default deposit limit to 50 HYPE
+        // - remainingDepositLimit() should return 0, not underflow
         (bool success, uint256 remaining) = Math.trySub(depositLimit, depositsByAddress[depositor]);
         if (!success) {
-            // This should never happen; it could only happen if the depositor exceeded their deposit limit somehow
             return 0;
         }
         return remaining;
