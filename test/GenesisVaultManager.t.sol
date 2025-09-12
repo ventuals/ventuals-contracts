@@ -953,6 +953,29 @@ contract GenesisVaultManagerTest is Test {
         assertEq(genesisVaultManager.defaultDepositLimit(), 0);
     }
 
+    function test_SetDefaultDepositLimit_LowerThanDepositedAmount() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(DEFAULT_DEPOSIT_LIMIT / 1e10));
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(DEFAULT_DEPOSIT_LIMIT / 1e10), false
+        );
+
+        // Max out the default deposit limit
+        vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
+
+        // Set default deposit limit lower than deposited amount
+        vm.prank(owner);
+        genesisVaultManager.setDefaultDepositLimit(DEFAULT_DEPOSIT_LIMIT / 2);
+
+        // Check that remaining deposit limit is 0
+        assertEq(genesisVaultManager.remainingDepositLimit(user), 0);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*         Tests: Whitelist Deposit Limit (Only Owner)        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -1006,6 +1029,34 @@ contract GenesisVaultManagerTest is Test {
         assertEq(genesisVaultManager.remainingDepositLimit(user2), limit2);
         // Regular user should still have default limit
         assertEq(genesisVaultManager.remainingDepositLimit(user), DEFAULT_DEPOSIT_LIMIT);
+    }
+
+    function test_SetWhitelistDepositLimit_LowerThanDepositedAmount() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+
+        // Whitelist the user with higher limit
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(whitelistLimit / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(whitelistLimit / 1e10), false);
+
+        // Whitelist user deposits HYPE with higher limit
+        vm.deal(whitelistedUser, whitelistLimit);
+        vm.prank(whitelistedUser);
+        genesisVaultManager.deposit{value: whitelistLimit}();
+
+        // Set whitelist limit lower than deposited amount
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, 0);
+
+        // Check that remaining deposit limit is 0
+        assertEq(genesisVaultManager.remainingDepositLimit(whitelistedUser), 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
