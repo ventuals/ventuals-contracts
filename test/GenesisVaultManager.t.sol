@@ -29,6 +29,7 @@ contract GenesisVaultManagerTest is Test {
     address public defaultValidator = makeAddr("defaultValidator");
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
+    uint256 public constant DEFAULT_DEPOSIT_LIMIT = 100_000 * 1e18; // 100k HYPE
 
     // Events
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
@@ -61,7 +62,8 @@ contract GenesisVaultManagerTest is Test {
             address(vHYPE),
             address(stakingVault),
             VAULT_CAPACITY,
-            defaultValidator
+            defaultValidator,
+            DEFAULT_DEPOSIT_LIMIT
         );
         ERC1967Proxy genesisVaultManagerProxy =
             new ERC1967Proxy(address(genesisVaultManagerImplementation), genesisVaultManagerInitData);
@@ -87,13 +89,20 @@ contract GenesisVaultManagerTest is Test {
         assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
+        assertEq(genesisVaultManager.defaultValidator(), defaultValidator);
+        assertEq(genesisVaultManager.defaultDepositLimit(), DEFAULT_DEPOSIT_LIMIT);
         assertEq(genesisVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
     function test_CannotInitializeTwice() public {
         vm.expectRevert(Initializable.InvalidInitialization.selector);
         genesisVaultManager.initialize(
-            address(roleRegistry), address(vHYPE), address(stakingVault), VAULT_CAPACITY, defaultValidator
+            address(roleRegistry),
+            address(vHYPE),
+            address(stakingVault),
+            VAULT_CAPACITY,
+            defaultValidator,
+            DEFAULT_DEPOSIT_LIMIT
         );
     }
 
@@ -105,7 +114,7 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegatorSummary(0);
         _mockSpotBalance(0);
 
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+        uint256 depositAmount = 50_000 * 1e18; // 50k HYPE
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
@@ -125,39 +134,12 @@ contract GenesisVaultManagerTest is Test {
         assertEq(user.balance, 0);
     }
 
-    function test_Deposit_PartialDepositIntoEmptyVault() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
-        uint256 depositAmount = 1_500_000 * 1e18; // 1.5M HYPE (more than capacity)
-
-        // Mock staking vault calls
-        uint256 expectedStakeAmount = VAULT_CAPACITY;
-        _mockAndExpectStakingDepositCall(uint64(expectedStakeAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(
-            genesisVaultManager.defaultValidator(), uint64(expectedStakeAmount / 1e10), false
-        );
-
-        vm.deal(user, depositAmount);
-        vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check that we minted 1:1 vHYPE when vault is empty
-        uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, VAULT_CAPACITY);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), VAULT_CAPACITY); // Should be exactly equal
-
-        // Check user was refunded the excess
-        uint256 expectedRefund = depositAmount - VAULT_CAPACITY;
-        assertEq(user.balance, expectedRefund);
-    }
-
     function test_Deposit_FullDepositIntoVaultWithExistingBalance() public {
         uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
         uint256 existingSupply = 500_000 * 1e18; // 500k HYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // 1:1 ratio
 
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+        uint256 depositAmount = 50_000 * 1e18; // 50k HYPE
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
@@ -177,16 +159,16 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_PartialDepositIntoVaultWithExistingBalance() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        uint256 existingBalance = 1_150_000 * 1e18; // 1.15M HYPE
+        uint256 existingSupply = 1_150_000 * 1e18; // 1.15M vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // 1:1 ratio
 
-        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted
-        uint256 depositAmount = 1_000_000 * 1e18;
+        // Attempt to deposit 100k HYPE; only 50k HYPE will be accepted
+        uint256 depositAmount = 100_000 * 1e18;
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(700_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(50_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(50_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -194,11 +176,11 @@ contract GenesisVaultManagerTest is Test {
 
         // Check vHYPE was minted at 1:1 exchange rate
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 700_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18); // Should be exactly equal
+        assertEq(userVHYPEBalance, 50_000 * 1e18);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 50_000 * 1e18); // Should be exactly equal
 
         // Check user was refunded the excess
-        assertEq(user.balance, 300_000 * 1e18);
+        assertEq(user.balance, 50_000 * 1e18);
     }
 
     function test_Deposit_ExchangeRateAboveOneFullDeposit() public {
@@ -206,7 +188,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 existingSupply = 250_000 * 1e18; // 250k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 2
 
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+        uint256 depositAmount = 50_000 * 1e18; // 50k HYPE
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
@@ -225,27 +207,27 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_ExchangeRateAboveOnePartialDeposit() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 existingSupply = 250_000 * 1e18; // 250k vHYPE
+        uint256 existingBalance = 1_150_000 * 1e18; // 1.15M HYPE
+        uint256 existingSupply = 575_000 * 1e18; // 575k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 2
 
-        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted
-        uint256 depositAmount = 1_000_000 * 1e18;
+        // Attempt to deposit 100k HYPE; only 50k HYPE will be accepted
+        uint256 depositAmount = 100_000 * 1e18;
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(700_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 2 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 2 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
         genesisVaultManager.deposit{value: depositAmount}();
 
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 350_000 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18); // Should be exactly equal
+        assertEq(userVHYPEBalance, 25_000 * 1e18);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 50_000 * 1e18); // Should be exactly equal
 
         // Check user was refunded the excess
-        assertEq(user.balance, 300_000 * 1e18);
+        assertEq(user.balance, 50_000 * 1e18);
     }
 
     function test_Deposit_ExchangeRateBelowOneFullDeposit() public {
@@ -253,7 +235,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 0.5
 
-        uint256 depositAmount = 250_000 * 1e18; // 250k HYPE
+        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
@@ -272,27 +254,27 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_ExchangeRateBelowOnePartialDeposit() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 existingSupply = 1_000_000 * 1e18; // 1M vHYPE
+        uint256 existingBalance = 1_150_000 * 1e18; // 1.15M HYPE
+        uint256 existingSupply = 2_300_000 * 1e18; // 2.3M vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 0.5
 
-        // Attempt to deposit 1M HYPE; only 700k HYPE will be accepted
-        uint256 depositAmount = 1_000_000 * 1e18; // 1M HYPE
+        // Attempt to deposit 100k HYPE; only 50k HYPE will be accepted
+        uint256 depositAmount = 100_000 * 1e18;
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(700_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(700_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(50_000 * 1e18 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(50_000 * 1e18 / 1e10), false);
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
         genesisVaultManager.deposit{value: depositAmount}();
 
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-        assertEq(userVHYPEBalance, 700_000 * 2 * 1e18);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 700_000 * 1e18); // Should be exactly equal
+        assertEq(userVHYPEBalance, 50_000 * 2 * 1e18);
+        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), 50_000 * 1e18); // Should be exactly equal
 
         // Check user was refunded the excess
-        assertEq(user.balance, 300_000 * 1e18);
+        assertEq(user.balance, 50_000 * 1e18);
     }
 
     function test_Deposit_RevertWhenVaultFull(uint256 depositAmount) public {
@@ -358,18 +340,19 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_RevertWhenRefundFails() public {
-        uint256 existingBalance = 1_000_000 * 1e18; // 1M HYPE
-        uint256 existingSupply = 1_000_000 * 1e18; // 1M vHYPE
+        uint256 existingBalance = 1_150_000 * 1e18; // 1.15M HYPE
+        uint256 existingSupply = 1_150_000 * 1e18; // 1.15M vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
 
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+        // Attempt to deposit 100k HYPE; only 50k HYPE will be accepted
+        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
 
         // Create a contract that rejects refunds
         ContractThatRejectsTransfers contractThatRejectsTransfers = new ContractThatRejectsTransfers();
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(200_000 * 1e18 / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(200_000 * 1e18 / 1e10), false);
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 2 / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 2 / 1e10), false);
 
         vm.deal(address(contractThatRejectsTransfers), depositAmount);
         vm.prank(address(contractThatRejectsTransfers));
@@ -378,6 +361,184 @@ contract GenesisVaultManagerTest is Test {
 
         // Check that no vHYPE was minted
         assertEq(vHYPE.balanceOf(address(contractThatRejectsTransfers)), 0);
+    }
+
+    function test_Deposit_RevertWhenDepositLimitReached() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        // First deposit up to the limit
+        vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
+        _mockAndExpectStakingDepositCall(uint64(DEFAULT_DEPOSIT_LIMIT / 1e10));
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(DEFAULT_DEPOSIT_LIMIT / 1e10), false
+        );
+
+        vm.prank(user);
+        genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
+
+        // Second deposit should revert
+        uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
+        vm.deal(user, additionalDeposit);
+        vm.prank(user);
+        vm.expectRevert("Deposit limit reached");
+        genesisVaultManager.deposit{value: additionalDeposit}();
+    }
+
+    function test_Deposit_SuccessWithWhitelistedLimit() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+        uint256 depositAmount = 200_000 * 1e18; // 200k HYPE
+
+        // Whitelist the user with higher limit
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 1e10), false);
+
+        vm.deal(whitelistedUser, depositAmount);
+        vm.prank(whitelistedUser);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Check that vHYPE was minted
+        assertEq(vHYPE.balanceOf(whitelistedUser), depositAmount);
+        assertEq(whitelistedUser.balance, 0);
+    }
+
+    function test_Deposit_RevertWhenWhitelistedLimitReached() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 50_000 * 1e18; // 50k HYPE (lower than default)
+
+        // Whitelist the user with lower limit
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // First deposit up to the whitelist limit
+        _mockAndExpectStakingDepositCall(uint64(whitelistLimit / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(whitelistLimit / 1e10), false);
+
+        vm.deal(whitelistedUser, whitelistLimit);
+        vm.prank(whitelistedUser);
+        genesisVaultManager.deposit{value: whitelistLimit}();
+
+        // Second deposit should revert
+        uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
+        vm.deal(whitelistedUser, additionalDeposit);
+        vm.prank(whitelistedUser);
+        vm.expectRevert("Deposit limit reached");
+        genesisVaultManager.deposit{value: additionalDeposit}();
+    }
+
+    function test_Deposit_PartialDepositDueToDepositLimit() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        // Try to deposit more than the limit
+        uint256 requestedAmount = DEFAULT_DEPOSIT_LIMIT + 50_000 * 1e18; // 150k HYPE
+        uint256 expectedDepositAmount = DEFAULT_DEPOSIT_LIMIT; // Only 100k HYPE should be deposited
+
+        // Mock staking vault calls for the limited amount
+        _mockAndExpectStakingDepositCall(uint64(expectedDepositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(expectedDepositAmount / 1e10), false
+        );
+
+        vm.deal(user, requestedAmount);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: requestedAmount}();
+
+        // Check that only the limit was deposited and rest was refunded
+        assertEq(vHYPE.balanceOf(user), expectedDepositAmount);
+        assertEq(user.balance, requestedAmount - expectedDepositAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*              Tests: Remaining Deposit Limits               */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_RemainingDepositLimit_NoDeposits() public view {
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(user);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT);
+    }
+
+    function test_RemainingDepositLimit_WithDeposits() public {
+        // Mock a deposit of 30k HYPE for the user
+        uint256 depositAmount = 30_000 * 1e18;
+
+        // Set up mock for balances to allow deposit
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(depositAmount / 1e10), false);
+
+        vm.deal(user, depositAmount);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(user);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT - depositAmount);
+    }
+
+    function test_RemainingDepositLimit_MaxDeposits() public {
+        // Mock a deposit equal to the limit
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(DEFAULT_DEPOSIT_LIMIT / 1e10));
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(DEFAULT_DEPOSIT_LIMIT / 1e10), false
+        );
+
+        vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
+
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(user);
+        assertEq(remaining, 0);
+    }
+
+    function test_RemainingDepositLimit_WithWhitelistHigherLimit() public {
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(whitelistedUser);
+        assertEq(remaining, whitelistLimit);
+    }
+
+    function test_RemainingDepositLimit_WithWhitelistLowerLimit() public {
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 50_000 * 1e18; // 50k HYPE
+
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(whitelistedUser);
+        assertEq(remaining, whitelistLimit);
+    }
+
+    function test_RemainingDepositLimit_WhitelistZeroLimit() public {
+        address whitelistedUser = makeAddr("whitelistedUser");
+
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, 0);
+
+        // When whitelist is 0, should use default limit
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(whitelistedUser);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -673,7 +834,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                    Tests: Vault Capacity                   */
+    /*              Tests: Vault Capacity (Only Owner)            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_SetVaultCapacity_OnlyOwner() public {
@@ -694,7 +855,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                 Tests: Default Validator                   */
+    /*            Tests: Set Default Validator (Only Owner)       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_SetDefaultValidator_OnlyOwner() public {
@@ -715,7 +876,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                 Tests: Redelegate Stake                    */
+    /*          Tests: Redelegate Stake (Only Owner)              */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
@@ -765,7 +926,141 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                 Tests: Emergency Withdraw                  */
+    /*       Tests: Set Default Deposit Limit (Only Owner)        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetDefaultDepositLimit_OnlyOwner() public {
+        uint256 newLimit = 200_000 * 1e18; // 200k HYPE
+
+        vm.prank(owner);
+        genesisVaultManager.setDefaultDepositLimit(newLimit);
+
+        assertEq(genesisVaultManager.defaultDepositLimit(), newLimit);
+    }
+
+    function test_SetDefaultDepositLimit_NotOwner() public {
+        uint256 newLimit = 200_000 * 1e18;
+
+        vm.prank(user);
+        vm.expectRevert("Caller is not the owner");
+        genesisVaultManager.setDefaultDepositLimit(newLimit);
+    }
+
+    function test_SetDefaultDepositLimit_ZeroLimit() public {
+        vm.prank(owner);
+        genesisVaultManager.setDefaultDepositLimit(0);
+
+        assertEq(genesisVaultManager.defaultDepositLimit(), 0);
+    }
+
+    function test_SetDefaultDepositLimit_LowerThanDepositedAmount() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(DEFAULT_DEPOSIT_LIMIT / 1e10));
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(DEFAULT_DEPOSIT_LIMIT / 1e10), false
+        );
+
+        // Max out the default deposit limit
+        vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
+
+        // Set default deposit limit lower than deposited amount
+        vm.prank(owner);
+        genesisVaultManager.setDefaultDepositLimit(DEFAULT_DEPOSIT_LIMIT / 2);
+
+        // Check that remaining deposit limit is 0
+        assertEq(genesisVaultManager.remainingDepositLimit(user), 0);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*         Tests: Whitelist Deposit Limit (Only Owner)        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetWhitelistDepositLimit_OnlyOwner() public {
+        address userToWhitelist = makeAddr("userToWhitelist");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, whitelistLimit);
+
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(userToWhitelist);
+        assertEq(remaining, whitelistLimit);
+    }
+
+    function test_SetWhitelistDepositLimit_NotOwner() public {
+        address userToWhitelist = makeAddr("userToWhitelist");
+        uint256 whitelistLimit = 500_000 * 1e18;
+
+        vm.prank(user);
+        vm.expectRevert("Caller is not the owner");
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, whitelistLimit);
+    }
+
+    function test_SetWhitelistDepositLimit_ZeroReturnsToDefault() public {
+        address userToWhitelist = makeAddr("userToWhitelist");
+
+        vm.startPrank(owner);
+        // First set a custom limit
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, 500_000 * 1e18);
+        // Then reset to 0 (should use default)
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, 0);
+        vm.stopPrank();
+
+        uint256 remaining = genesisVaultManager.remainingDepositLimit(userToWhitelist);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT);
+    }
+
+    function test_SetWhitelistDepositLimit_MultipleUsers() public {
+        address user1 = makeAddr("user1");
+        address user2 = makeAddr("user2");
+        uint256 limit1 = 300_000 * 1e18;
+        uint256 limit2 = 750_000 * 1e18;
+
+        vm.startPrank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(user1, limit1);
+        genesisVaultManager.setWhitelistDepositLimit(user2, limit2);
+        vm.stopPrank();
+
+        assertEq(genesisVaultManager.remainingDepositLimit(user1), limit1);
+        assertEq(genesisVaultManager.remainingDepositLimit(user2), limit2);
+        // Regular user should still have default limit
+        assertEq(genesisVaultManager.remainingDepositLimit(user), DEFAULT_DEPOSIT_LIMIT);
+    }
+
+    function test_SetWhitelistDepositLimit_LowerThanDepositedAmount() public {
+        _mockDelegatorSummary(0);
+        _mockSpotBalance(0);
+
+        address whitelistedUser = makeAddr("whitelistedUser");
+        uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
+
+        // Whitelist the user with higher limit
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
+
+        // Mock staking vault calls
+        _mockAndExpectStakingDepositCall(uint64(whitelistLimit / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(whitelistLimit / 1e10), false);
+
+        // Whitelist user deposits HYPE with higher limit
+        vm.deal(whitelistedUser, whitelistLimit);
+        vm.prank(whitelistedUser);
+        genesisVaultManager.deposit{value: whitelistLimit}();
+
+        // Set whitelist limit lower than deposited amount
+        vm.prank(owner);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, 0);
+
+        // Check that remaining deposit limit is 0
+        assertEq(genesisVaultManager.remainingDepositLimit(whitelistedUser), 0);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*             Tests: Emergency Withdraw (Only Owner)         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_EmergencyStakingWithdraw_OnlyOwner() public {

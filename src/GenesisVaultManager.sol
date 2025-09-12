@@ -14,20 +14,29 @@ import {Converters} from "./libraries/Converters.sol";
 contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     using Converters for *;
 
-    /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
-    uint64 public immutable HYPE_TOKEN_ID;
-
-    /// @dev The default validator to delegate HYPE to
-    address public defaultValidator;
-
     RoleRegistry public roleRegistry;
     VHYPE public vHYPE;
     IStakingVault public stakingVault;
+
+    /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
+    uint64 public immutable HYPE_TOKEN_ID;
 
     /// @notice The total HYPE capacity of the vault (in 18 decimals)
     /// @dev This is the total amount of HYPE that can be deposited into the vault.
     /// @dev All HYPE will be moved to the vault's staking account and staked with validators (on HyperCore).
     uint256 public vaultCapacity;
+
+    /// @dev The default validator to delegate HYPE to
+    address public defaultValidator;
+
+    /// @dev The default maximum amount of HYPE that can be deposited for each address (in 18 decimals)
+    uint256 public defaultDepositLimit;
+
+    /// @dev A whitelist of addresses that have higher deposit limits
+    mapping(address => uint256) whitelistDepositLimits;
+
+    /// @dev The cumulative amount of HYPE deposited by each address
+    mapping(address => uint256) depositsByAddress;
 
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
@@ -60,7 +69,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         address _vHYPE,
         address _stakingVault,
         uint256 _vaultCapacity,
-        address _defaultValidator
+        address _defaultValidator,
+        uint256 _defaultDepositLimit
     ) public initializer {
         __UUPSUpgradeable_init();
 
@@ -70,14 +80,17 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
 
         vaultCapacity = _vaultCapacity;
         defaultValidator = _defaultValidator;
+        defaultDepositLimit = _defaultDepositLimit;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
     function deposit() public payable canDeposit whenNotPaused {
         uint256 requestedDepositAmount = msg.value;
-        uint256 availableCapacity = vaultCapacity - totalBalance();
-        uint256 amountToDeposit =
-            requestedDepositAmount > availableCapacity ? availableCapacity : requestedDepositAmount;
+        uint256 availableCapacity = Math.min(vaultCapacity - totalBalance(), remainingDepositLimit(msg.sender));
+        uint256 amountToDeposit = Math.min(requestedDepositAmount, availableCapacity);
+
+        // Update cumulative deposits for this address
+        depositsByAddress[msg.sender] += amountToDeposit;
 
         // Mint vHYPE
         // IMPORTANT: We need to make sure that we mint the vHYPE _before_ transferring the HYPE to the staking vault,
@@ -172,6 +185,30 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         return spotBalance.total.to18Decimals();
     }
 
+    /// @notice Returns the remaining deposit limit for an address (in 18 decimals)
+    /// @param depositor The address to check the remaining deposit limit for
+    /// @return The remaining deposit limit (in 18 decimals)
+    function remainingDepositLimit(address depositor) public view returns (uint256) {
+        uint256 depositLimit = whitelistDepositLimits[depositor];
+        if (depositLimit == 0) {
+            depositLimit = defaultDepositLimit;
+        }
+
+        // IMPORTANT: We need to prevent possible underflow here. This may happen if we lower the default
+        // deposit limit after a user has already deposited more than the new limit.
+        //
+        // Example:
+        // - Default deposit limit is 100 HYPE
+        // - User deposits 150 HYPE
+        // - We lower the default deposit limit to 50 HYPE
+        // - remainingDepositLimit() should return 0, not underflow
+        (bool success, uint256 remaining) = Math.trySub(depositLimit, depositsByAddress[depositor]);
+        if (!success) {
+            return 0;
+        }
+        return remaining;
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       Owner Actions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -186,6 +223,19 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @param _defaultValidator The default validator to delegate HYPE to
     function setDefaultValidator(address _defaultValidator) public onlyOwner {
         defaultValidator = _defaultValidator;
+    }
+
+    /// @notice Sets the default deposit limit per address (in 18 decimals)
+    /// @param _defaultDepositLimit The default deposit limit per address (in 18 decimals)
+    function setDefaultDepositLimit(uint256 _defaultDepositLimit) public onlyOwner {
+        defaultDepositLimit = _defaultDepositLimit;
+    }
+
+    /// @notice Whitelists a deposit limit for an address (in 18 decimals)
+    /// @param depositor The address to whitelist a custom deposit limit for
+    /// @param limit The deposit limit (in 18 decimals)
+    function setWhitelistDepositLimit(address depositor, uint256 limit) public onlyOwner {
+        whitelistDepositLimits[depositor] = limit;
     }
 
     /// @notice Moves an HYPE stake from one validator to another
@@ -241,6 +291,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     modifier canDeposit() {
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
+        require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
         _;
     }
 
