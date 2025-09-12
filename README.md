@@ -1,66 +1,49 @@
-## Foundry
+# Ventuals Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## Overview
 
-Foundry consists of:
+Smart contracts for the Ventuals HYPE LST (vHYPE).
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+Ventuals is creating a HYPE LST (vHYPE) to raise the stake requirement for its HIP-3 deployment and share economics with contributors.
+Contributors deposit HYPE and receive vHYPE, a fully transferable ERC20 issued 1:1 against their principal deposit.
 
-## Documentation
+vHYPE serves as both:
 
-https://book.getfoundry.sh/
+- A claim on the underlying HYPE stake.
+- A claim on Ventuals exchange revenue, distributed periodically in USDC.
 
-## Usage
+## Getting Started
 
-### Build
+Install Foundry:
 
-```shell
-$ forge build
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+foundryup
 ```
 
-### Test
+Clone and set up the repository:
 
-```shell
-$ forge test
+```bash
+git clone https://github.com/metro-xyz/ventuals-contracts.git && cd ventuals-contracts
+git submodule update --init --recursive
+forge build
 ```
 
-### Format
+## Testing
 
-```shell
-$ forge fmt
+```bash
+# Run tests
+forge test
+
+# Run coverage report
+forge coverage
 ```
 
-### Gas Snapshots
+## Security
 
-```shell
-$ forge snapshot
-```
+The Ventuals smart contracts undergo independent security audits, and available audit reports are published in [docs/audits](docs/audits). We recommend
+that all integrators and contributors review these reports before interacting with the contracts.
 
-### Anvil
+## License
 
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+The Ventuals smart contracts are licensed under Apache License 2.0.
