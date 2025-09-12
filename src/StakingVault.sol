@@ -51,18 +51,12 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
-        require(address(this).balance >= amount, "Staking vault does not have enough HYPE to transfer");
-
-        (bool success,) = payable(HYPE_SYSTEM_ADDRESS).call{value: amount}("");
-        require(success, "Failed to transfer HYPE to HyperCore"); // TODO: Change to typed error
+        _transfer(payable(HYPE_SYSTEM_ADDRESS), amount);
     }
 
     /// @inheritdoc IStakingVault
     function transferHype(address payable recipient, uint256 amount) external onlyManager whenNotPaused {
-        require(address(this).balance >= amount, "Staking vault does not have enough HYPE to transfer");
-
-        (bool success,) = recipient.call{value: amount}("");
-        require(success, "Transfer failed"); // TODO: Change to typed error
+        _transfer(recipient, amount);
     }
 
     /// @inheritdoc IStakingVault
@@ -108,6 +102,15 @@ contract StakingVault is IStakingVault, Initializable, UUPSUpgradeable {
     /// @dev Fallback function to receive HYPE when msg.data is not empty
     fallback() external payable virtual {
         emit Received(msg.sender, msg.value);
+    }
+
+    /// @notice Internal function to handle HYPE transfers from the vault.
+    /// @dev Reverts if there is not enought HYPE to transfer the requested amount, or if the underlying call fails.
+    function _transfer(address payable recipient, uint256 amount) internal {
+        if (address(this).balance < amount) revert InsufficientHYPEBalance();
+
+        (bool success,) = recipient.call{value: amount}("");
+        if (!success) revert TransferFailed(recipient, amount);
     }
 
     /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
