@@ -1,5 +1,8 @@
 # Ventuals Contracts
 
+[![Tests](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/test.yml/badge.svg)](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/test.yml)
+[![Lint](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/lint.yml/badge.svg)](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/lint.yml)
+
 ## Overview
 
 Smart contracts for the Ventuals HYPE LST (vHYPE).
@@ -14,7 +17,7 @@ vHYPE serves as both:
 
 ## Getting Started
 
-Install Foundry:
+Install [Foundry](https://getfoundry.sh/):
 
 ```bash
 curl -L https://foundry.paradigm.xyz | bash
