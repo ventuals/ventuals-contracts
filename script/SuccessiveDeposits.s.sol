@@ -40,17 +40,3 @@ contract DeploySuccessiveDeposits is Script {
         vm.stopBroadcast();
     }
 }
-
-contract RunSuccessiveDeposits is Script {
-    function run() public {
-        address successiveDepositsAddress = vm.envAddress("SUCCESSIVE_DEPOSITS");
-        require(successiveDepositsAddress != address(0), "SuccessiveDeposits address is not set");
-
-        vm.startBroadcast();
-
-        SuccessiveDeposits successiveDeposits = SuccessiveDeposits(payable(successiveDepositsAddress));
-        successiveDeposits.successiveDeposits{value: 0.05 ether}();
-
-        vm.stopBroadcast();
-    }
-}
