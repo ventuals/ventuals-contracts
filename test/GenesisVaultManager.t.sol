@@ -29,7 +29,7 @@ contract GenesisVaultManagerTest is Test {
     address public defaultValidator = makeAddr("defaultValidator");
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
-    uint256 public constant DEPOSIT_LIMIT_PER_ADDRESS = 100_000 * 1e18; // 100k HYPE
+    uint256 public constant DEFAULT_DEPOSIT_LIMIT = 100_000 * 1e18; // 100k HYPE
 
     // Events
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
@@ -63,7 +63,7 @@ contract GenesisVaultManagerTest is Test {
             address(stakingVault),
             VAULT_CAPACITY,
             defaultValidator,
-            DEPOSIT_LIMIT_PER_ADDRESS
+            DEFAULT_DEPOSIT_LIMIT
         );
         ERC1967Proxy genesisVaultManagerProxy =
             new ERC1967Proxy(address(genesisVaultManagerImplementation), genesisVaultManagerInitData);
@@ -90,7 +90,7 @@ contract GenesisVaultManagerTest is Test {
         assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
         assertEq(genesisVaultManager.defaultValidator(), defaultValidator);
-        assertEq(genesisVaultManager.depositLimitPerAddress(), DEPOSIT_LIMIT_PER_ADDRESS);
+        assertEq(genesisVaultManager.defaultDepositLimit(), DEFAULT_DEPOSIT_LIMIT);
         assertEq(genesisVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
@@ -102,7 +102,7 @@ contract GenesisVaultManagerTest is Test {
             address(stakingVault),
             VAULT_CAPACITY,
             defaultValidator,
-            DEPOSIT_LIMIT_PER_ADDRESS
+            DEFAULT_DEPOSIT_LIMIT
         );
     }
 
@@ -368,14 +368,14 @@ contract GenesisVaultManagerTest is Test {
         _mockSpotBalance(0);
 
         // First deposit up to the limit
-        vm.deal(user, DEPOSIT_LIMIT_PER_ADDRESS);
-        _mockAndExpectStakingDepositCall(uint64(DEPOSIT_LIMIT_PER_ADDRESS / 1e10));
+        vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
+        _mockAndExpectStakingDepositCall(uint64(DEFAULT_DEPOSIT_LIMIT / 1e10));
         _mockAndExpectTokenDelegateCall(
-            genesisVaultManager.defaultValidator(), uint64(DEPOSIT_LIMIT_PER_ADDRESS / 1e10), false
+            genesisVaultManager.defaultValidator(), uint64(DEFAULT_DEPOSIT_LIMIT / 1e10), false
         );
 
         vm.prank(user);
-        genesisVaultManager.deposit{value: DEPOSIT_LIMIT_PER_ADDRESS}();
+        genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
 
         // Second deposit should revert
         uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
@@ -395,7 +395,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Whitelist the user with higher limit
         vm.prank(owner);
-        genesisVaultManager.whitelistDepositLimit(whitelistedUser, whitelistLimit);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
 
         // Mock staking vault calls
         _mockAndExpectStakingDepositCall(uint64(depositAmount / 1e10));
@@ -419,7 +419,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Whitelist the user with lower limit
         vm.prank(owner);
-        genesisVaultManager.whitelistDepositLimit(whitelistedUser, whitelistLimit);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
 
         // First deposit up to the whitelist limit
         _mockAndExpectStakingDepositCall(uint64(whitelistLimit / 1e10));
@@ -442,8 +442,8 @@ contract GenesisVaultManagerTest is Test {
         _mockSpotBalance(0);
 
         // Try to deposit more than the limit
-        uint256 requestedAmount = DEPOSIT_LIMIT_PER_ADDRESS + 50_000 * 1e18; // 150k HYPE
-        uint256 expectedDepositAmount = DEPOSIT_LIMIT_PER_ADDRESS; // Only 100k HYPE should be deposited
+        uint256 requestedAmount = DEFAULT_DEPOSIT_LIMIT + 50_000 * 1e18; // 150k HYPE
+        uint256 expectedDepositAmount = DEFAULT_DEPOSIT_LIMIT; // Only 100k HYPE should be deposited
 
         // Mock staking vault calls for the limited amount
         _mockAndExpectStakingDepositCall(uint64(expectedDepositAmount / 1e10));
@@ -466,7 +466,7 @@ contract GenesisVaultManagerTest is Test {
 
     function test_RemainingDepositLimit_NoDeposits() public view {
         uint256 remaining = genesisVaultManager.remainingDepositLimit(user);
-        assertEq(remaining, DEPOSIT_LIMIT_PER_ADDRESS);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT);
     }
 
     function test_RemainingDepositLimit_WithDeposits() public {
@@ -486,7 +486,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.deposit{value: depositAmount}();
 
         uint256 remaining = genesisVaultManager.remainingDepositLimit(user);
-        assertEq(remaining, DEPOSIT_LIMIT_PER_ADDRESS - depositAmount);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT - depositAmount);
     }
 
     function test_RemainingDepositLimit_MaxDeposits() public {
@@ -495,14 +495,14 @@ contract GenesisVaultManagerTest is Test {
         _mockSpotBalance(0);
 
         // Mock staking vault calls
-        _mockAndExpectStakingDepositCall(uint64(DEPOSIT_LIMIT_PER_ADDRESS / 1e10));
+        _mockAndExpectStakingDepositCall(uint64(DEFAULT_DEPOSIT_LIMIT / 1e10));
         _mockAndExpectTokenDelegateCall(
-            genesisVaultManager.defaultValidator(), uint64(DEPOSIT_LIMIT_PER_ADDRESS / 1e10), false
+            genesisVaultManager.defaultValidator(), uint64(DEFAULT_DEPOSIT_LIMIT / 1e10), false
         );
 
-        vm.deal(user, DEPOSIT_LIMIT_PER_ADDRESS);
+        vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
         vm.prank(user);
-        genesisVaultManager.deposit{value: DEPOSIT_LIMIT_PER_ADDRESS}();
+        genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
 
         uint256 remaining = genesisVaultManager.remainingDepositLimit(user);
         assertEq(remaining, 0);
@@ -513,7 +513,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
 
         vm.prank(owner);
-        genesisVaultManager.whitelistDepositLimit(whitelistedUser, whitelistLimit);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
 
         uint256 remaining = genesisVaultManager.remainingDepositLimit(whitelistedUser);
         assertEq(remaining, whitelistLimit);
@@ -524,7 +524,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 whitelistLimit = 50_000 * 1e18; // 50k HYPE
 
         vm.prank(owner);
-        genesisVaultManager.whitelistDepositLimit(whitelistedUser, whitelistLimit);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, whitelistLimit);
 
         uint256 remaining = genesisVaultManager.remainingDepositLimit(whitelistedUser);
         assertEq(remaining, whitelistLimit);
@@ -534,11 +534,11 @@ contract GenesisVaultManagerTest is Test {
         address whitelistedUser = makeAddr("whitelistedUser");
 
         vm.prank(owner);
-        genesisVaultManager.whitelistDepositLimit(whitelistedUser, 0);
+        genesisVaultManager.setWhitelistDepositLimit(whitelistedUser, 0);
 
         // When whitelist is 0, should use default limit
         uint256 remaining = genesisVaultManager.remainingDepositLimit(whitelistedUser);
-        assertEq(remaining, DEPOSIT_LIMIT_PER_ADDRESS);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -926,86 +926,86 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*     Tests: Set Deposit Limit Per Address (Only Owner)      */
+    /*       Tests: Set Default Deposit Limit (Only Owner)        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_SetDepositLimitPerAddress_OnlyOwner() public {
+    function test_SetDefaultDepositLimit_OnlyOwner() public {
         uint256 newLimit = 200_000 * 1e18; // 200k HYPE
 
         vm.prank(owner);
-        genesisVaultManager.setDepositLimitPerAddress(newLimit);
+        genesisVaultManager.setDefaultDepositLimit(newLimit);
 
-        assertEq(genesisVaultManager.depositLimitPerAddress(), newLimit);
+        assertEq(genesisVaultManager.defaultDepositLimit(), newLimit);
     }
 
-    function test_SetDepositLimitPerAddress_NotOwner() public {
+    function test_SetDefaultDepositLimit_NotOwner() public {
         uint256 newLimit = 200_000 * 1e18;
 
         vm.prank(user);
         vm.expectRevert("Caller is not the owner");
-        genesisVaultManager.setDepositLimitPerAddress(newLimit);
+        genesisVaultManager.setDefaultDepositLimit(newLimit);
     }
 
-    function test_SetDepositLimitPerAddress_ZeroLimit() public {
+    function test_SetDefaultDepositLimit_ZeroLimit() public {
         vm.prank(owner);
-        genesisVaultManager.setDepositLimitPerAddress(0);
+        genesisVaultManager.setDefaultDepositLimit(0);
 
-        assertEq(genesisVaultManager.depositLimitPerAddress(), 0);
+        assertEq(genesisVaultManager.defaultDepositLimit(), 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*         Tests: Whitelist Deposit Limit (Only Owner)        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_WhitelistDepositLimit_OnlyOwner() public {
+    function test_SetWhitelistDepositLimit_OnlyOwner() public {
         address userToWhitelist = makeAddr("userToWhitelist");
         uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
 
         vm.prank(owner);
-        genesisVaultManager.whitelistDepositLimit(userToWhitelist, whitelistLimit);
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, whitelistLimit);
 
         uint256 remaining = genesisVaultManager.remainingDepositLimit(userToWhitelist);
         assertEq(remaining, whitelistLimit);
     }
 
-    function test_WhitelistDepositLimit_NotOwner() public {
+    function test_SetWhitelistDepositLimit_NotOwner() public {
         address userToWhitelist = makeAddr("userToWhitelist");
         uint256 whitelistLimit = 500_000 * 1e18;
 
         vm.prank(user);
         vm.expectRevert("Caller is not the owner");
-        genesisVaultManager.whitelistDepositLimit(userToWhitelist, whitelistLimit);
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, whitelistLimit);
     }
 
-    function test_WhitelistDepositLimit_ZeroReturnsToDefault() public {
+    function test_SetWhitelistDepositLimit_ZeroReturnsToDefault() public {
         address userToWhitelist = makeAddr("userToWhitelist");
 
         vm.startPrank(owner);
         // First set a custom limit
-        genesisVaultManager.whitelistDepositLimit(userToWhitelist, 500_000 * 1e18);
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, 500_000 * 1e18);
         // Then reset to 0 (should use default)
-        genesisVaultManager.whitelistDepositLimit(userToWhitelist, 0);
+        genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, 0);
         vm.stopPrank();
 
         uint256 remaining = genesisVaultManager.remainingDepositLimit(userToWhitelist);
-        assertEq(remaining, DEPOSIT_LIMIT_PER_ADDRESS);
+        assertEq(remaining, DEFAULT_DEPOSIT_LIMIT);
     }
 
-    function test_WhitelistDepositLimit_MultipleUsers() public {
+    function test_SetWhitelistDepositLimit_MultipleUsers() public {
         address user1 = makeAddr("user1");
         address user2 = makeAddr("user2");
         uint256 limit1 = 300_000 * 1e18;
         uint256 limit2 = 750_000 * 1e18;
 
         vm.startPrank(owner);
-        genesisVaultManager.whitelistDepositLimit(user1, limit1);
-        genesisVaultManager.whitelistDepositLimit(user2, limit2);
+        genesisVaultManager.setWhitelistDepositLimit(user1, limit1);
+        genesisVaultManager.setWhitelistDepositLimit(user2, limit2);
         vm.stopPrank();
 
         assertEq(genesisVaultManager.remainingDepositLimit(user1), limit1);
         assertEq(genesisVaultManager.remainingDepositLimit(user2), limit2);
         // Regular user should still have default limit
-        assertEq(genesisVaultManager.remainingDepositLimit(user), DEPOSIT_LIMIT_PER_ADDRESS);
+        assertEq(genesisVaultManager.remainingDepositLimit(user), DEFAULT_DEPOSIT_LIMIT);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
