@@ -11,14 +11,14 @@ contract DeployGenesisVaultManager is Script {
         address roleRegistry = vm.envAddress("ROLE_REGISTRY");
         address vHYPE = vm.envAddress("VHYPE");
         address stakingVault = vm.envAddress("STAKING_VAULT");
-        uint64 hypeTokenId = vm.envUint("HYPE_TOKEN_ID");
+        bool isTestnet = vm.envBool("IS_TESTNET");
         require(roleRegistry != address(0), "RoleRegistry address is not set");
         require(vHYPE != address(0), "vHYPE address is not set");
         require(stakingVault != address(0), "StakingVault address is not set");
-        require(hypeTokenId != 0, "HYPE_TOKEN_ID is not set");
 
         vm.startBroadcast();
 
+        uint64 hypeTokenId = isTestnet ? 1105 : 150; // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids
         GenesisVaultManager implementation = new GenesisVaultManager(hypeTokenId);
         bytes memory initData = abi.encodeWithSelector(
             GenesisVaultManager.initialize.selector,
