@@ -247,6 +247,9 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev This function is called by the operator
     /// @param amount The amount of HYPE to transfer (in 18 decimals)
     function transferToHyperCoreAndDelegate(uint256 amount) public onlyOperator {
+        require(
+            block.number >= lastHyperCoreTransferBlockNumber + 1, "Cannot transfer to HyperCore until the next block"
+        ); // TODO: Change to typed error
         require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
         stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
         stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
@@ -314,10 +317,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         // We prevent deposits for one block if there was a HyperEVM -> HyperCore transfer that happened earlier
         // in the block. When a HyperEVM -> HyperCore transfer occurs, the account balance state changes are not
         // reflected via L1Read precompiles until the beginning of the next block.
-        require(
-            block.number > lastHyperCoreTransferBlockNumber + 1,
-            "Cannot deposit until HyperCore transfer is complete at the end of the next block"
-        );
+        require(block.number > lastHyperCoreTransferBlockNumber + 1, "Cannot deposit until the next block");
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
