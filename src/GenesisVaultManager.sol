@@ -251,6 +251,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
             block.number >= lastHyperCoreTransferBlockNumber + 1, "Cannot transfer to HyperCore until the next block"
         ); // TODO: Change to typed error
         require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
+        require(amount <= address(stakingVault).balance, "Staking vault balance is too low"); // TODO: Change to typed error
         stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
         stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
         stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
