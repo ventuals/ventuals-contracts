@@ -345,7 +345,7 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
         // - Block ends
 
-        require(block.number > lastEvmToCoreTransferBlockNumber + 1, "Cannot deposit until the next block");
+        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, "Cannot deposit until the next block");
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
