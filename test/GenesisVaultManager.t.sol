@@ -78,6 +78,8 @@ contract GenesisVaultManagerTest is Test {
         // Mock HYPE system contract
         MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
         vm.etch(0x2222222222222222222222222222222222222222, address(mockHypeSystemContract).code);
+        _mockSpotBalance(0);
+        _mockDelegatorSummary(0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -111,9 +113,6 @@ contract GenesisVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_Deposit_FullDepositIntoEmptyVault() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         uint256 depositAmount = 50_000 * 1e18; // 50k HYPE
 
         vm.deal(user, depositAmount);
@@ -368,9 +367,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_RevertWhenDepositLimitReached() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         // First deposit up to the limit
         vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
 
@@ -386,9 +382,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_SuccessWithWhitelistedLimit() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         address whitelistedUser = makeAddr("whitelistedUser");
         uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
         uint256 depositAmount = 200_000 * 1e18; // 200k HYPE
@@ -410,9 +403,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_RevertWhenWhitelistedLimitReached() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         address whitelistedUser = makeAddr("whitelistedUser");
         uint256 whitelistLimit = 50_000 * 1e18; // 50k HYPE (lower than default)
 
@@ -435,9 +425,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_PartialDepositDueToDepositLimit() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         // Try to deposit more than the limit
         uint256 requestedAmount = DEFAULT_DEPOSIT_LIMIT + 50_000 * 1e18; // 150k HYPE
         uint256 expectedDepositAmount = DEFAULT_DEPOSIT_LIMIT; // Only 100k HYPE should be deposited
@@ -469,10 +456,6 @@ contract GenesisVaultManagerTest is Test {
         // Mock a deposit of 30k HYPE for the user
         uint256 depositAmount = 30_000 * 1e18;
 
-        // Set up mock for balances to allow deposit
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         vm.deal(user, depositAmount);
         vm.prank(user);
         genesisVaultManager.deposit{value: depositAmount}();
@@ -485,12 +468,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_RemainingDepositLimit_MaxDeposits() public {
-        // Mock a deposit equal to the limit
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
-        // Mock staking vault calls
-
         vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
         vm.prank(user);
         genesisVaultManager.deposit{value: DEFAULT_DEPOSIT_LIMIT}();
@@ -948,11 +925,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetDefaultDepositLimit_LowerThanDepositedAmount() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
-        // Mock staking vault calls
-
         // Max out the default deposit limit
         vm.deal(user, DEFAULT_DEPOSIT_LIMIT);
         vm.prank(user);
@@ -1025,9 +997,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_SetWhitelistDepositLimit_LowerThanDepositedAmount() public {
-        _mockDelegatorSummary(0);
-        _mockSpotBalance(0);
-
         address whitelistedUser = makeAddr("whitelistedUser");
         uint256 whitelistLimit = 500_000 * 1e18; // 500k HYPE
 
@@ -1127,6 +1096,137 @@ contract GenesisVaultManagerTest is Test {
         vm.prank(user);
         vm.expectRevert("Caller is not the owner");
         genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*       Tests: Transfer to Core and Delegate (Only Operator) */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TransferToCoreAndDelegate_AllBalance() public {
+        uint256 stakingVaultBalance = 100_000 * 1e18; // 100k HYPE
+        vm.deal(address(stakingVault), stakingVaultBalance);
+
+        // Mock the expected calls for transferring all balance
+        _mockAndExpectStakingDepositCall(uint64(stakingVaultBalance / 1e10));
+        _mockAndExpectTokenDelegateCall(
+            genesisVaultManager.defaultValidator(), uint64(stakingVaultBalance / 1e10), false
+        );
+
+        vm.prank(operator);
+        genesisVaultManager.transferToCoreAndDelegate();
+
+        // Check that lastEvmToCoreTransferBlockNumber was updated
+        assertEq(genesisVaultManager.lastEvmToCoreTransferBlockNumber(), block.number);
+    }
+
+    function test_TransferToCoreAndDelegate_SpecificAmount() public {
+        uint256 stakingVaultBalance = 100_000 * 1e18; // 100k HYPE
+        uint256 transferAmount = 50_000 * 1e18; // 50k HYPE
+        vm.deal(address(stakingVault), stakingVaultBalance);
+
+        // Mock the expected calls for transferring specific amount
+        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+
+        vm.prank(operator);
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+
+        // Check that lastEvmToCoreTransferBlockNumber was updated
+        assertEq(genesisVaultManager.lastEvmToCoreTransferBlockNumber(), block.number);
+    }
+
+    function test_TransferToCoreAndDelegate_NotOperator() public {
+        uint256 transferAmount = 50_000 * 1e18; // 50k HYPE
+        vm.deal(address(stakingVault), transferAmount);
+
+        vm.prank(user);
+        vm.expectRevert("Caller is not an operator");
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+    }
+
+    function test_TransferToCoreAndDelegate_ZeroAmount() public {
+        vm.prank(operator);
+        vm.expectRevert("Amount must be greater than 0");
+        genesisVaultManager.transferToCoreAndDelegate(0);
+    }
+
+    function test_TransferToCoreAndDelegate_InsufficientBalance() public {
+        uint256 stakingVaultBalance = 50_000 * 1e18; // 50k HYPE
+        uint256 transferAmount = 100_000 * 1e18; // 100k HYPE (more than balance)
+        vm.deal(address(stakingVault), stakingVaultBalance);
+
+        vm.prank(operator);
+        vm.expectRevert("Staking vault balance is too low");
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+    }
+
+    function test_TransferToCoreAndDelegate_OneBlockDelayRestriction() public {
+        uint256 transferAmount = 50_000 * 1e18; // 50k HYPE
+        vm.deal(address(stakingVault), transferAmount);
+
+        // First, make a transfer to set lastEvmToCoreTransferBlockNumber
+        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+
+        vm.prank(operator);
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+
+        // Try to make another transfer in the same block - should fail
+        vm.deal(address(stakingVault), transferAmount); // Refill balance
+        vm.prank(operator);
+        vm.expectRevert("Cannot transfer to HyperCore until the next block");
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+
+        // Advance to next block - should succeed
+        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+
+        vm.roll(block.number + 1);
+        vm.prank(operator);
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+    }
+
+    function test_TransferToCoreAndDelegate_BlocksDepositInSameBlock() public {
+        uint256 transferAmount = 50_000 * 1e18; // 50k HYPE
+        uint256 depositAmount = 10_000 * 1e18; // 10k HYPE
+
+        // Set up staking vault balance for transfer
+        vm.deal(address(stakingVault), transferAmount);
+
+        // Mock the expected calls for the transfer
+        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+
+        // Execute the transfer to HyperCore
+        vm.prank(operator);
+        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+
+        // Try to make a deposit in the same block - should fail due to one-block delay
+        vm.deal(user, depositAmount);
+        vm.prank(user);
+        vm.expectRevert("Cannot deposit until the next block");
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Advance to next block - deposit should now succeed
+        vm.roll(block.number + 1);
+        vm.prank(user);
+
+        genesisVaultManager.deposit{value: depositAmount}();
+
+        // Verify deposit succeeded
+        assertEq(vHYPE.balanceOf(user), depositAmount);
+        assertEq(address(stakingVault).balance, depositAmount);
+    }
+
+    function test_TransferToCoreAndDelegate_AllBalance_ZeroBalance() public {
+        // No balance in staking vault
+        assertEq(address(stakingVault).balance, 0);
+
+        vm.roll(block.number + 1);
+
+        vm.prank(operator);
+        vm.expectRevert("Amount must be greater than 0");
+        genesisVaultManager.transferToCoreAndDelegate();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
