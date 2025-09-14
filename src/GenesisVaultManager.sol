@@ -33,10 +33,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     uint256 public defaultDepositLimit;
 
     /// @dev A whitelist of addresses that have higher deposit limits
-    mapping(address => uint256) whitelistDepositLimits;
+    mapping(address => uint256) public whitelistDepositLimits;
 
     /// @dev The cumulative amount of HYPE deposited by each address
-    mapping(address => uint256) depositsByAddress;
+    mapping(address => uint256) public depositsByAddress;
 
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
