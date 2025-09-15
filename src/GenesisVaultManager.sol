@@ -12,11 +12,54 @@ import {Converters} from "./libraries/Converters.sol";
 contract GenesisVaultManager is Base {
     using Converters for *;
 
-    VHYPE public vHYPE;
-    IStakingVault public stakingVault;
+    /// @notice Thrown if HYPE transfer fails to given recipient for specified amount.
+    error TransferFailed(address recipient, uint256 amount);
+
+    /// @notice Thrown if an amount of 0 is provided.
+    error ZeroAmount();
+
+    /// @notice Thrown if an amount exceeds the balance.
+    error InsufficientBalance();
+
+    /// @notice Thrown if the vault is full.
+    error VaultFull();
+
+    /// @notice Thrown if the deposit limit is reached.
+    error DepositLimitReached();
+
+    /// @notice Thrown if the from and to validators are the same.
+    error RedelegateToSameValidator();
+
+    /// @notice Thrown if a deposit cannot be made until the next block.
+    error CannotDepositUntilNextBlock();
+
+    /// @notice Thrown if a transfer to HyperCore cannot be made until the next block.
+    error CannotTransferToCoreUntilNextBlock();
+
+    /// @notice Emitted when HYPE is deposited into the vault
+    /// @param depositor The address that deposited the HYPE
+    /// @param minted The amount of vHYPE minted (in 18 decimals)
+    /// @param deposited The amount of HYPE deposited (in 18 decimals)
+    /// @param refunded The amount of HYPE refunded (in 18 decimals)
+    event Deposit(address indexed depositor, uint256 minted, uint256 deposited, uint256 refunded);
+
+    /// @notice Emitted when an HYPE stake is moved from one validator to another
+    /// @param fromValidator The validator from which the HYPE stake is being moved
+    /// @param toValidator The validator to which the HYPE stake is being moved
+    /// @param amount The amount of HYPE being moved (in 18 decimals)
+    event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
+
+    /// @notice Emitted when an emergency staking withdraw is executed
+    /// @param sender The address that executed the emergency withdraw
+    /// @param amount The amount of HYPE withdrawn
+    /// @param purpose The purpose of the withdrawal
+    event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
+
+    VHYPE public vHYPE;
+    IStakingVault public stakingVault;
 
     /// @notice The total HYPE capacity of the vault (in 18 decimals)
     /// @dev This is the total amount of HYPE that can be deposited into the vault.
@@ -38,25 +81,6 @@ contract GenesisVaultManager is Base {
     /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
     /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
     uint256 public lastEvmToCoreTransferBlockNumber;
-
-    /// @notice Emitted when HYPE is deposited into the vault
-    /// @param depositor The address that deposited the HYPE
-    /// @param minted The amount of vHYPE minted (in 18 decimals)
-    /// @param deposited The amount of HYPE deposited (in 18 decimals)
-    /// @param refunded The amount of HYPE refunded (in 18 decimals)
-    event Deposit(address indexed depositor, uint256 minted, uint256 deposited, uint256 refunded);
-
-    /// @notice Emitted when an HYPE stake is moved from one validator to another
-    /// @param fromValidator The validator from which the HYPE stake is being moved
-    /// @param toValidator The validator to which the HYPE stake is being moved
-    /// @param amount The amount of HYPE being moved (in 18 decimals)
-    event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
-
-    /// @notice Emitted when an emergency staking withdraw is executed
-    /// @param sender The address that executed the emergency withdraw
-    /// @param amount The amount of HYPE withdrawn
-    /// @param purpose The purpose of the withdrawal
-    event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -102,20 +126,21 @@ contract GenesisVaultManager is Base {
         // Transfer HYPE to staking vault (HyperEVM -> HyperEVM)
         if (amountToDeposit > 0) {
             (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
-            require(success, "Transfer failed"); // TODO: Change to typed error
+            require(success, TransferFailed(address(stakingVault), amountToDeposit));
         }
 
         // Refund any excess HYPE
-        if (requestedDepositAmount > amountToDeposit) {
-            (bool success,) = payable(msg.sender).call{value: requestedDepositAmount - amountToDeposit}("");
-            require(success, "Refund failed"); // TODO: Change to typed error
+        uint256 amountToRefund = requestedDepositAmount - amountToDeposit;
+        if (amountToRefund > 0) {
+            (bool success,) = payable(msg.sender).call{value: amountToRefund}("");
+            require(success, TransferFailed(msg.sender, amountToRefund));
         }
 
         emit Deposit(
             msg.sender, /* depositor */
             amountToMint, /* minted */
             amountToDeposit, /* deposited */
-            requestedDepositAmount - amountToDeposit /* refunded */
+            amountToRefund /* refunded */
         );
     }
 
@@ -206,6 +231,38 @@ contract GenesisVaultManager is Base {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     Operator Actions                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Transfers all HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @dev This function can only be called by the operator
+    function transferToCoreAndDelegate() public onlyOperator {
+        uint256 amount = address(stakingVault).balance;
+        _transferToCoreAndDelegate(amount);
+    }
+
+    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @dev This function can only be called by the operator
+    /// @param amount The amount of HYPE to transfer (in 18 decimals)
+    function transferToCoreAndDelegate(uint256 amount) public onlyOperator {
+        _transferToCoreAndDelegate(amount);
+    }
+
+    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @param amount The amount of HYPE to transfer (in 18 decimals)
+    function _transferToCoreAndDelegate(uint256 amount) internal {
+        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotTransferToCoreUntilNextBlock());
+        require(amount > 0, ZeroAmount());
+        require(amount <= address(stakingVault).balance, InsufficientBalance());
+
+        stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
+        stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
+        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
+
+        lastEvmToCoreTransferBlockNumber = block.number;
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       Owner Actions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -234,42 +291,13 @@ contract GenesisVaultManager is Base {
         whitelistDepositLimits[depositor] = limit;
     }
 
-    /// @notice Transfers all HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @dev This function can only be called by the operator
-    function transferToCoreAndDelegate() public onlyOperator {
-        uint256 amount = address(stakingVault).balance;
-        _transferToCoreAndDelegate(amount);
-    }
-
-    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @dev This function can only be called by the operator
-    /// @param amount The amount of HYPE to transfer (in 18 decimals)
-    function transferToCoreAndDelegate(uint256 amount) public onlyOperator {
-        _transferToCoreAndDelegate(amount);
-    }
-
-    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @param amount The amount of HYPE to transfer (in 18 decimals)
-    function _transferToCoreAndDelegate(uint256 amount) internal {
-        require(
-            block.number >= lastEvmToCoreTransferBlockNumber + 1, "Cannot transfer to HyperCore until the next block"
-        ); // TODO: Change to typed error
-        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
-        require(amount <= address(stakingVault).balance, "Staking vault balance is too low"); // TODO: Change to typed error
-        stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
-        stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
-        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
-
-        lastEvmToCoreTransferBlockNumber = block.number;
-    }
-
     /// @notice Moves an HYPE stake from one validator to another
     /// @param fromValidator The validator from which the HYPE stake is being moved
     /// @param toValidator The validator to which the HYPE stake is being moved
     /// @param amount The amount of HYPE being moved (in 18 decimals)
     function redelegateStake(address fromValidator, address toValidator, uint256 amount) external onlyOwner {
-        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
-        require(fromValidator != toValidator, "From and to validators cannot be the same"); // TODO: Change to typed error
+        require(amount > 0, ZeroAmount());
+        require(fromValidator != toValidator, RedelegateToSameValidator());
 
         stakingVault.tokenDelegate(fromValidator, amount.to8Decimals(), true);
         stakingVault.tokenDelegate(toValidator, amount.to8Decimals(), false);
@@ -282,11 +310,10 @@ contract GenesisVaultManager is Base {
     /// @param amount Amount to withdraw (in 18 decimals)
     /// @param purpose Description of withdrawal purpose
     function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
-        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
-        require(bytes(purpose).length > 0, "Purpose must be set"); // TODO: Change to typed error
+        require(amount > 0, ZeroAmount());
 
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
-        require(delegatorSummary.delegated >= amount.to8Decimals(), "Insufficient delegated balance"); // TODO: Change to typed error
+        require(delegatorSummary.delegated >= amount.to8Decimals(), InsufficientBalance());
 
         // Immediately undelegate HYPE
         stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), true);
@@ -331,11 +358,10 @@ contract GenesisVaultManager is Base {
         //          - 100 HYPE on HyperCore <= should be 200 HYPE - balance not reflected in L1Read precompiles until the next block
         //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
         // - Block ends
+        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotDepositUntilNextBlock());
 
-        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, "Cannot deposit until the next block");
-        uint256 balance = totalBalance();
-        require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
-        require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
+        require(totalBalance() < vaultCapacity, VaultFull());
+        require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
         _;
     }
 }

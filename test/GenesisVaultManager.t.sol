@@ -277,7 +277,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        vm.expectRevert("Vault is full");
+        vm.expectRevert(GenesisVaultManager.VaultFull.selector);
         genesisVaultManager.deposit{value: depositAmount}();
 
         assertEq(vHYPE.balanceOf(user), 0);
@@ -332,11 +332,13 @@ contract GenesisVaultManagerTest is Test {
         uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
 
-        uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
+        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        vm.expectRevert("Transfer failed");
+        vm.expectRevert(
+            abi.encodeWithSelector(GenesisVaultManager.TransferFailed.selector, address(stakingVault), depositAmount)
+        );
         genesisVaultManager.deposit{value: depositAmount}();
 
         // Check that no vHYPE was minted
@@ -359,7 +361,13 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(address(contractThatRejectsTransfers), depositAmount);
         vm.startPrank(address(contractThatRejectsTransfers));
-        vm.expectRevert("Refund failed");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GenesisVaultManager.TransferFailed.selector,
+                address(contractThatRejectsTransfers),
+                depositAmount - (VAULT_CAPACITY - existingBalance)
+            )
+        );
         genesisVaultManager.deposit{value: depositAmount}();
 
         // Check that no vHYPE was minted
@@ -380,7 +388,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
         vm.deal(user, additionalDeposit);
         vm.startPrank(user);
-        vm.expectRevert("Deposit limit reached");
+        vm.expectRevert(GenesisVaultManager.DepositLimitReached.selector);
         genesisVaultManager.deposit{value: additionalDeposit}();
     }
 
@@ -423,7 +431,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
         vm.deal(whitelistedUser, additionalDeposit);
         vm.startPrank(whitelistedUser);
-        vm.expectRevert("Deposit limit reached");
+        vm.expectRevert(GenesisVaultManager.DepositLimitReached.selector);
         genesisVaultManager.deposit{value: additionalDeposit}();
     }
 
@@ -886,7 +894,7 @@ contract GenesisVaultManagerTest is Test {
         address toValidator = makeAddr("toValidator");
 
         vm.startPrank(owner);
-        vm.expectRevert("Amount must be greater than 0");
+        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
         genesisVaultManager.redelegateStake(fromValidator, toValidator, 0);
     }
 
@@ -895,7 +903,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
         vm.startPrank(owner);
-        vm.expectRevert("From and to validators cannot be the same");
+        vm.expectRevert(GenesisVaultManager.RedelegateToSameValidator.selector);
         genesisVaultManager.redelegateStake(validator, validator, amount);
     }
 
@@ -1053,7 +1061,7 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegatorSummary(50_000 * 1e8); // 50k HYPE delegated (in 8 decimals)
 
         vm.startPrank(owner);
-        vm.expectRevert("Insufficient delegated balance");
+        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
         genesisVaultManager.emergencyStakingWithdraw(withdrawAmount, "Emergency staking withdraw");
     }
 
@@ -1061,16 +1069,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegatorSummary(uint64(1_000_000 * 1e8)); // 1M HYPE delegated
 
         vm.startPrank(owner);
-        vm.expectRevert("Amount must be greater than 0");
+        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
         genesisVaultManager.emergencyStakingWithdraw(0, "Emergency staking withdraw");
-    }
-
-    function test_ProtocolWithdraw_EmptyPurposeString() public {
-        _mockDelegatorSummary(uint64(1_000_000 * 1e8)); // 1M HYPE delegated
-
-        vm.startPrank(owner);
-        vm.expectRevert("Purpose must be set");
-        genesisVaultManager.emergencyStakingWithdraw(1_000_000 * 1e18, "");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1125,7 +1125,7 @@ contract GenesisVaultManagerTest is Test {
 
     function test_TransferToCoreAndDelegate_ZeroAmount() public {
         vm.startPrank(operator);
-        vm.expectRevert("Amount must be greater than 0");
+        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
         genesisVaultManager.transferToCoreAndDelegate(0);
     }
 
@@ -1135,7 +1135,7 @@ contract GenesisVaultManagerTest is Test {
         vm.deal(address(stakingVault), stakingVaultBalance);
 
         vm.startPrank(operator);
-        vm.expectRevert("Staking vault balance is too low");
+        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
     }
 
@@ -1153,7 +1153,7 @@ contract GenesisVaultManagerTest is Test {
         // Try to make another transfer in the same block - should fail
         vm.deal(address(stakingVault), transferAmount); // Refill balance
         vm.startPrank(operator);
-        vm.expectRevert("Cannot transfer to HyperCore until the next block");
+        vm.expectRevert(GenesisVaultManager.CannotTransferToCoreUntilNextBlock.selector);
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
         vm.stopPrank();
 
@@ -1184,7 +1184,7 @@ contract GenesisVaultManagerTest is Test {
         // Try to make a deposit in the same block - should fail due to one-block delay
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        vm.expectRevert("Cannot deposit until the next block");
+        vm.expectRevert(GenesisVaultManager.CannotDepositUntilNextBlock.selector);
         genesisVaultManager.deposit{value: depositAmount}();
         vm.stopPrank();
 
@@ -1206,7 +1206,7 @@ contract GenesisVaultManagerTest is Test {
         vm.roll(block.number + 1);
 
         vm.startPrank(operator);
-        vm.expectRevert("Amount must be greater than 0");
+        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
         genesisVaultManager.transferToCoreAndDelegate();
     }
 
