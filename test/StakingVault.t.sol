@@ -467,6 +467,36 @@ contract StakingVaultTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*              Tests: Receive and Fallback Functions         */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_Receive() public {
+        uint256 amount = 1e18;
+        uint256 balanceBefore = address(stakingVault).balance;
+
+        address user = makeAddr("user");
+        vm.deal(user, amount);
+        vm.prank(user);
+        (bool success,) = address(stakingVault).call{value: amount}("");
+
+        assertTrue(success);
+        assertEq(address(stakingVault).balance, balanceBefore + amount);
+    }
+
+    function test_Fallback() public {
+        uint256 amount = 1e18;
+        uint256 balanceBefore = address(stakingVault).balance;
+
+        address user = makeAddr("user");
+        vm.deal(user, amount);
+        vm.prank(user);
+        (bool success,) = address(stakingVault).call{value: amount}("0x1234");
+
+        assertTrue(success);
+        assertEq(address(stakingVault).balance, balanceBefore + amount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                 Tests: Upgradeability                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_UpgradeToAndCall_OnlyOwner() public {
