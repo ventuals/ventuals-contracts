@@ -60,6 +60,16 @@ contract RoleRegistry is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
         pausedContracts[contractAddress] = false;
     }
 
+    /// @notice Accepts ownership of the contract. Only the pending owner can accept ownership.
+    /// @dev Also transfers the DEFAULT_ADMIN_ROLE to the new owner.
+    function acceptOwnership() public override {
+        address previousOwner = owner();
+        super.acceptOwnership();
+
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _revokeRole(DEFAULT_ADMIN_ROLE, previousOwner);
+    }
+
     /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
     /// @dev DO NOT REMOVE THIS FUNCTION, OTHERWISE WE LOSE THE ABILITY TO UPGRADE THE CONTRACT
     /// @param newImplementation The address of the new implementation
