@@ -1,20 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {RoleRegistry} from "./RoleRegistry.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {Base} from "./Base.sol";
 import {VHYPE} from "./VHYPE.sol";
 import {Converters} from "./libraries/Converters.sol";
 
-contract GenesisVaultManager is Initializable, UUPSUpgradeable {
+contract GenesisVaultManager is Base {
     using Converters for *;
 
-    RoleRegistry public roleRegistry;
     VHYPE public vHYPE;
     IStakingVault public stakingVault;
 
@@ -76,9 +73,8 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         address _defaultValidator,
         uint256 _defaultDepositLimit
     ) public initializer {
-        __UUPSUpgradeable_init();
+        __Base_init(_roleRegistry);
 
-        roleRegistry = RoleRegistry(_roleRegistry);
         vHYPE = VHYPE(_vHYPE);
         stakingVault = IStakingVault(payable(_stakingVault));
 
@@ -301,26 +297,11 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
-    /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
-    /// @dev DO NOT REMOVE THIS FUNCTION, OTHERWISE WE LOSE THE ABILITY TO UPGRADE THE CONTRACT
-    /// @param newImplementation The address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
-
     /// @dev Function to receive HYPE when msg.data is empty
     receive() external payable {}
 
     /// @dev Fallback function to receive HYPE when msg.data is not empty
     fallback() external payable {}
-
-    modifier onlyOperator() {
-        require(roleRegistry.hasRole(roleRegistry.OPERATOR_ROLE(), msg.sender), "Caller is not an operator"); // TODO: Change to typed error
-        _;
-    }
-
-    modifier onlyOwner() {
-        require(roleRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
-        _;
-    }
 
     modifier canDeposit() {
         // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
@@ -355,11 +336,6 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
-        _;
-    }
-
-    modifier whenNotPaused() {
-        require(!roleRegistry.isPaused(address(this)), "Contract is paused"); // TODO: Change to typed error
         _;
     }
 }

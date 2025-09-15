@@ -15,6 +15,9 @@ import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {Base} from "../src/Base.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract GenesisVaultManagerTest is Test {
     GenesisVaultManager genesisVaultManager;
@@ -273,7 +276,7 @@ contract GenesisVaultManagerTest is Test {
         _mockBalancesForExchangeRate(VAULT_CAPACITY, VAULT_CAPACITY);
 
         vm.deal(user, depositAmount);
-        vm.prank(user);
+        vm.startPrank(user);
         vm.expectRevert("Vault is full");
         genesisVaultManager.deposit{value: depositAmount}();
 
@@ -308,8 +311,8 @@ contract GenesisVaultManagerTest is Test {
         roleRegistry.pause(address(genesisVaultManager));
 
         vm.deal(user, depositAmount);
-        vm.prank(user);
-        vm.expectRevert("Contract is paused");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(genesisVaultManager)));
         genesisVaultManager.deposit{value: depositAmount}();
 
         // Check that no HYPE was transferred to staking vault (vault balance should remain 0)
@@ -332,7 +335,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 depositAmount = 500_000 * 1e18; // 500k HYPE
 
         vm.deal(user, depositAmount);
-        vm.prank(user);
+        vm.startPrank(user);
         vm.expectRevert("Transfer failed");
         genesisVaultManager.deposit{value: depositAmount}();
 
@@ -355,7 +358,7 @@ contract GenesisVaultManagerTest is Test {
         ContractThatRejectsTransfers contractThatRejectsTransfers = new ContractThatRejectsTransfers();
 
         vm.deal(address(contractThatRejectsTransfers), depositAmount);
-        vm.prank(address(contractThatRejectsTransfers));
+        vm.startPrank(address(contractThatRejectsTransfers));
         vm.expectRevert("Refund failed");
         genesisVaultManager.deposit{value: depositAmount}();
 
@@ -376,7 +379,7 @@ contract GenesisVaultManagerTest is Test {
         // Second deposit should revert
         uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
         vm.deal(user, additionalDeposit);
-        vm.prank(user);
+        vm.startPrank(user);
         vm.expectRevert("Deposit limit reached");
         genesisVaultManager.deposit{value: additionalDeposit}();
     }
@@ -419,7 +422,7 @@ contract GenesisVaultManagerTest is Test {
         // Second deposit should revert
         uint256 additionalDeposit = 1 * 1e18; // 1 HYPE
         vm.deal(whitelistedUser, additionalDeposit);
-        vm.prank(whitelistedUser);
+        vm.startPrank(whitelistedUser);
         vm.expectRevert("Deposit limit reached");
         genesisVaultManager.deposit{value: additionalDeposit}();
     }
@@ -820,8 +823,8 @@ contract GenesisVaultManagerTest is Test {
     function test_SetVaultCapacity_NotOwner() public {
         uint256 newCapacity = 1_500_000 * 1e18;
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.setVaultCapacity(newCapacity);
     }
 
@@ -841,8 +844,8 @@ contract GenesisVaultManagerTest is Test {
     function test_SetDefaultValidator_NotOwner() public {
         address newValidator = makeAddr("newValidator");
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.setDefaultValidator(newValidator);
     }
 
@@ -873,8 +876,8 @@ contract GenesisVaultManagerTest is Test {
         address toValidator = makeAddr("toValidator");
         uint256 amount = 100_000 * 1e18;
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
@@ -882,7 +885,7 @@ contract GenesisVaultManagerTest is Test {
         address fromValidator = makeAddr("fromValidator");
         address toValidator = makeAddr("toValidator");
 
-        vm.prank(owner);
+        vm.startPrank(owner);
         vm.expectRevert("Amount must be greater than 0");
         genesisVaultManager.redelegateStake(fromValidator, toValidator, 0);
     }
@@ -891,7 +894,7 @@ contract GenesisVaultManagerTest is Test {
         address validator = makeAddr("validator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
-        vm.prank(owner);
+        vm.startPrank(owner);
         vm.expectRevert("From and to validators cannot be the same");
         genesisVaultManager.redelegateStake(validator, validator, amount);
     }
@@ -912,8 +915,8 @@ contract GenesisVaultManagerTest is Test {
     function test_SetDefaultDepositLimit_NotOwner() public {
         uint256 newLimit = 200_000 * 1e18;
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.setDefaultDepositLimit(newLimit);
     }
 
@@ -960,8 +963,8 @@ contract GenesisVaultManagerTest is Test {
         address userToWhitelist = makeAddr("userToWhitelist");
         uint256 whitelistLimit = 500_000 * 1e18;
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.setWhitelistDepositLimit(userToWhitelist, whitelistLimit);
     }
 
@@ -1039,8 +1042,8 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_EmergencyStakingWithdraw_NotOwner() public {
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.emergencyStakingWithdraw(1_000_000 * 1e18, "Emergency staking withdraw");
     }
 
@@ -1049,7 +1052,7 @@ contract GenesisVaultManagerTest is Test {
 
         _mockDelegatorSummary(50_000 * 1e8); // 50k HYPE delegated (in 8 decimals)
 
-        vm.prank(owner);
+        vm.startPrank(owner);
         vm.expectRevert("Insufficient delegated balance");
         genesisVaultManager.emergencyStakingWithdraw(withdrawAmount, "Emergency staking withdraw");
     }
@@ -1057,7 +1060,7 @@ contract GenesisVaultManagerTest is Test {
     function test_EmergencyStakingWithdraw_ZeroAmount() public {
         _mockDelegatorSummary(uint64(1_000_000 * 1e8)); // 1M HYPE delegated
 
-        vm.prank(owner);
+        vm.startPrank(owner);
         vm.expectRevert("Amount must be greater than 0");
         genesisVaultManager.emergencyStakingWithdraw(0, "Emergency staking withdraw");
     }
@@ -1065,7 +1068,7 @@ contract GenesisVaultManagerTest is Test {
     function test_ProtocolWithdraw_EmptyPurposeString() public {
         _mockDelegatorSummary(uint64(1_000_000 * 1e8)); // 1M HYPE delegated
 
-        vm.prank(owner);
+        vm.startPrank(owner);
         vm.expectRevert("Purpose must be set");
         genesisVaultManager.emergencyStakingWithdraw(1_000_000 * 1e18, "");
     }
@@ -1093,8 +1096,8 @@ contract GenesisVaultManagerTest is Test {
     function test_UpgradeToAndCall_NotOwner() public {
         GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
     }
 
@@ -1139,13 +1142,17 @@ contract GenesisVaultManagerTest is Test {
         uint256 transferAmount = 50_000 * 1e18; // 50k HYPE
         vm.deal(address(stakingVault), transferAmount);
 
-        vm.prank(user);
-        vm.expectRevert("Caller is not an operator");
+        vm.startPrank(user);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, user, roleRegistry.OPERATOR_ROLE()
+            )
+        );
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
     }
 
     function test_TransferToCoreAndDelegate_ZeroAmount() public {
-        vm.prank(operator);
+        vm.startPrank(operator);
         vm.expectRevert("Amount must be greater than 0");
         genesisVaultManager.transferToCoreAndDelegate(0);
     }
@@ -1155,7 +1162,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 transferAmount = 100_000 * 1e18; // 100k HYPE (more than balance)
         vm.deal(address(stakingVault), stakingVaultBalance);
 
-        vm.prank(operator);
+        vm.startPrank(operator);
         vm.expectRevert("Staking vault balance is too low");
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
     }
@@ -1173,9 +1180,10 @@ contract GenesisVaultManagerTest is Test {
 
         // Try to make another transfer in the same block - should fail
         vm.deal(address(stakingVault), transferAmount); // Refill balance
-        vm.prank(operator);
+        vm.startPrank(operator);
         vm.expectRevert("Cannot transfer to HyperCore until the next block");
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        vm.stopPrank();
 
         // Advance to next block - should succeed
         _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
@@ -1203,9 +1211,10 @@ contract GenesisVaultManagerTest is Test {
 
         // Try to make a deposit in the same block - should fail due to one-block delay
         vm.deal(user, depositAmount);
-        vm.prank(user);
+        vm.startPrank(user);
         vm.expectRevert("Cannot deposit until the next block");
         genesisVaultManager.deposit{value: depositAmount}();
+        vm.stopPrank();
 
         // Advance to next block - deposit should now succeed
         vm.roll(block.number + 1);
@@ -1224,7 +1233,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.roll(block.number + 1);
 
-        vm.prank(operator);
+        vm.startPrank(operator);
         vm.expectRevert("Amount must be greater than 0");
         genesisVaultManager.transferToCoreAndDelegate();
     }
