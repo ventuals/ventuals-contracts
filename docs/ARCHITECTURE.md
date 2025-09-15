@@ -1,5 +1,7 @@
 # Architecture
 
+## Overview
+
 The Ventuals HYPE LST enables contributors to stake HYPE and receive vHYPE, a fully
 transferable ERC20 that represents their staked principal.
 
