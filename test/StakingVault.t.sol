@@ -498,7 +498,11 @@ contract StakingVaultTest is Test {
         newProxy.extraFunction();
     }
 
-    function test_ProtocolRegistryUpgradeToAndCall_NewOwner() public {
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     Tests: Ownership                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TransferOwnership_NewOwnerCanUpgrade() public {
         address originalOwner = owner;
         address newOwner = makeAddr("newOwner");
 
