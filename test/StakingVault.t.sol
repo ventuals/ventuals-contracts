@@ -9,6 +9,9 @@ import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {RoleRegistry} from "../src/RoleRegistry.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
+import {Base} from "../src/Base.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract StakingVaultTest is Test {
     RoleRegistry roleRegistry;
@@ -68,8 +71,12 @@ contract StakingVaultTest is Test {
         vm.assume(notManager != manager);
 
         vm.deal(notManager, 1e18);
-        vm.prank(notManager);
-        vm.expectRevert("Caller is not a manager");
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
         stakingVault.stakingDeposit(1e10);
     }
 
@@ -102,8 +109,12 @@ contract StakingVaultTest is Test {
     function test_StakingWithdraw_NotManager(address notManager) public {
         vm.assume(notManager != manager);
 
-        vm.prank(notManager);
-        vm.expectRevert("Caller is not a manager");
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
         stakingVault.stakingWithdraw(1e8);
     }
 
@@ -139,8 +150,12 @@ contract StakingVaultTest is Test {
         address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
 
-        vm.prank(notManager);
-        vm.expectRevert("Caller is not a manager");
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
         stakingVault.tokenDelegate(validator, weiAmount, false);
     }
 
@@ -177,8 +192,12 @@ contract StakingVaultTest is Test {
         uint64 token = 0;
         uint64 weiAmount = 1e8;
 
-        vm.prank(notManager);
-        vm.expectRevert("Caller is not a manager");
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
         stakingVault.spotSend(destination, token, weiAmount);
     }
 
@@ -224,8 +243,12 @@ contract StakingVaultTest is Test {
         uint256 amount = 1e18;
         vm.deal(address(stakingVault), amount);
 
-        vm.prank(notManager);
-        vm.expectRevert("Caller is not a manager");
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
         stakingVault.transferHypeToCore(amount);
 
         // Balance should remain unchanged
@@ -240,8 +263,9 @@ contract StakingVaultTest is Test {
         vm.prank(owner);
         roleRegistry.pause(address(stakingVault));
 
-        vm.prank(manager);
-        vm.expectRevert(); // Should revert when paused
+        // Should revert when paused
+        vm.startPrank(manager);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVault)));
         stakingVault.transferHypeToCore(amount);
 
         // Balance should remain unchanged
@@ -275,8 +299,12 @@ contract StakingVaultTest is Test {
         uint256 vaultBalanceBefore = address(stakingVault).balance;
         uint256 recipientBalanceBefore = recipient.balance;
 
-        vm.prank(notManager);
-        vm.expectRevert("Caller is not a manager");
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
         stakingVault.transferHype(recipient, amount);
 
         assertEq(address(stakingVault).balance, vaultBalanceBefore);
@@ -340,8 +368,12 @@ contract StakingVaultTest is Test {
         address apiWalletAddress = address(0x789);
         string memory name = "TestWallet";
 
-        vm.prank(notOperator);
-        vm.expectRevert("Caller is not an operator");
+        vm.startPrank(notOperator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notOperator, roleRegistry.OPERATOR_ROLE()
+            )
+        );
         stakingVault.addApiWallet(apiWalletAddress, name);
     }
 
@@ -456,8 +488,8 @@ contract StakingVaultTest is Test {
 
         StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
 
-        vm.prank(notOwner);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
         stakingVault.upgradeToAndCall(address(newImplementation), "");
 
         // Check that the extra function is not available
@@ -494,8 +526,8 @@ contract StakingVaultTest is Test {
 
         // Verify that the old owner can no longer upgrade
         StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction();
-        vm.prank(originalOwner);
-        vm.expectRevert("Caller is not the owner");
+        vm.startPrank(originalOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         stakingVault.upgradeToAndCall(address(anotherImplementation), "");
     }
 }
