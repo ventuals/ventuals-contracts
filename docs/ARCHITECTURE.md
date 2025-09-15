@@ -90,6 +90,7 @@ function transferToCoreAndDelegate() public onlyOperator;
 #### Key functions
 
 ```solidity
+function totalSupply() public view returns (uint256);
 function mint(address to, uint256 amount) external onlyManager;
 function burn(address from, uint256 amount) external;
 ```
