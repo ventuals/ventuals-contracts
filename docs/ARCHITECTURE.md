@@ -1,7 +1,5 @@
 # Architecture
 
-## Overview
-
 The Ventuals HYPE LST enables contributors to stake HYPE and receive vHYPE, a fully
 transferable ERC20 that represents their staked principal.
 
@@ -21,9 +19,7 @@ This structure ensures predictable and guaranteed withdrawal windows for all con
 This repository currently includes the contracts required for the genesis phase. Contracts
 for epoch-based staking will be finalized in a future release.
 
-## Architecture
-
-TODO: Add architecture diagram
+![Ventuals Architecture Diagram](./images/architecture.jpg)
 
 ## Access Control
 
