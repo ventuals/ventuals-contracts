@@ -38,6 +38,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev The cumulative amount of HYPE deposited by each address
     mapping(address => uint256) public depositsByAddress;
 
+    /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
+    /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
+    uint256 public lastEvmToCoreTransferBlockNumber;
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -99,14 +103,10 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         uint256 amountToMint = HYPETovHYPE(amountToDeposit);
         vHYPE.mint(msg.sender, amountToMint);
 
-        // Stake HYPE
+        // Transfer HYPE to staking vault (HyperEVM -> HyperEVM)
         if (amountToDeposit > 0) {
-            (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}(""); // HyperEVM -> HyperEVM
+            (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
             require(success, "Transfer failed"); // TODO: Change to typed error
-
-            stakingVault.transferHypeToCore(amountToDeposit); // HyperEVM -> HyperCore spot
-            stakingVault.stakingDeposit(amountToDeposit.to8Decimals()); // HyperCore spot -> HyperCore staking
-            stakingVault.tokenDelegate(defaultValidator, amountToDeposit.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
         }
 
         // Refund any excess HYPE
@@ -238,6 +238,29 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
         whitelistDepositLimits[depositor] = limit;
     }
 
+    /// @notice Transfers all HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @dev This function is called by the operator
+    function transferToCoreAndDelegate() public onlyOperator {
+        uint256 amount = address(stakingVault).balance;
+        transferToCoreAndDelegate(amount);
+    }
+
+    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @dev This function is called by the operator
+    /// @param amount The amount of HYPE to transfer (in 18 decimals)
+    function transferToCoreAndDelegate(uint256 amount) public onlyOperator {
+        require(
+            block.number >= lastEvmToCoreTransferBlockNumber + 1, "Cannot transfer to HyperCore until the next block"
+        ); // TODO: Change to typed error
+        require(amount > 0, "Amount must be greater than 0"); // TODO: Change to typed error
+        require(amount <= address(stakingVault).balance, "Staking vault balance is too low"); // TODO: Change to typed error
+        stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
+        stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
+        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
+
+        lastEvmToCoreTransferBlockNumber = block.number;
+    }
+
     /// @notice Moves an HYPE stake from one validator to another
     /// @param fromValidator The validator from which the HYPE stake is being moved
     /// @param toValidator The validator to which the HYPE stake is being moved
@@ -283,12 +306,46 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     /// @dev Fallback function to receive HYPE when msg.data is not empty
     fallback() external payable {}
 
+    modifier onlyOperator() {
+        require(roleRegistry.hasRole(roleRegistry.OPERATOR_ROLE(), msg.sender), "Caller is not an operator"); // TODO: Change to typed error
+        _;
+    }
+
     modifier onlyOwner() {
         require(roleRegistry.owner() == msg.sender, "Caller is not the owner"); // TODO: Change to typed error
         _;
     }
 
     modifier canDeposit() {
+        // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
+        // the account balances after the transfer are reflected in L1Read precompiles before subsequent deposits
+        // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
+        // would be made against an incorrect total balance / exchange rate.
+        //
+        // Example:
+        // - Block begins
+        //      - Exchange rate: 1 HYPE = 1 vHYPE
+        //          - 0 HYPE on HyperEVM
+        //          - 100 HYPE on HyperCore
+        //          - 100 vHYPE total supply
+        // - User deposits 100 HYPE
+        //      - Exchange rate: 1 HYPE = 1 vHYPE
+        //          - 100 HYPE on HyperEVM
+        //          - 100 HYPE on HyperCore
+        //          - 200 vHYPE total supply (+100 vHYPE minted to user)
+        // - Operator transfers 100 HYPE to HyperCore
+        //      - Exchange rate: 1 HYPE = 2 vHYPE <= this is incorrect
+        //          - 0 HYPE on HyperEVM
+        //          - 100 HYPE on HyperCore <= should be 200 HYPE - balance not reflected in L1Read precompiles until the next block
+        //          - 200 vHYPE total supply
+        // - User deposits 200 HYPE
+        //      - Exchange rate: 1 HYPE = 2 vHYPE <= this is incorrect
+        //          - 200 HYPE on HyperEVM
+        //          - 100 HYPE on HyperCore <= should be 200 HYPE - balance not reflected in L1Read precompiles until the next block
+        //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
+        // - Block ends
+
+        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, "Cannot deposit until the next block");
         uint256 balance = totalBalance();
         require(balance < vaultCapacity, "Vault is full"); // TODO: Change to typed error
         require(remainingDepositLimit(msg.sender) > 0, "Deposit limit reached"); // TODO: Change to typed error
