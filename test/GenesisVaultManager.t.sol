@@ -1074,34 +1074,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                    Tests: Upgradeability                   */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function test_UpgradeToAndCall_OnlyOwner() public {
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
-
-        vm.prank(owner);
-        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
-
-        // Verify upgrade preserved state
-        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
-        assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
-
-        // Check that the extra function is available
-        GenesisVaultManagerWithExtraFunction newProxy =
-            GenesisVaultManagerWithExtraFunction(payable(address(genesisVaultManager)));
-        assertTrue(newProxy.extraFunction());
-    }
-
-    function test_UpgradeToAndCall_NotOwner() public {
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
-
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*       Tests: Transfer to Core and Delegate (Only Operator) */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -1264,6 +1236,75 @@ contract GenesisVaultManagerTest is Test {
 
         assertTrue(success);
         assertEq(address(genesisVaultManager).balance, balanceBefore + amount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Upgradeability                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_UpgradeToAndCall_OnlyOwner() public {
+        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+
+        vm.prank(owner);
+        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
+        assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
+
+        // Check that the extra function is available
+        GenesisVaultManagerWithExtraFunction newProxy =
+            GenesisVaultManagerWithExtraFunction(payable(address(genesisVaultManager)));
+        assertTrue(newProxy.extraFunction());
+    }
+
+    function test_UpgradeToAndCall_NotOwner() public {
+        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     Tests: Ownership                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TransferOwnership_NewOwnerCanUpgrade() public {
+        address originalOwner = owner;
+        address newOwner = makeAddr("newOwner");
+
+        // Transfer ownership using 2-step process
+        vm.prank(originalOwner);
+        roleRegistry.transferOwnership(newOwner);
+
+        vm.prank(newOwner);
+        roleRegistry.acceptOwnership();
+
+        // Verify ownership has been transferred
+        assertEq(roleRegistry.owner(), newOwner);
+
+        // New owner upgrades the contract
+        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        vm.prank(newOwner);
+        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
+        assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
+        assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
+
+        // Check that the extra function is available
+        GenesisVaultManagerWithExtraFunction newProxy =
+            GenesisVaultManagerWithExtraFunction(payable(address(genesisVaultManager)));
+        assertTrue(newProxy.extraFunction());
+
+        // Verify that the old owner can no longer upgrade
+        GenesisVaultManagerWithExtraFunction anotherImplementation =
+            new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        vm.prank(originalOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
+        genesisVaultManager.upgradeToAndCall(address(anotherImplementation), "");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
