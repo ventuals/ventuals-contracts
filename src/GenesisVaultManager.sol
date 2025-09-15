@@ -239,16 +239,22 @@ contract GenesisVaultManager is Initializable, UUPSUpgradeable {
     }
 
     /// @notice Transfers all HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @dev This function is called by the operator
+    /// @dev This function can only be called by the operator
     function transferToCoreAndDelegate() public onlyOperator {
         uint256 amount = address(stakingVault).balance;
-        transferToCoreAndDelegate(amount);
+        _transferToCoreAndDelegate(amount);
     }
 
     /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @dev This function is called by the operator
+    /// @dev This function can only be called by the operator
     /// @param amount The amount of HYPE to transfer (in 18 decimals)
     function transferToCoreAndDelegate(uint256 amount) public onlyOperator {
+        _transferToCoreAndDelegate(amount);
+    }
+
+    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
+    /// @param amount The amount of HYPE to transfer (in 18 decimals)
+    function _transferToCoreAndDelegate(uint256 amount) internal {
         require(
             block.number >= lastEvmToCoreTransferBlockNumber + 1, "Cannot transfer to HyperCore until the next block"
         ); // TODO: Change to typed error
