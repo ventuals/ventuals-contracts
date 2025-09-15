@@ -1,19 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {ERC20Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import {ERC20BurnableUpgradeable} from
     "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20BurnableUpgradeable.sol";
-import {ERC20PausableUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PausableUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {RoleRegistry} from "./RoleRegistry.sol";
+import {Base} from "./Base.sol";
 
-contract VHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUPSUpgradeable {
-    RoleRegistry public roleRegistry;
-
+contract VHYPE is Base, ERC20Upgradeable, ERC20BurnableUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -22,8 +15,7 @@ contract VHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUP
     function initialize(address _roleRegistry) public initializer {
         __ERC20_init("vHYPE", "vHYPE");
         __ERC20Burnable_init();
-
-        roleRegistry = RoleRegistry(_roleRegistry);
+        __Base_init(_roleRegistry);
     }
 
     function mint(address to, uint256 amount) public onlyManager {
@@ -33,19 +25,4 @@ contract VHYPE is Initializable, ERC20Upgradeable, ERC20BurnableUpgradeable, UUP
     function burn(uint256 amount) public override {
         _burn(msg.sender, amount);
     }
-
-    modifier onlyManager() {
-        require(roleRegistry.hasRole(roleRegistry.MANAGER_ROLE(), msg.sender), "Caller is not a manager");
-        _;
-    }
-
-    modifier onlyOwner() {
-        require(roleRegistry.owner() == msg.sender, "Caller is not the owner");
-        _;
-    }
-
-    /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
-    /// @dev DO NOT REMOVE THIS FUNCTION, OTHERWISE WE LOSE THE ABILITY TO UPGRADE THE CONTRACT
-    /// @param newImplementation The address of the new implementation
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 }

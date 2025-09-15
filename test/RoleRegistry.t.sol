@@ -294,6 +294,41 @@ contract RoleRegistryTest is Test {
         vm.expectRevert();
         roleRegistry.renounceOwnership();
     }
+
+    function test_TransferOwnership_NewOwnerCanUpgrade() public {
+        address originalOwner = owner;
+        address newOwner = makeAddr("newOwner");
+
+        // Transfer ownership using 2-step process
+        vm.prank(originalOwner);
+        roleRegistry.transferOwnership(newOwner);
+
+        vm.prank(newOwner);
+        roleRegistry.acceptOwnership();
+
+        // Verify ownership has been transferred
+        assertEq(roleRegistry.owner(), newOwner);
+        assertFalse(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), originalOwner));
+        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), newOwner));
+
+        // Verify that the old owner can no longer upgrade
+        RoleRegistryWithExtraFunction anotherImplementation = new RoleRegistryWithExtraFunction();
+        vm.prank(originalOwner);
+        vm.expectRevert();
+        roleRegistry.upgradeToAndCall(address(anotherImplementation), "");
+
+        // New owner upgrades the contract
+        RoleRegistryWithExtraFunction newImplementation = new RoleRegistryWithExtraFunction();
+        vm.prank(newOwner);
+        roleRegistry.upgradeToAndCall(address(newImplementation), "");
+
+        // Verify upgrade preserved state
+        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), newOwner));
+
+        // Check that the extra function is available
+        RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
+        assertTrue(newProxy.extraFunction());
+    }
 }
 
 contract RoleRegistryWithExtraFunction is RoleRegistry {

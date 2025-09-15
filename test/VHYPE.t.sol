@@ -5,6 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {VHYPE} from "../src/VHYPE.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {RoleRegistry} from "../src/RoleRegistry.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract VHYPETest is Test {
     RoleRegistry roleRegistry;
@@ -42,14 +44,18 @@ contract VHYPETest is Test {
         assertEq(vHYPE.totalSupply(), amount);
     }
 
-    function test_Mint_NotManager(address user, uint256 amount) public {
-        vm.assume(user != address(0));
-        vm.assume(user != manager);
+    function test_Mint_NotManager(address notManager, uint256 amount) public {
+        vm.assume(notManager != manager);
+        vm.assume(notManager != address(0));
         vm.assume(amount > 0);
 
-        vm.prank(user);
-        vm.expectRevert();
-        vHYPE.mint(user, amount);
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
+        vHYPE.mint(notManager, amount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -167,7 +173,7 @@ contract VHYPETest is Test {
         VHYPEWithExtraFunction newImplementation = new VHYPEWithExtraFunction();
 
         vm.prank(notOwner);
-        vm.expectRevert("Caller is not the owner");
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
         vHYPE.upgradeToAndCall(address(newImplementation), "");
 
         // Check that the extra function is not available
@@ -176,7 +182,11 @@ contract VHYPETest is Test {
         newProxy.extraFunction();
     }
 
-    function test_ProtocolRegistryUpgradeToAndCall_NewOwner() public {
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     Tests: Ownership                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TransferOwnership_NewOwnerCanUpgrade() public {
         address originalOwner = owner;
         address newOwner = makeAddr("newOwner");
 
@@ -205,7 +215,7 @@ contract VHYPETest is Test {
         // Verify that the old owner can no longer upgrade
         VHYPEWithExtraFunction anotherImplementation = new VHYPEWithExtraFunction();
         vm.prank(originalOwner);
-        vm.expectRevert("Caller is not the owner");
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         vHYPE.upgradeToAndCall(address(anotherImplementation), "");
     }
 }
