@@ -18,8 +18,8 @@ choose to redeem their HYPE, roll over their HYPE into the next epoch, or deposi
 additional HYPE. The first epoch will be 1 year; subsequent epochs will last 6 months.
 This structure ensures predictable and guaranteed withdrawal windows for all contributors.
 
-This repository currently includes the contracts required for the genesis phase. Contracts
-for epoch-based staking will be finalized in a future release.
+_This repository currently includes the contracts required for the genesis phase. Contracts
+for epoch-based staking will be finalized in a future release._
 
 ![Ventuals Architecture Diagram](./images/architecture.jpg)
 
