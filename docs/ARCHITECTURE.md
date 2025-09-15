@@ -35,9 +35,10 @@ The Ventuals protocol uses a centralized role-based access control system (via t
   vault parameters, and execute emergency operations (e.g., withdrawing HYPE). This role is controlled by
   the Ventuals multisig.
 - `MANAGER` – Manages the vault. Can deposit, withdraw, delegate, and transfer HYPE on behalf of the vault.
-  During genesis, this role is assigned to the GenesisVaultManager; once epochs begin, it will be assigned to the EpochVaultManager.
-- `OPERATOR` – Handles automated, day-to-day protocol operations (e.g. rotating the StakingVault's
-  API wallets).
+  During genesis, this role is assigned to the GenesisVaultManager; once epochs begin, it will be assigned
+  to the EpochVaultManager.
+- `OPERATOR` – Handles automated, day-to-day protocol operations (e.g. transferring HYPE from HyperEVM to
+  HyperCore, rotating the StakingVault's API wallets).
 
 ## Contracts
 
@@ -77,6 +78,7 @@ function addApiWallet(address apiWalletAddress, string calldata name) external o
 function deposit() public canDeposit;
 function exchangeRate() public view returns (uint256);
 function totalBalance() public view returns (uint256);
+function transferToCoreAndDelegate() public onlyOperator;
 ```
 
 ### vHYPE
@@ -112,9 +114,84 @@ function pause(address contractAddress) external onlyOwner;
 function unpause(address contractAddress) external onlyOwner
 ```
 
-## Contract interactions
+## HyperEVM and HyperCore interaction timings
 
-### Deposit (Genesis)
+The L1Read precompiles will reflect the HyperCore state **at the beginning of the HyperEVM
+block** ([Hyperliquid docs](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interaction-timings)).
+This introduces a subtle timing issue when performing transfers from HyperEVM → HyperCore.
+
+When a transfer occurs:
+
+- The HyperEVM balance is reduced immediately.
+- The HyperCore spot balance queried via L1Read is not updated until the next block.
+
+This desynchronization means that immediately after a transfer to HyperCore, the vault's
+`totalBalance()` computation will be incorrect, because it relies on both HyperEVM balances
+and HyperCore spot balances. If a deposit happens after a transfer in the same block, we
+will mint vHYPE against an inaccurate exchange rate.
+
+To avoid this, we need to enforce a **one-block delay** between HyperEVM → HyperCore transfers
+and any action (such as deposits) that requires an accurate totalBalance(). User deposits
+will simply transfer HYPE to the StakingVault on HyperEVM, and then the OPERATOR will
+periodically transfer the HYPE from HyperEVM to HyperCore.
+
+In practice:
+
+- Deposits are allowed at the beginning of a block, when L1Read values are up-to-date.
+- When the OPERATOR initiates a HyperEVM → HyperCore transfer, subsequent deposits in
+  that same block are reverted.
+- Deposits may resume in the following block, once L1Read values are up-to-date again.
+
+This ensures that the vault's exchange rate is computed consistently.
+
+### Example:
+
+**Block begins**
+
+- 100 vHYPE supply
+- 0 HYPE on HyperEVM
+- 100 HYPE on HyperCore
+- Exchange rate: 1 HYPE = 1 vHYPE
+
+**User deposits 100 HYPE - `deposit()`**
+
+- 200 vHYPE supply
+- 100 HYPE on HyperEVM
+- 100 HYPE on HyperCore
+- Exchange rate: 1 HYPE = 1 vHYPE
+
+**Operator transfers 100 HYPE to HyperCore - `transferToCoreAndDelegate()`**
+
+- 200 vHYPE supply
+- 0 HYPE on HyperEVM
+  - ⇒ HyperEVM balance is immediately reduced
+- 100 HYPE on HyperCore
+  - ⇒ Should be 200 HYPE, but not reflected until next block
+- Exchange rate: 1 HYPE = 2 vHYPE
+  - ⇒ Exchange rate is incorrect
+
+**Another user deposits 200 HYPE - `deposit()`**
+
+- ⇒ Reverts
+
+**Block ends**
+
+**Next block begins**
+
+- 200 vHYPE supply
+- 0 HYPE on HyperEVM
+- 200 HYPE on HyperCore
+- Exchange rate: 1 HYPE = 1 vHYPE
+- ⇒ This is correct now
+
+**User deposits 200 HYPE - `deposit()`**
+
+- 400 vHYPE supply
+- 200 HYPE on HyperEVM
+- 200 HYPE on HyperCore
+- Exchange rate: 1 HYPE = 1 vHYPE
+
+### Diagram
 
 ```mermaid
 %%{init: {'theme':'neo-dark'}}%%
@@ -126,56 +203,122 @@ sequenceDiagram
     participant L1R as L1Read
     participant HCSP as HyperCore Spot
     participant HCST as HyperCore Staking
+    participant Op as Operator
+
+    Note over User,Op: User deposits (block n)
 
     User->>+GVM: deposit() {value: HYPE amount}
 
-    Note over GVM: Check vault balance
+    rect rgb(40, 40, 80)
+        Note over GVM: canDeposit() modifier checks
+        GVM->>GVM: Check: block.number >= lastEvmToCoreTransferBlockNumber + 1
+        GVM->>GVM: Check: totalBalance() < vaultCapacity
+        GVM->>GVM: Check: remainingDepositLimit() > 0
+    end
 
-    rect dimgray
-        Note over GVM,HCST: Aggregates balances across all accounts
+    rect rgb(60, 40, 40)
+        Note over GVM,HCST: Calculate totalBalance() - aggregates all balances
 
-        GVM->>+L1R: Get HyperCore balances
-        L1R->>+HCSP: Get spot balance
+        GVM->>+L1R: delegatorSummary() for staking balance
+        L1R->>+HCST: Query staking account
+        HCST-->>-L1R: delegated + undelegated + pendingWithdrawal
+        L1R-->>-GVM: Staking balance (reflects Block N-1 state)
+
+        GVM->>+L1R: spotBalance() for spot balance
+        L1R->>+HCSP: Query spot account
         HCSP-->>-L1R: spot balance
-        L1R->>+HCST: Get staking balance
-        HCST-->>-L1R: staking balance
-        L1R-->>-GVM: HyperCore balances
-        GVM->>+SV: Get EVM balance
-        SV-->>-GVM: EVM balance
-        GVM->>GVM: Get protocol withdrawals
-        GVM->>GVM: totalBalance = HyperCore + EVM + protocol withdrawals
+        L1R-->>-GVM: Spot balance (reflects Block N-1 state)
+
+        GVM->>+SV: address(stakingVault).balance
+        SV-->>-GVM: Current EVM balance
+
+        GVM->>GVM: totalBalance = stakingBalance + spotBalance + evmBalance
     end
 
-    Note over GVM: Mint vHYPE
-    GVM->>+vHYPE: mint(msg.sender, amountToMint)
-    vHYPE-->>-User: vHYPE tokens
-
-    Note over GVM: Stake
-
-    rect dimgray
-        Note over GVM,HCST: Transfer and stake HYPE via StakingVault
-        GVM->>+SV: Transfer HYPE to EVM
-        SV-->>-GVM: Success
-        GVM->>+SV: Transfer HYPE to Spot
-        SV->>+HCSP: Transfer HYPE to Spot
-        HCSP-->>-SV: Success
-        SV-->>-GVM: HYPE transferred to Spot
-
-        GVM->>+SV: Transfer HYPE to Staking
-        SV->>+HCST: Transfer HYPE to Staking
-        HCST-->>-SV: Success
-        SV-->>-GVM: HYPE transferred to Staking
-
-        GVM->>+SV: Delegate HYPE
-        SV->>+HCST: Delegate HYPE
-        HCST-->>-SV: Success
-        SV-->>-GVM: HYPE delegated
+    rect rgb(40, 80, 40)
+        Note over GVM,vHYPE: Calculate exchange rate and mint vHYPE
+        GVM->>GVM: exchangeRate = totalBalance / vHYPE.totalSupply()
+        GVM->>GVM: amountToMint = HYPETovHYPE(amountToDeposit)
+        GVM->>+vHYPE: mint(msg.sender, amountToMint)
+        vHYPE-->>User: vHYPE tokens
+        vHYPE-->>-GVM: Success
     end
 
-    alt requestedAmount > remainingCapacity
+    rect rgb(80, 80, 40)
+        Note over GVM,SV: Transfer HYPE to StakingVault (HyperEVM → HyperEVM)
+        GVM->>+SV: Transfer HYPE via call{value: amountToDeposit}
+        SV-->>-GVM: HYPE received on HyperEVM
+    end
+
+    alt requestedAmount > availableCapacity
         Note over GVM: Refund excess HYPE
         GVM->>User: call{value: refund}("")
     end
 
-    GVM-->>-User: Success
+    GVM-->>-User: Deposit() event emitted
+
+    Note over User,Op: Operator transfers HYPE from HyperEVM to HyperCore (block n)
+
+    Op->>+GVM: transferToCoreAndDelegate()
+
+    rect rgb(100, 40, 40)
+        Note over GVM: Check timing constraint
+        GVM->>GVM: require(block.number >= lastEvmToCoreTransferBlockNumber + 1)
+    end
+
+    rect rgb(80, 40, 80)
+        Note over GVM,HCST: Transfer and delegate HYPE
+        GVM->>+SV: transferHypeToCore(amount)
+        SV->>+HCSP: Transfer HYPE (HyperEVM → HyperCore Spot)
+        Note right of SV: EVM balance reduced immediately
+        HCSP-->>-SV: Success
+        SV-->>-GVM: HYPE transferred to HyperCore
+
+        GVM->>+SV: stakingDeposit(amount)
+        SV->>+HCST: Transfer (HyperCore Spot → HyperCore Staking)
+        HCST-->>-SV: Success
+        SV-->>-GVM: HYPE moved to staking
+
+        GVM->>+SV: tokenDelegate(defaultValidator, amount)
+        SV->>+HCST: Delegate to validator
+        HCST-->>-SV: HYPE delegated
+        SV-->>-GVM: Success
+    end
+
+    GVM->>GVM: lastEvmToCoreTransferBlockNumber = block.number
+    GVM-->>-Op: Transfer completed
+
+    Note over User,Op: Subsequent user deposit fails (block n)
+
+    User->>+GVM: deposit() {value: HYPE amount}
+
+    rect rgb(100, 40, 40)
+        Note over GVM: Timing check fails!
+        GVM->>GVM: require(block.number >= lastEvmToCoreTransferBlockNumber + 1)
+        Note right of GVM: block.number = N<br/>lastEvmToCoreTransferBlockNumber = N<br/>N >= N + 1 = false
+        GVM-->>User: ❌ CannotDepositUntilNextBlock()
+    end
+
+    GVM-->>-User: Transaction reverted
+
+    Note over User,Op: Next block user deposit (block n + 1)
+
+    User->>+GVM: deposit() {value: HYPE amount}
+
+    rect rgb(40, 80, 40)
+        Note over GVM: Timing check passes
+        GVM->>GVM: require(block.number >= lastEvmToCoreTransferBlockNumber + 1)
+        Note right of GVM: block.number = N+1<br/>lastEvmToCoreTransferBlockNumber = N<br/>N+1 >= N + 1 = true ✓
+    end
+
+    rect rgb(60, 40, 40)
+        Note over GVM,HCST: totalBalance() now accurate
+        GVM->>+L1R: Get updated HyperCore balances
+        Note right of L1R: L1Read now reflects the<br/>HyperEVM → HyperCore transfer<br/>that happened in Block N
+        L1R-->>-GVM: Updated balances
+        GVM->>GVM: totalBalance = correct sum of all balances
+    end
+
+    Note over GVM: Continue with normal deposit flow...
+    GVM-->>-User: Deposit successful with correct exchange rate
 ```
