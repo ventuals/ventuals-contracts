@@ -1211,34 +1211,6 @@ contract GenesisVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*              Tests: Receive and Fallback Functions         */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function test_Receive() public {
-        uint256 amount = 1e18;
-        uint256 balanceBefore = address(genesisVaultManager).balance;
-
-        vm.deal(user, amount);
-        vm.prank(user);
-        (bool success,) = address(genesisVaultManager).call{value: amount}("");
-
-        assertTrue(success);
-        assertEq(address(genesisVaultManager).balance, balanceBefore + amount);
-    }
-
-    function test_Fallback() public {
-        uint256 amount = 1e18;
-        uint256 balanceBefore = address(genesisVaultManager).balance;
-
-        vm.deal(user, amount);
-        vm.prank(user);
-        (bool success,) = address(genesisVaultManager).call{value: amount}("0x1234");
-
-        assertTrue(success);
-        assertEq(address(genesisVaultManager).balance, balanceBefore + amount);
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Upgradeability                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 

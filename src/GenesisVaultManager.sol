@@ -324,12 +324,6 @@ contract GenesisVaultManager is Base {
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
-    /// @dev Function to receive HYPE when msg.data is empty
-    receive() external payable {}
-
-    /// @dev Fallback function to receive HYPE when msg.data is not empty
-    fallback() external payable {}
-
     modifier canDeposit() {
         // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
         // the account balances after the transfer are reflected in L1Read precompiles before subsequent deposits
