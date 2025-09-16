@@ -1,6 +1,6 @@
 # Architecture
 
-## Overview
+## Background
 
 The Ventuals HYPE LST enables contributors to stake HYPE and receive vHYPE, a fully
 transferable ERC20 that represents their staked principal.
@@ -21,7 +21,16 @@ This structure ensures predictable and guaranteed withdrawal windows for all con
 _This repository currently includes the contracts required for the genesis phase. Contracts
 for epoch-based staking will be finalized in a future release._
 
+## Overview
+
 ![Ventuals Architecture Diagram](./images/architecture.jpg)
+
+- **vHYPE**: Fully transferable ERC20 which serves as a claim to the underlying principal HYPE.
+- **StakingVault**: Holds HYPE natively staked with validators.
+- **GenesisVaultManager**: Manages the StakingVault during the genesis raise before HIP-3 mainnet deployment.
+- **EpochVaultManager**: Manages the StakingVault once epochs begin. Handles deposits, withdrawals, and rollovers. Used for epochs only.
+- **StakingYieldDistributor**: Distributes Ventuals exchange revenue (in USDC) to vHYPE stakers once epochs begin. Used for epochs only.
+- **RoleRegistry**: Centralizes role-based access control across the protocol.
 
 ## Access Control
 
