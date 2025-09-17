@@ -18,8 +18,11 @@ import {Vm} from "forge-std/Vm.sol";
 import {Base} from "../src/Base.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
+import {Converters} from "../src/libraries/Converters.sol";
 
 contract GenesisVaultManagerTest is Test {
+    using Converters for *;
+
     GenesisVaultManager genesisVaultManager;
     RoleRegistry roleRegistry;
     VHYPE vHYPE;
@@ -795,7 +798,8 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_ExchangeRate_BalanceMoreThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
-        vm.assume(totalBalance >= 1e10); // Minimum to survive division by 1e10
+        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
+        vm.assume(totalBalance >= 1e10);
         vm.assume(vHYPESupply > 0);
         vm.assume(totalBalance > vHYPESupply);
         _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
@@ -805,6 +809,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_ExchangeRate_BalanceLessThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
+        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
         vm.assume(totalBalance > 0);
         vm.assume(vHYPESupply > 0);
         vm.assume(totalBalance < vHYPESupply);
@@ -873,6 +878,7 @@ contract GenesisVaultManagerTest is Test {
         uint256 vHYPESupply,
         uint256 hypeAmountToConvert
     ) public {
+        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
         vm.assume(hypeAmountToConvert > 0 && hypeAmountToConvert < 2_000_000 * 1e18);
 
         _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
@@ -996,9 +1002,9 @@ contract GenesisVaultManagerTest is Test {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
         // Mock the undelegate call (from validator)
-        _mockAndExpectTokenDelegateCall(fromValidator, uint64(amount / 1e10), true);
+        _mockAndExpectTokenDelegateCall(fromValidator, amount.to8Decimals(), true);
         // Mock the delegate call (to validator)
-        _mockAndExpectTokenDelegateCall(toValidator, uint64(amount / 1e10), false);
+        _mockAndExpectTokenDelegateCall(toValidator, amount.to8Decimals(), false);
 
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
@@ -1209,9 +1215,9 @@ contract GenesisVaultManagerTest is Test {
         vm.deal(address(stakingVault), stakingVaultBalance);
 
         // Mock the expected calls for transferring all balance
-        _mockAndExpectStakingDepositCall(uint64(stakingVaultBalance / 1e10));
+        _mockAndExpectStakingDepositCall(stakingVaultBalance.to8Decimals());
         _mockAndExpectTokenDelegateCall(
-            genesisVaultManager.defaultValidator(), uint64(stakingVaultBalance / 1e10), false
+            genesisVaultManager.defaultValidator(), stakingVaultBalance.to8Decimals(), false
         );
 
         vm.prank(operator);
@@ -1227,8 +1233,8 @@ contract GenesisVaultManagerTest is Test {
         vm.deal(address(stakingVault), stakingVaultBalance);
 
         // Mock the expected calls for transferring specific amount
-        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+        _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         vm.prank(operator);
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
@@ -1271,8 +1277,8 @@ contract GenesisVaultManagerTest is Test {
         vm.deal(address(stakingVault), transferAmount);
 
         // First, make a transfer to set lastEvmToCoreTransferBlockNumber
-        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+        _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         vm.prank(operator);
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
@@ -1285,8 +1291,8 @@ contract GenesisVaultManagerTest is Test {
         vm.stopPrank();
 
         // Advance to next block - should succeed
-        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+        _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         vm.roll(block.number + 1);
         vm.prank(operator);
@@ -1301,8 +1307,8 @@ contract GenesisVaultManagerTest is Test {
         vm.deal(address(stakingVault), transferAmount);
 
         // Mock the expected calls for the transfer
-        _mockAndExpectStakingDepositCall(uint64(transferAmount / 1e10));
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), uint64(transferAmount / 1e10), false);
+        _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
+        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         // Execute the transfer to HyperCore
         vm.prank(operator);
@@ -1414,9 +1420,9 @@ contract GenesisVaultManagerTest is Test {
     /// @param totalBalance The total balance of HYPE to mock (in 18 decimals)
     /// @param vHYPESupply The total supply of vHYPE to mint (in 18 decimals)
     function _mockBalancesForExchangeRate(uint256 totalBalance, uint256 vHYPESupply) internal {
-        vm.assume(totalBalance / 1e10 <= type(uint64).max);
+        vm.assume(totalBalance.to8Decimals() <= type(uint64).max);
 
-        uint64 delegatedBalance = totalBalance > 0 ? uint64(totalBalance / 1e10) : 0; // Convert to 8 decimals
+        uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
 
         // Mock delegator summary and spot balance
         _mockDelegatorSummary(delegatedBalance);
@@ -1542,6 +1548,8 @@ contract ContractThatRejectsTransfers {
 }
 
 contract MockHypeSystemContract {
+    using Converters for *;
+
     /// @dev Cheat code address.
     /// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
     address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
@@ -1549,7 +1557,7 @@ contract MockHypeSystemContract {
     uint64 public constant HYPE_TOKEN_ID = 150;
 
     receive() external payable {
-        uint64 amount = SafeCast.toUint64(msg.value / 1e10);
+        uint64 amount = msg.value.to8Decimals();
 
         // When we receive HYPE, we want to add it to the spot balance to simulate a "transfer" to the address's
         // spot account
