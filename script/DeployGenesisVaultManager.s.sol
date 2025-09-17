@@ -25,11 +25,13 @@ contract DeployGenesisVaultManager is Script {
         GenesisVaultManager implementation = new GenesisVaultManager(hypeTokenId);
         bytes memory initData = abi.encodeWithSelector(
             GenesisVaultManager.initialize.selector,
-            roleRegistry,
-            vHYPE,
-            stakingVault,
-            1_200_000 * 1e18,
-            defaultValidator
+            roleRegistry, /* roleRegistry */
+            vHYPE, /* vHYPE */
+            stakingVault, /* stakingVault */
+            1_200_000 * 1e18, /* vaultCapacity */
+            defaultValidator, /* defaultValidator */
+            100_000 * 1e18, /* defaultDepositLimit */
+            0.01 * 1e18 /* minimumDepositAmount */
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Using RoleRegistry at:", roleRegistry);
