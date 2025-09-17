@@ -9,6 +9,7 @@
   "solidity.packageDefaultDependenciesDirectory": "lib",
   "solidity.remappingsUnix": [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
-    "forge-std/=lib/forge-std/src/"
+    "forge-std/=lib/forge-std/src/",
+    "solady/=lib/solady/src/"
   ]
 }
