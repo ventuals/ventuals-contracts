@@ -2,7 +2,6 @@
 pragma solidity ^0.8.27;
 
 import {IStakingVault} from "./interfaces/IStakingVault.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Base} from "./Base.sol";

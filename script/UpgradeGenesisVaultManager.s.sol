@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import {Script} from "forge-std/Script.sol";
 import {GenesisVaultManager} from "../src/GenesisVaultManager.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {console} from "forge-std/console.sol";
 
 contract UpgradeGenesisVaultManager is Script {

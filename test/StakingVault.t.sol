@@ -3,7 +3,6 @@ pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
