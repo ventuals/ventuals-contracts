@@ -231,6 +231,7 @@ library L1ReadLibrary {
         return abi.decode(result, (Bbo));
     }
 
+    /// forge-lint: disable-next-line(mixed-case-variable)
     function accountMarginSummary(uint32 perp_dex_index, address user)
         internal
         view

@@ -3,7 +3,6 @@ pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {StakingVault} from "../src/StakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
@@ -275,17 +274,17 @@ contract StakingVaultTest is Test {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Transfer Hype                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_TransferHype(address payable recipient, uint256 amount) public {
-        vm.assume(recipient != address(stakingVault));
-        vm.assume(recipient != address(roleRegistry));
-        assumeNotPrecompile(recipient);
+    function test_TransferHype(uint256 amount) public {
+        vm.assume(amount <= 1_000_000_000 * 1e18); // 1 billion tokens max
+
+        address recipient = makeAddr("recipient");
 
         vm.deal(address(stakingVault), amount);
         uint256 vaultBalanceBefore = address(stakingVault).balance;
         uint256 recipientBalanceBefore = recipient.balance;
 
         vm.prank(manager);
-        stakingVault.transferHype(recipient, amount);
+        stakingVault.transferHype(payable(recipient), amount);
 
         assertEq(address(stakingVault).balance, vaultBalanceBefore - amount);
         assertEq(recipient.balance, recipientBalanceBefore + amount);

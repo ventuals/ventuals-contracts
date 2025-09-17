@@ -10,6 +10,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 
 contract VHYPETest is Test {
     RoleRegistry roleRegistry;
+    /// forge-lint: disable-next-line(mixed-case-variable)
     VHYPE public vHYPE;
 
     address public owner = makeAddr("owner");
@@ -72,6 +73,7 @@ contract VHYPETest is Test {
         vHYPE.mint(user1, amount);
 
         vm.prank(user1);
+        /// forge-lint: disable-next-line(erc20-unchecked-transfer)
         vHYPE.transfer(user2, transferAmount);
 
         assertEq(vHYPE.balanceOf(user1), amount - transferAmount);
@@ -92,6 +94,7 @@ contract VHYPETest is Test {
         vHYPE.approve(user2, transferAmount);
 
         vm.prank(user2);
+        /// forge-lint: disable-next-line(erc20-unchecked-transfer)
         vHYPE.transferFrom(user1, user2, transferAmount);
 
         assertEq(vHYPE.balanceOf(user1), amount - transferAmount);
