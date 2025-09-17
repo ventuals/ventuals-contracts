@@ -33,6 +33,7 @@ contract GenesisVaultManagerTest is Test {
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant VAULT_CAPACITY = 1_200_000 * 1e18; // 1.2M HYPE
     uint256 public constant DEFAULT_DEPOSIT_LIMIT = 100_000 * 1e18; // 100k HYPE
+    uint256 public constant MINIMUM_DEPOSIT_AMOUNT = 1e16; // 0.01 HYPE
 
     // Events
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
@@ -66,7 +67,8 @@ contract GenesisVaultManagerTest is Test {
             address(stakingVault),
             VAULT_CAPACITY,
             defaultValidator,
-            DEFAULT_DEPOSIT_LIMIT
+            DEFAULT_DEPOSIT_LIMIT,
+            MINIMUM_DEPOSIT_AMOUNT
         );
         ERC1967Proxy genesisVaultManagerProxy =
             new ERC1967Proxy(address(genesisVaultManagerImplementation), genesisVaultManagerInitData);
@@ -96,6 +98,7 @@ contract GenesisVaultManagerTest is Test {
         assertEq(genesisVaultManager.vaultCapacity(), VAULT_CAPACITY);
         assertEq(genesisVaultManager.defaultValidator(), defaultValidator);
         assertEq(genesisVaultManager.defaultDepositLimit(), DEFAULT_DEPOSIT_LIMIT);
+        assertEq(genesisVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
         assertEq(genesisVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
@@ -107,7 +110,8 @@ contract GenesisVaultManagerTest is Test {
             address(stakingVault),
             VAULT_CAPACITY,
             defaultValidator,
-            DEFAULT_DEPOSIT_LIMIT
+            DEFAULT_DEPOSIT_LIMIT,
+            MINIMUM_DEPOSIT_AMOUNT
         );
     }
 
@@ -273,6 +277,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_RevertWhenVaultFull(uint256 depositAmount) public {
+        vm.assume(depositAmount >= 1e16);
         _mockBalancesForExchangeRate(VAULT_CAPACITY, VAULT_CAPACITY);
 
         vm.deal(user, depositAmount);
@@ -284,19 +289,43 @@ contract GenesisVaultManagerTest is Test {
         assertEq(address(stakingVault).balance, 0);
     }
 
+    function test_Deposit_ExactMinimumAmount() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
+
+        vm.deal(user, MINIMUM_DEPOSIT_AMOUNT);
+        vm.prank(user);
+        genesisVaultManager.deposit{value: MINIMUM_DEPOSIT_AMOUNT}();
+
+        // vHYPE should be minted
+        assertEq(vHYPE.balanceOf(user), MINIMUM_DEPOSIT_AMOUNT);
+
+        // HYPE should be transferred to staking vault
+        assertEq(address(stakingVault).balance, MINIMUM_DEPOSIT_AMOUNT);
+    }
+
+    function test_Deposit_BelowMinimumAmount() public {
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
+
+        uint256 belowMinimumAmount = MINIMUM_DEPOSIT_AMOUNT - 1; // 1 wei below minimum
+
+        vm.deal(user, belowMinimumAmount);
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
+        genesisVaultManager.deposit{value: belowMinimumAmount}();
+    }
+
     function test_Deposit_ZeroAmount() public {
         uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
         uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
 
-        vm.prank(user);
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
         genesisVaultManager.deposit{value: 0}();
-
-        // No vHYPE should be minted
-        assertEq(vHYPE.balanceOf(user), 0);
-
-        // No HYPE should be transferred to staking vault (vault balance should remain 0)
-        assertEq(address(stakingVault).balance, 0);
     }
 
     function test_Deposit_RevertWhenContractPaused() public {
@@ -855,6 +884,55 @@ contract GenesisVaultManagerTest is Test {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.setDefaultValidator(newValidator);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*       Tests: Set Minimum Deposit Amount (Only Owner)      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetMinimumDepositAmount_OnlyOwner() public {
+        uint256 newMinimumAmount = 5e16; // 0.05 HYPE
+
+        vm.prank(owner);
+        genesisVaultManager.setMinimumDepositAmount(newMinimumAmount);
+
+        assertEq(genesisVaultManager.minimumDepositAmount(), newMinimumAmount);
+    }
+
+    function test_SetMinimumDepositAmount_NotOwner() public {
+        uint256 newMinimumAmount = 5e16; // 0.05 HYPE
+
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        genesisVaultManager.setMinimumDepositAmount(newMinimumAmount);
+    }
+
+    function test_SetMinimumDepositAmount_UpdatesDepositValidation() public {
+        uint256 newMinimumAmount = 5e16; // 0.05 HYPE
+        uint256 belowNewMinimum = newMinimumAmount - 1; // 1 wei below new minimum
+
+        // Set new minimum amount
+        vm.prank(owner);
+        genesisVaultManager.setMinimumDepositAmount(newMinimumAmount);
+
+        // Mock balances for deposit
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply);
+
+        // Try to deposit below new minimum - should fail
+        vm.deal(user, belowNewMinimum);
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
+        genesisVaultManager.deposit{value: belowNewMinimum}();
+
+        // Deposit exactly the new minimum - should succeed
+        vm.deal(user, newMinimumAmount);
+        genesisVaultManager.deposit{value: newMinimumAmount}();
+
+        // Verify deposit succeeded
+        assertEq(vHYPE.balanceOf(user), newMinimumAmount);
+        assertEq(address(stakingVault).balance, newMinimumAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
