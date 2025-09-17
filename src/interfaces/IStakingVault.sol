@@ -10,6 +10,9 @@ interface IStakingVault {
     /// @notice Thrown if HYPE transfer fails to given recipient for specified amount.
     error TransferFailed(address recipient, uint256 amount);
 
+    /// @notice Thrown if the StakingVault is not activated on HyperCore.
+    error NotActivatedOnHyperCore();
+
     /// @dev Deposit HYPE from spot to staking account on HyperCore
     /// @param weiAmount The amount of wei to deposit (8 decimals)
     function stakingDeposit(uint64 weiAmount) external;
