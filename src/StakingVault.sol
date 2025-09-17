@@ -42,6 +42,13 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
+        // This is an important safety check - ensures that the StakingVault account is activated on HyperCore.
+        // If the StakingVault is not activated on HyperCore, and a HyperEVM -> HyperCore HYPE transfer is made,
+        // the transferred HYPE will be lost.
+        L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(address(this));
+        if (!coreUserExists.exists) {
+            revert NotActivatedOnHyperCore();
+        }
         _transfer(payable(HYPE_SYSTEM_ADDRESS), amount);
     }
 
