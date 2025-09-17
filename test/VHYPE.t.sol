@@ -10,6 +10,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 
 contract VHYPETest is Test {
     RoleRegistry roleRegistry;
+    /// forge-lint: disable-next-line(mixed-case-variable)
     VHYPE public vHYPE;
 
     address public owner = makeAddr("owner");

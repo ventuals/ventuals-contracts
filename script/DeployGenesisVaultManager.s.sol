@@ -9,6 +9,7 @@ import {console} from "forge-std/console.sol";
 contract DeployGenesisVaultManager is Script {
     function run() public {
         address roleRegistry = vm.envAddress("ROLE_REGISTRY");
+        /// forge-lint: disable-next-line(mixed-case-variable)
         address vHYPE = vm.envAddress("VHYPE");
         address stakingVault = vm.envAddress("STAKING_VAULT");
         bool isTestnet = vm.envBool("IS_TESTNET");
