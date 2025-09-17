@@ -4,7 +4,8 @@
   "description": "JavaScript scripts for interacting with Ventuals contracts",
   "main": "index.js",
   "scripts": {
-    "genesis-deposit": "node scripts/call-genesis-deposit.js"
+    "genesis-deposit": "node scripts/call-genesis-deposit.js",
+    "transfer-to-core": "node scripts/call-transfer-to-core.js"
   },
   "dependencies": {
     "dotenv": "^16.3.1",

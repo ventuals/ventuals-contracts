@@ -70,3 +70,70 @@ The script provides detailed output including:
 - ⛽ Current gas price
 - 📝 Transaction hash
 - ✅ Confirmation details
+
+## call-transfer-to-core.js
+
+A script to transfer HYPE from GenesisVaultManager's HyperEVM balance to HyperCore and delegate it to validators.
+
+### Description
+
+This script calls the `transferToCoreAndDelegate()` function on the GenesisVaultManager contract. This function transfers HYPE from the vault's HyperEVM balance to HyperCore and automatically delegates it to the default validator. You can either transfer all available balance or specify a specific amount.
+
+### Prerequisites
+
+**Environment Variables**
+
+```bash
+IS_TESTNET=true             # true for testnet, false for mainnet
+GENESIS_VAULT_MANAGER=0x... # GenesisVaultManager contract address
+STAKING_VAULT=0x...         # StakingVault contract address
+PRIVATE_KEY=0x...           # Your wallet private key (must have OPERATOR role)
+```
+
+**Operator Role**: Your wallet must have the OPERATOR role on the GenesisVaultManager contract.
+
+### Usage
+
+Transfer all available balance:
+
+```bash
+npm run transfer-to-core
+```
+
+Transfer specific amount (e.g., 1.5 HYPE):
+
+```bash
+npm run transfer-to-core 1.5
+```
+
+Or directly with node:
+
+```bash
+node scripts/call-transfer-to-core.js        # Transfer all
+node scripts/call-transfer-to-core.js 2.0    # Transfer 2.0 HYPE
+```
+
+### What it does
+
+1. **Loads Configuration**: Reads environment variables from `.env` file
+2. **Network Detection**: Automatically selects RPC URL based on `IS_TESTNET` flag
+3. **Wallet Setup**: Connects to your operator wallet using the provided private key
+4. **Amount Processing**: Uses specified amount or transfers all available balance
+5. **Transaction**: Calls `transferToCoreAndDelegate()` function
+6. **Core Operations**: The function internally:
+   - Transfers HYPE from HyperEVM to HyperCore
+   - Moves HYPE from spot to staking account
+   - Delegates HYPE to the default validator
+7. **Confirmation**: Waits for transaction confirmation and displays results
+
+### Output
+
+The script provides detailed output including:
+
+- 🌐 Network (Testnet/Mainnet)
+- 📋 Contract address being called
+- 👤 Wallet address being used
+- 💰 Transfer amount (specific or "All available balance")
+- ⛽ Current gas price
+- 📝 Transaction hash
+- ✅ Confirmation details
