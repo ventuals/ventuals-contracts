@@ -278,7 +278,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_Deposit_RevertWhenVaultFull(uint256 depositAmount) public {
-        vm.assume(depositAmount >= 1e16);
+        depositAmount = bound(depositAmount, 1e16, type(uint256).max);
         _mockBalancesForExchangeRate(VAULT_CAPACITY, VAULT_CAPACITY);
 
         vm.deal(user, depositAmount);
@@ -876,8 +876,9 @@ contract GenesisVaultManagerTest is Test {
         uint256 vHYPESupply,
         uint256 hypeAmountToConvert
     ) public {
-        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
-        vm.assume(hypeAmountToConvert > 0 && hypeAmountToConvert < 2_000_000 * 1e18);
+        totalBalance = bound(totalBalance, 1, 1_000_000_000e18);
+        vHYPESupply = bound(vHYPESupply, 1, 1_000_000_000e18);
+        hypeAmountToConvert = bound(hypeAmountToConvert, 1, 2_000_000 * 1e18 - 1);
 
         _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
 
