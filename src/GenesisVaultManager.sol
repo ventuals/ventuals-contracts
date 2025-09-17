@@ -60,7 +60,9 @@ contract GenesisVaultManager is Base {
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
 
+    /// forge-lint: disable-next-line(mixed-case-variable)
     VHYPE public vHYPE;
+
     IStakingVault public stakingVault;
 
     /// @notice The total HYPE capacity of the vault (in 18 decimals)
@@ -96,6 +98,7 @@ contract GenesisVaultManager is Base {
 
     function initialize(
         address _roleRegistry,
+        /// forge-lint: disable-next-line(mixed-case-variable)
         address _vHYPE,
         address _stakingVault,
         uint256 _vaultCapacity,
@@ -154,6 +157,7 @@ contract GenesisVaultManager is Base {
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
     /// @param hypeAmount The HYPE amount to convert (in 18 decimals)
     /// @return The vHYPE amount (in 18 decimals)
+    /// forge-lint: disable-next-line(mixed-case-function)
     function HYPETovHYPE(uint256 hypeAmount) public view returns (uint256) {
         uint256 _exchangeRate = exchangeRate();
         if (_exchangeRate == 0) {
@@ -165,6 +169,7 @@ contract GenesisVaultManager is Base {
     /// @notice Calculates the HYPE amount for a given vHYPE amount, based on the exchange rate
     /// @param vHYPEAmount The vHYPE amount to convert (in 18 decimals)
     /// @return The HYPE amount (in 18 decimals)
+    /// forge-lint: disable-next-line(mixed-case-function, mixed-case-variable)
     function vHYPEtoHYPE(uint256 vHYPEAmount) public view returns (uint256) {
         uint256 _exchangeRate = exchangeRate();
         if (_exchangeRate == 0) {

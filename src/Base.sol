@@ -18,6 +18,7 @@ contract Base is Initializable, UUPSUpgradeable {
         _disableInitializers();
     }
 
+    /// forge-lint: disable-next-line(mixed-case-function)
     function __Base_init(address _roleRegistry) internal onlyInitializing {
         __UUPSUpgradeable_init();
         roleRegistry = RoleRegistry(_roleRegistry);
