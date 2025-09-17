@@ -24,29 +24,45 @@ contract Base is Initializable, UUPSUpgradeable {
     }
 
     modifier whenNotPaused() {
-        require(!roleRegistry.isPaused(address(this)), Paused(address(this)));
+        _whenNotPaused();
         _;
     }
 
+    function _whenNotPaused() internal view {
+        require(!roleRegistry.isPaused(address(this)), Paused(address(this)));
+    }
+
     modifier onlyManager() {
+        _onlyManager();
+        _;
+    }
+
+    function _onlyManager() internal view {
         require(
             roleRegistry.hasRole(roleRegistry.MANAGER_ROLE(), msg.sender),
             IAccessControl.AccessControlUnauthorizedAccount(msg.sender, roleRegistry.MANAGER_ROLE())
         );
-        _;
     }
 
     modifier onlyOperator() {
+        _onlyOperator();
+        _;
+    }
+
+    function _onlyOperator() internal view {
         require(
             roleRegistry.hasRole(roleRegistry.OPERATOR_ROLE(), msg.sender),
             IAccessControl.AccessControlUnauthorizedAccount(msg.sender, roleRegistry.OPERATOR_ROLE())
         );
-        _;
     }
 
     modifier onlyOwner() {
-        require(roleRegistry.owner() == msg.sender, OwnableUpgradeable.OwnableUnauthorizedAccount(msg.sender));
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        require(roleRegistry.owner() == msg.sender, OwnableUpgradeable.OwnableUnauthorizedAccount(msg.sender));
     }
 
     /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.

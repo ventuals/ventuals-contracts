@@ -339,6 +339,11 @@ contract GenesisVaultManager is Base {
     }
 
     modifier canDeposit() {
+        _canDeposit();
+        _;
+    }
+
+    function _canDeposit() internal view {
         // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
         // the account balances after the transfer are reflected in L1Read precompiles before subsequent deposits
         // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
@@ -375,6 +380,5 @@ contract GenesisVaultManager is Base {
             BelowMinimumDepositAmount()
         );
         require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
-        _;
     }
 }
