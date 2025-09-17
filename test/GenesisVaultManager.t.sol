@@ -86,6 +86,9 @@ contract GenesisVaultManagerTest is Test {
         vm.etch(0x2222222222222222222222222222222222222222, address(mockHypeSystemContract).code);
         _mockSpotBalance(0);
         _mockDelegatorSummary(0);
+
+        // Mock the core user exists check to return true
+        _mockCoreUserExists(true);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1414,6 +1417,16 @@ contract GenesisVaultManagerTest is Test {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Helper Functions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev Helper function to mock the core user exists check
+    /// @param exists Whether the core user should exist on HyperCore
+    function _mockCoreUserExists(bool exists) internal {
+        L1ReadLibrary.CoreUserExists memory mockCoreUserExists = L1ReadLibrary.CoreUserExists({exists: exists});
+        bytes memory encodedCoreUserExists = abi.encode(mockCoreUserExists);
+        vm.mockCall(
+            L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedCoreUserExists
+        );
+    }
 
     /// @dev Helper function to mock balances for testing exchange rate calculations
     /// @param totalBalance The total balance of HYPE to mock (in 18 decimals)

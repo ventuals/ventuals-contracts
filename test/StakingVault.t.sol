@@ -4,6 +4,7 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {StakingVault} from "../src/StakingVault.sol";
+import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {RoleRegistry} from "../src/RoleRegistry.sol";
@@ -36,6 +37,9 @@ contract StakingVaultTest is Test {
         roleRegistry.grantRole(roleRegistry.MANAGER_ROLE(), manager);
         roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
+
+        // Mock the core user exists check to return true
+        _mockCoreUserExists(true);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -225,6 +229,21 @@ contract StakingVaultTest is Test {
 
         assertEq(address(stakingVault).balance, vaultBalance);
         assertEq(stakingVault.HYPE_SYSTEM_ADDRESS().balance, systemAddressBalanceBefore);
+    }
+
+    function test_TransferHypeToCore_NotActivatedOnHyperCore() public {
+        uint256 amount = 1e18;
+        vm.deal(address(stakingVault), amount);
+
+        // Mock the core user exists check to return false
+        _mockCoreUserExists(false);
+
+        vm.prank(manager);
+        vm.expectRevert(IStakingVault.NotActivatedOnHyperCore.selector);
+        stakingVault.transferHypeToCore(amount);
+
+        // Balance should remain unchanged
+        assertEq(address(stakingVault).balance, amount);
     }
 
     function test_TransferHypeToCore_InsufficientBalance() public {
@@ -562,6 +581,16 @@ contract StakingVaultTest is Test {
         vm.startPrank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         stakingVault.upgradeToAndCall(address(anotherImplementation), "");
+    }
+
+    /// @dev Helper function to mock the core user exists check
+    /// @param exists Whether the core user should exist on HyperCore
+    function _mockCoreUserExists(bool exists) internal {
+        L1ReadLibrary.CoreUserExists memory mockCoreUserExists = L1ReadLibrary.CoreUserExists({exists: exists});
+        bytes memory encodedCoreUserExists = abi.encode(mockCoreUserExists);
+        vm.mockCall(
+            L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedCoreUserExists
+        );
     }
 }
 
