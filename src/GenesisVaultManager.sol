@@ -24,6 +24,9 @@ contract GenesisVaultManager is Base {
     /// @notice Thrown if the vault is full.
     error VaultFull();
 
+    /// @notice Thrown if the deposit amount is below the minimum deposit amount.
+    error BelowMinimumDepositAmount();
+
     /// @notice Thrown if the deposit limit is reached.
     error DepositLimitReached();
 
@@ -69,6 +72,9 @@ contract GenesisVaultManager is Base {
     /// @dev The default validator to delegate HYPE to
     address public defaultValidator;
 
+    /// @dev The minimum amount of HYPE that can be deposited (in 18 decimals)
+    uint256 public minimumDepositAmount;
+
     /// @dev The default maximum amount of HYPE that can be deposited for each address (in 18 decimals)
     uint256 public defaultDepositLimit;
 
@@ -95,7 +101,8 @@ contract GenesisVaultManager is Base {
         address _stakingVault,
         uint256 _vaultCapacity,
         address _defaultValidator,
-        uint256 _defaultDepositLimit
+        uint256 _defaultDepositLimit,
+        uint256 _minimumDepositAmount
     ) public initializer {
         __Base_init(_roleRegistry);
 
@@ -105,6 +112,7 @@ contract GenesisVaultManager is Base {
         vaultCapacity = _vaultCapacity;
         defaultValidator = _defaultValidator;
         defaultDepositLimit = _defaultDepositLimit;
+        minimumDepositAmount = _minimumDepositAmount;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -278,6 +286,12 @@ contract GenesisVaultManager is Base {
         defaultValidator = _defaultValidator;
     }
 
+    /// @notice Sets the minimum deposit amount (in 18 decimals)
+    /// @param _minimumDepositAmount The minimum deposit amount (in 18 decimals)
+    function setMinimumDepositAmount(uint256 _minimumDepositAmount) public onlyOwner {
+        minimumDepositAmount = _minimumDepositAmount;
+    }
+
     /// @notice Sets the default deposit limit per address (in 18 decimals)
     /// @param _defaultDepositLimit The default deposit limit per address (in 18 decimals)
     function setDefaultDepositLimit(uint256 _defaultDepositLimit) public onlyOwner {
@@ -353,8 +367,13 @@ contract GenesisVaultManager is Base {
         //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
         // - Block ends
         require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotDepositUntilNextBlock());
-
         require(totalBalance() < vaultCapacity, VaultFull());
+        require(
+            // The deposit amount should be at least the minimum deposit amount, unless the remaining capacity is less than the minimum deposit amount
+            msg.value >= minimumDepositAmount
+                || (msg.value > 0 && vaultCapacity - totalBalance() < minimumDepositAmount),
+            BelowMinimumDepositAmount()
+        );
         require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
         _;
     }
