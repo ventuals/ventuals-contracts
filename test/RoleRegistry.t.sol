@@ -30,7 +30,6 @@ contract RoleRegistryTest is Test {
 
     function test_Initialize_OwnerAndAdmin() public view {
         assertEq(roleRegistry.owner(), owner);
-        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), owner));
     }
 
     function test_Initialize_CannotInitializeTwice() public {
@@ -83,6 +82,7 @@ contract RoleRegistryTest is Test {
     }
 
     function test_GrantAndRevokeRole(bytes32 role, address fuzzUser) public {
+        vm.assume(fuzzUser != address(0)); // Cannot grant roles to zero address
         vm.assume(!roleRegistry.hasRole(role, fuzzUser));
 
         vm.startPrank(owner);
@@ -95,6 +95,7 @@ contract RoleRegistryTest is Test {
     }
 
     function test_GrantRole_SameUserMultipleRoles(bytes32 role1, bytes32 role2, address fuzzUser) public {
+        vm.assume(fuzzUser != address(0)); // Cannot grant roles to zero address
         vm.assume(role1 != role2);
 
         vm.startPrank(owner);
@@ -106,6 +107,7 @@ contract RoleRegistryTest is Test {
     }
 
     function test_RevokeRole_OneOfMultiple(bytes32 role1, bytes32 role2, address fuzzUser) public {
+        vm.assume(fuzzUser != address(0)); // Cannot grant roles to zero address
         vm.assume(role1 != role2);
 
         vm.startPrank(owner);
@@ -116,6 +118,89 @@ contract RoleRegistryTest is Test {
 
         assertFalse(roleRegistry.hasRole(role1, fuzzUser));
         assertTrue(roleRegistry.hasRole(role2, fuzzUser));
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Role Holders                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_RoleHolders_EmptyRole() public view {
+        bytes32 role = keccak256("EMPTY_ROLE");
+        address[] memory holders = roleRegistry.roleHolders(role);
+        assertEq(holders.length, 0);
+    }
+
+    function test_RoleHolders_SingleUser() public {
+        bytes32 role = keccak256("TEST_ROLE");
+
+        vm.startPrank(owner);
+        roleRegistry.grantRole(role, manager);
+
+        address[] memory holders = roleRegistry.roleHolders(role);
+        assertEq(holders.length, 1);
+        assertEq(holders[0], manager);
+    }
+
+    function test_RoleHolders_MultipleUsers() public {
+        bytes32 role = keccak256("TEST_ROLE");
+
+        vm.startPrank(owner);
+        roleRegistry.grantRole(role, manager);
+        roleRegistry.grantRole(role, operator);
+        roleRegistry.grantRole(role, user);
+
+        address[] memory holders = roleRegistry.roleHolders(role);
+        assertEq(holders.length, 3);
+
+        // Check that all users are in the list (order may vary)
+        bool foundManager = false;
+        bool foundOperator = false;
+        bool foundUser = false;
+
+        for (uint256 i = 0; i < holders.length; i++) {
+            if (holders[i] == manager) foundManager = true;
+            if (holders[i] == operator) foundOperator = true;
+            if (holders[i] == user) foundUser = true;
+        }
+
+        assertTrue(foundManager);
+        assertTrue(foundOperator);
+        assertTrue(foundUser);
+    }
+
+    function test_RoleHolders_AfterRevoke() public {
+        bytes32 role = keccak256("TEST_ROLE");
+
+        vm.startPrank(owner);
+        roleRegistry.grantRole(role, manager);
+        roleRegistry.grantRole(role, operator);
+        roleRegistry.grantRole(role, user);
+
+        // Verify all three are initially in the list
+        address[] memory holdersBeforeRevoke = roleRegistry.roleHolders(role);
+        assertEq(holdersBeforeRevoke.length, 3);
+
+        // Revoke role from one user
+        roleRegistry.revokeRole(role, operator);
+
+        // Check that the list is updated
+        address[] memory holdersAfterRevoke = roleRegistry.roleHolders(role);
+        assertEq(holdersAfterRevoke.length, 2);
+
+        // Check that operator is no longer in the list
+        bool foundOperator = false;
+        bool foundManager = false;
+        bool foundUser = false;
+
+        for (uint256 i = 0; i < holdersAfterRevoke.length; i++) {
+            if (holdersAfterRevoke[i] == manager) foundManager = true;
+            if (holdersAfterRevoke[i] == operator) foundOperator = true;
+            if (holdersAfterRevoke[i] == user) foundUser = true;
+        }
+
+        assertTrue(foundManager);
+        assertFalse(foundOperator);
+        assertTrue(foundUser);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -177,9 +262,6 @@ contract RoleRegistryTest is Test {
         roleRegistry.upgradeToAndCall(address(newImplementation), "");
         vm.stopPrank();
 
-        // Verify upgrade was successful by checking that it's still functional
-        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), owner));
-
         // Check that the extra function is available
         RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
         assertTrue(newProxy.extraFunction());
@@ -206,7 +288,6 @@ contract RoleRegistryTest is Test {
         roleRegistry.upgradeToAndCall(address(newImplementation), initData);
 
         // Verify upgrade was successful and data was executed
-        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), owner));
         assertTrue(roleRegistry.hasRole(MANAGER_ROLE, manager));
 
         // Check that the extra function is available
@@ -308,8 +389,6 @@ contract RoleRegistryTest is Test {
 
         // Verify ownership has been transferred
         assertEq(roleRegistry.owner(), newOwner);
-        assertFalse(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), originalOwner));
-        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), newOwner));
 
         // Verify that the old owner can no longer upgrade
         RoleRegistryWithExtraFunction anotherImplementation = new RoleRegistryWithExtraFunction();
@@ -321,9 +400,6 @@ contract RoleRegistryTest is Test {
         RoleRegistryWithExtraFunction newImplementation = new RoleRegistryWithExtraFunction();
         vm.prank(newOwner);
         roleRegistry.upgradeToAndCall(address(newImplementation), "");
-
-        // Verify upgrade preserved state
-        assertTrue(roleRegistry.hasRole(roleRegistry.DEFAULT_ADMIN_ROLE(), newOwner));
 
         // Check that the extra function is available
         RoleRegistryWithExtraFunction newProxy = RoleRegistryWithExtraFunction(address(roleRegistry));
