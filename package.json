@@ -1,0 +1,13 @@
+{
+  "name": "ventuals-contracts-scripts",
+  "version": "1.0.0",
+  "description": "JavaScript scripts for interacting with Ventuals contracts",
+  "main": "index.js",
+  "scripts": {
+    "genesis-deposit": "node scripts/call-genesis-deposit.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "ethers": "^6.8.1"
+  }
+}
