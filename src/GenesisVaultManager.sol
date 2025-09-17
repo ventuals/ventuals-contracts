@@ -367,9 +367,13 @@ contract GenesisVaultManager is Base {
         //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
         // - Block ends
         require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotDepositUntilNextBlock());
-        require(msg.value >= minimumDepositAmount, BelowMinimumDepositAmount());
-
         require(totalBalance() < vaultCapacity, VaultFull());
+        require(
+            // The deposit amount should be at least the minimum deposit amount, unless the remaining capacity is less than the minimum deposit amount
+            msg.value >= minimumDepositAmount
+                || (msg.value > 0 && vaultCapacity - totalBalance() < minimumDepositAmount),
+            BelowMinimumDepositAmount()
+        );
         require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
         _;
     }
