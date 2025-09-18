@@ -14,8 +14,6 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract StakingVaultTest is Test {
-    uint64 public constant HYPE_TOKEN_ID = 150;
-
     RoleRegistry roleRegistry;
     StakingVault stakingVault;
 
@@ -29,7 +27,7 @@ contract StakingVaultTest is Test {
         ERC1967Proxy roleRegistryProxy = new ERC1967Proxy(address(roleRegistryImplementation), roleRegistryInitData);
         roleRegistry = RoleRegistry(address(roleRegistryProxy));
 
-        StakingVault stakingVaultImplementation = new StakingVault(HYPE_TOKEN_ID);
+        StakingVault stakingVaultImplementation = new StakingVault();
         bytes memory stakingVaultInitData =
             abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistryProxy));
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
@@ -397,13 +395,13 @@ contract StakingVaultTest is Test {
         bytes memory encodedSpotBalance = abi.encode(mockSpotBalance);
         vm.mockCall(
             L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, // Precompile address
-            abi.encode(address(stakingVault), 150), // Calldata parameters
+            abi.encode(address(stakingVault), 1), // Calldata parameters
             encodedSpotBalance // Return data
         );
 
-        vm.expectCall(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault), 150));
+        vm.expectCall(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault), 1));
 
-        L1ReadLibrary.SpotBalance memory result = stakingVault.spotBalance();
+        L1ReadLibrary.SpotBalance memory result = stakingVault.spotBalance(1);
         assertEq(result.total, mockSpotBalance.total);
         assertEq(result.hold, mockSpotBalance.hold);
         assertEq(result.entryNtl, mockSpotBalance.entryNtl);
@@ -477,7 +475,7 @@ contract StakingVaultTest is Test {
     /*                 Tests: Upgradeability                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_UpgradeToAndCall_OnlyOwner() public {
-        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction(150);
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
 
         vm.prank(owner);
         stakingVault.upgradeToAndCall(address(newImplementation), "");
@@ -493,7 +491,7 @@ contract StakingVaultTest is Test {
     function test_UpgradeToAndCall_NotOwner(address notOwner) public {
         vm.assume(notOwner != owner);
 
-        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction(150);
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
 
         vm.startPrank(notOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
@@ -524,7 +522,7 @@ contract StakingVaultTest is Test {
         assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
-        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction(150);
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
         vm.prank(newOwner);
         stakingVault.upgradeToAndCall(address(newImplementation), "");
 
@@ -536,7 +534,7 @@ contract StakingVaultTest is Test {
         assertTrue(newProxy.extraFunction());
 
         // Verify that the old owner can no longer upgrade
-        StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction();
         vm.startPrank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         stakingVault.upgradeToAndCall(address(anotherImplementation), "");
@@ -554,8 +552,6 @@ contract StakingVaultTest is Test {
 }
 
 contract StakingVaultWithExtraFunction is StakingVault {
-    constructor(uint64 _hypeTokenId) StakingVault(_hypeTokenId) {}
-
     function extraFunction() public pure returns (bool) {
         return true;
     }

@@ -11,12 +11,9 @@ contract DeployStakingVault is Script {
         address roleRegistry = vm.envAddress("ROLE_REGISTRY");
         require(roleRegistry != address(0), "RoleRegistry address is not set");
 
-        bool isTestnet = vm.envBool("IS_TESTNET");
-        uint64 hypeTokenId = isTestnet ? 1105 : 150; // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids
-
         vm.startBroadcast();
 
-        StakingVault implementation = new StakingVault(hypeTokenId);
+        StakingVault implementation = new StakingVault();
         bytes memory initData = abi.encodeWithSelector(StakingVault.initialize.selector, roleRegistry);
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Using RoleRegistry at:", roleRegistry);
