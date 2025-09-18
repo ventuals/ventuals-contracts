@@ -32,12 +32,6 @@ contract GenesisVaultManager is Base {
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
-    /// @notice Thrown if a deposit cannot be made until the next block.
-    error CannotDepositUntilNextBlock();
-
-    /// @notice Thrown if a transfer to HyperCore cannot be made until the next block.
-    error CannotTransferToCoreUntilNextBlock();
-
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -84,10 +78,6 @@ contract GenesisVaultManager is Base {
 
     /// @dev The cumulative amount of HYPE deposited by each address
     mapping(address => uint256) public depositsByAddress;
-
-    /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
-    /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
-    uint256 public lastEvmToCoreTransferBlockNumber;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -262,15 +252,12 @@ contract GenesisVaultManager is Base {
     /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
     /// @param amount The amount of HYPE to transfer (in 18 decimals)
     function _transferToCoreAndDelegate(uint256 amount) internal {
-        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotTransferToCoreUntilNextBlock());
         require(amount > 0, ZeroAmount());
         require(amount <= address(stakingVault).balance, InsufficientBalance());
 
         stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
         stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
         stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
-
-        lastEvmToCoreTransferBlockNumber = block.number;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -347,34 +334,6 @@ contract GenesisVaultManager is Base {
     }
 
     function _canDeposit() internal view {
-        // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
-        // the account balances after the transfer are reflected in L1Read precompiles before subsequent deposits
-        // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
-        // would be made against an incorrect total balance / exchange rate.
-        //
-        // Example:
-        // - Block begins
-        //      - Exchange rate: 1 HYPE = 1 vHYPE
-        //          - 0 HYPE on HyperEVM
-        //          - 100 HYPE on HyperCore
-        //          - 100 vHYPE total supply
-        // - User deposits 100 HYPE
-        //      - Exchange rate: 1 HYPE = 1 vHYPE
-        //          - 100 HYPE on HyperEVM
-        //          - 100 HYPE on HyperCore
-        //          - 200 vHYPE total supply (+100 vHYPE minted to user)
-        // - Operator transfers 100 HYPE to HyperCore
-        //      - Exchange rate: 1 HYPE = 2 vHYPE <= this is incorrect
-        //          - 0 HYPE on HyperEVM
-        //          - 100 HYPE on HyperCore <= should be 200 HYPE - balance not reflected in L1Read precompiles until the next block
-        //          - 200 vHYPE total supply
-        // - User deposits 200 HYPE
-        //      - Exchange rate: 1 HYPE = 2 vHYPE <= this is incorrect
-        //          - 200 HYPE on HyperEVM
-        //          - 100 HYPE on HyperCore <= should be 200 HYPE - balance not reflected in L1Read precompiles until the next block
-        //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
-        // - Block ends
-        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotDepositUntilNextBlock());
         require(totalBalance() < vaultCapacity, VaultFull());
         require(
             // The deposit amount should be at least the minimum deposit amount, unless the remaining capacity is less than the minimum deposit amount

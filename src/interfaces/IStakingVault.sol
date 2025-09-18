@@ -13,6 +13,12 @@ interface IStakingVault {
     /// @notice Thrown if the StakingVault is not activated on HyperCore.
     error NotActivatedOnHyperCore();
 
+    /// @notice Thrown if a deposit cannot be made until the next block.
+    error CannotDepositUntilNextBlock();
+
+    /// @notice Thrown when a transfer to HyperCore cannot be made until the next block
+    error CannotTransferToCoreUntilNextBlock();
+
     /// @notice Emitted when HYPE is deposited into the vault (HyperEVM -> HyperEVM)
     event Deposit(address indexed sender, uint256 amount);
 
