@@ -73,7 +73,9 @@ contract GenesisVaultManager is Base {
     /// @dev The default maximum amount of HYPE that can be deposited for each address (in 18 decimals)
     uint256 public defaultDepositLimit;
 
-    /// @dev A whitelist of addresses that have higher deposit limits
+    /// @dev A whitelist of addresses that have different deposit limits
+    /// @dev Addresses may have higher or lower deposit limits than the default. Set the whitelist
+    ///      deposit limit to 0 to disable the whitelist for that address.
     mapping(address => uint256) public whitelistDepositLimits;
 
     /// @dev The cumulative amount of HYPE deposited by each address
