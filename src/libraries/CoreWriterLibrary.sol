@@ -4,7 +4,7 @@ pragma solidity ^0.8.27;
 import {ICoreWriter} from "../interfaces/ICoreWriter.sol";
 
 /// @notice Library for sending actions to CoreWriter
-/// @dev Important! All weiAmounts should be converted to 6 decimals before calling this library
+/// @dev Important! All weiAmounts should be converted to 8 decimals before calling this library
 library CoreWriterLibrary {
     address public constant CORE_WRITER = 0x3333333333333333333333333333333333333333;
 
