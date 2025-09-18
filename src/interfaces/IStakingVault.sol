@@ -13,6 +13,13 @@ interface IStakingVault {
     /// @notice Thrown if the StakingVault is not activated on HyperCore.
     error NotActivatedOnHyperCore();
 
+    /// @notice Emitted when HYPE is deposited into the vault (HyperEVM -> HyperEVM)
+    event Deposit(address indexed sender, uint256 amount);
+
+    /// @dev Deposit HYPE into the vault (HyperEVM -> HyperEVM)
+    /// @dev msg.value is the amount of HYPE to deposit (18 decimals)
+    function deposit() external payable;
+
     /// @dev Deposit HYPE from spot to staking account on HyperCore
     /// @param weiAmount The amount of wei to deposit (8 decimals)
     function stakingDeposit(uint64 weiAmount) external;
@@ -53,10 +60,4 @@ interface IStakingVault {
     /// @dev Get the spot balance for the given token for the staking vault using HyperCore precompiles
     /// @param tokenId The token ID to get the spot balance for (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory);
-
-    /// @dev Receive HYPE (when msg.data is empty)
-    receive() external payable;
-
-    /// @dev Receive HYPE (fallback when msg.data is not empty)
-    fallback() external payable;
 }

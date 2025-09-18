@@ -135,8 +135,7 @@ contract GenesisVaultManager is Base {
 
         // Transfer HYPE to staking vault (HyperEVM -> HyperEVM)
         if (amountToDeposit > 0) {
-            (bool success,) = payable(address(stakingVault)).call{value: amountToDeposit}("");
-            require(success, TransferFailed(address(stakingVault), amountToDeposit));
+            stakingVault.deposit{value: amountToDeposit}();
         }
 
         // Refund any excess HYPE

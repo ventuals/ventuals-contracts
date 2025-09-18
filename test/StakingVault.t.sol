@@ -488,7 +488,7 @@ contract StakingVaultTest is Test {
     /*              Tests: Receive and Fallback Functions         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_Receive() public {
+    function test_CannotReceive() public {
         uint256 amount = 1e18;
         uint256 balanceBefore = address(stakingVault).balance;
 
@@ -497,11 +497,11 @@ contract StakingVaultTest is Test {
         vm.prank(user);
         (bool success,) = address(stakingVault).call{value: amount}("");
 
-        assertTrue(success);
-        assertEq(address(stakingVault).balance, balanceBefore + amount);
+        assertFalse(success);
+        assertEq(address(stakingVault).balance, balanceBefore);
     }
 
-    function test_Fallback() public {
+    function test_CannotFallback() public {
         uint256 amount = 1e18;
         uint256 balanceBefore = address(stakingVault).balance;
 
@@ -510,8 +510,8 @@ contract StakingVaultTest is Test {
         vm.prank(user);
         (bool success,) = address(stakingVault).call{value: amount}("0x1234");
 
-        assertTrue(success);
-        assertEq(address(stakingVault).balance, balanceBefore + amount);
+        assertFalse(success);
+        assertEq(address(stakingVault).balance, balanceBefore);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
