@@ -15,7 +15,7 @@ contract VHYPE is Base, ERC20Upgradeable {
         __Base_init(_roleRegistry);
     }
 
-    function mint(address to, uint256 amount) public onlyManager {
+    function mint(address to, uint256 amount) public onlyManager whenNotPaused {
         _mint(to, amount);
     }
 }
