@@ -13,6 +13,8 @@ contract Base is Initializable, UUPSUpgradeable {
 
     RoleRegistry public roleRegistry;
 
+    uint256[50] private __gap;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
