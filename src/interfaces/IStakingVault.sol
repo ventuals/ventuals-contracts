@@ -49,11 +49,6 @@ interface IStakingVault {
     /// @param amount The amount of HYPE to transfer (18 decimals)
     function transferHypeToCore(uint256 amount) external;
 
-    /// @dev Transfer HYPE to the recipient (HyperEVM to HyperEVM)
-    /// @param recipient The recipient address to transfer HYPE to
-    /// @param amount The amount of HYPE to transfer (18 decimals)
-    function transferHype(address payable recipient, uint256 amount) external;
-
     /// @dev Get the delegator summary for the staking vault using HyperCore precompiles
     function delegatorSummary() external view returns (L1ReadLibrary.DelegatorSummary memory);
 
