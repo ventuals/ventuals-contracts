@@ -35,9 +35,6 @@ contract GenesisVaultManager is Base {
     /// @notice Thrown if a deposit cannot be made until the next block.
     error CannotDepositUntilNextBlock();
 
-    /// @notice Thrown if a transfer to HyperCore cannot be made until the next block.
-    error CannotTransferToCoreUntilNextBlock();
-
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -56,9 +53,6 @@ contract GenesisVaultManager is Base {
     /// @param amount The amount of HYPE withdrawn
     /// @param purpose The purpose of the withdrawal
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
-
-    /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
-    uint64 public immutable HYPE_TOKEN_ID;
 
     /// forge-lint: disable-next-line(mixed-case-variable)
     VHYPE public vHYPE;
@@ -90,9 +84,7 @@ contract GenesisVaultManager is Base {
     uint256 public lastEvmToCoreTransferBlockNumber;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(uint64 _hypeTokenId) {
-        HYPE_TOKEN_ID = _hypeTokenId;
-
+    constructor() {
         _disableInitializers();
     }
 
@@ -212,8 +204,9 @@ contract GenesisVaultManager is Base {
 
     /// @notice Total HYPE balance in the staking vault's spot account balance (in 18 decimals)
     /// @dev Uses L1Read precompiles to get the spot balance for the staking vault from HyperCore
+    /// @dev IMPORTANT: Check isSpotBalanceSafe() before using this function to ensure the spot balance is safe to use
     function spotAccountBalance() public view returns (uint256) {
-        L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(HYPE_TOKEN_ID);
+        L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance();
         return spotBalance.total.to18Decimals();
     }
 
@@ -262,15 +255,12 @@ contract GenesisVaultManager is Base {
     /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
     /// @param amount The amount of HYPE to transfer (in 18 decimals)
     function _transferToCoreAndDelegate(uint256 amount) internal {
-        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotTransferToCoreUntilNextBlock());
         require(amount > 0, ZeroAmount());
         require(amount <= address(stakingVault).balance, InsufficientBalance());
 
         stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
         stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
         stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
-
-        lastEvmToCoreTransferBlockNumber = block.number;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -374,7 +364,7 @@ contract GenesisVaultManager is Base {
         //          - 100 HYPE on HyperCore <= should be 200 HYPE - balance not reflected in L1Read precompiles until the next block
         //          - 300 vHYPE total supply (+100 vHYPE minted to user) <= user should have received 200 vHYPE
         // - Block ends
-        require(block.number >= lastEvmToCoreTransferBlockNumber + 1, CannotDepositUntilNextBlock());
+        require(stakingVault.isSpotBalanceSafe(), CannotDepositUntilNextBlock());
         require(totalBalance() < vaultCapacity, VaultFull());
         require(
             // The deposit amount should be at least the minimum deposit amount, unless the remaining capacity is less than the minimum deposit amount
