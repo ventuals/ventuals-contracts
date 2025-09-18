@@ -17,6 +17,7 @@ import {Base} from "../src/Base.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Converters} from "../src/libraries/Converters.sol";
+import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 
 contract GenesisVaultManagerTest is Test {
     using Converters for *;
@@ -1200,7 +1201,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.transferToCoreAndDelegate();
 
         // Check that lastEvmToCoreTransferBlockNumber was updated
-        assertEq(genesisVaultManager.lastEvmToCoreTransferBlockNumber(), block.number);
+        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
     }
 
     function test_TransferToCoreAndDelegate_SpecificAmount() public {
@@ -1216,7 +1217,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
 
         // Check that lastEvmToCoreTransferBlockNumber was updated
-        assertEq(genesisVaultManager.lastEvmToCoreTransferBlockNumber(), block.number);
+        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
     }
 
     function test_TransferToCoreAndDelegate_NotOperator() public {
@@ -1262,7 +1263,7 @@ contract GenesisVaultManagerTest is Test {
         // Try to make another transfer in the same block - should fail
         vm.deal(address(stakingVault), transferAmount); // Refill balance
         vm.startPrank(operator);
-        vm.expectRevert(GenesisVaultManager.CannotTransferToCoreUntilNextBlock.selector);
+        vm.expectRevert(IStakingVault.CannotTransferToCoreUntilNextBlock.selector);
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
         vm.stopPrank();
 
@@ -1293,7 +1294,7 @@ contract GenesisVaultManagerTest is Test {
         // Try to make a deposit in the same block - should fail due to one-block delay
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        vm.expectRevert(GenesisVaultManager.CannotDepositUntilNextBlock.selector);
+        vm.expectRevert(IStakingVault.CannotDepositUntilNextBlock.selector);
         genesisVaultManager.deposit{value: depositAmount}();
         vm.stopPrank();
 
