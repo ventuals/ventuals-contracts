@@ -404,32 +404,6 @@ contract GenesisVaultManagerTest is Test {
         assertEq(vHYPE.balanceOf(user), 0);
     }
 
-    function test_Deposit_RevertWhenTransferFails() public {
-        // Upgrade staking vault to a version that rejects transfers
-        StakingVaultThatRejectsTransfers newImplementation = new StakingVaultThatRejectsTransfers();
-        vm.prank(owner);
-        stakingVault.upgradeToAndCall(address(newImplementation), "");
-
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
-        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
-
-        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
-
-        vm.deal(user, depositAmount);
-        vm.startPrank(user);
-        vm.expectRevert(
-            abi.encodeWithSelector(GenesisVaultManager.TransferFailed.selector, address(stakingVault), depositAmount)
-        );
-        genesisVaultManager.deposit{value: depositAmount}();
-
-        // Check that no vHYPE was minted
-        assertEq(vHYPE.balanceOf(user), 0);
-
-        // Check that no HYPE was transferred to staking vault (vault balance should remain 0)
-        assertEq(address(stakingVault).balance, 0);
-    }
-
     function test_Deposit_RevertWhenRefundFails() public {
         uint256 existingBalance = 1_150_000 * 1e18; // 1.15M HYPE
         uint256 existingSupply = 1_150_000 * 1e18; // 1.15M vHYPE
@@ -1534,17 +1508,6 @@ contract GenesisVaultManagerWithExtraFunction is GenesisVaultManager {
 
     function extraFunction() public pure returns (bool) {
         return true;
-    }
-}
-
-contract StakingVaultThatRejectsTransfers is StakingVault {
-    // Reject all incoming transfers
-    receive() external payable override {
-        revert("Staking vault transfer rejected");
-    }
-
-    fallback() external payable override {
-        revert("Staking vault transfer rejected");
     }
 }
 

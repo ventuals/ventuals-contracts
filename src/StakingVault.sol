@@ -9,8 +9,6 @@ import {Base} from "./Base.sol";
 contract StakingVault is IStakingVault, Base {
     address public immutable HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
 
-    event Received(address indexed sender, uint256 amount);
-
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -18,6 +16,11 @@ contract StakingVault is IStakingVault, Base {
 
     function initialize(address _roleRegistry) public initializer {
         __Base_init(_roleRegistry);
+    }
+
+    /// @inheritdoc IStakingVault
+    function deposit() external payable onlyManager whenNotPaused {
+        emit Deposit(msg.sender, msg.value);
     }
 
     /// @inheritdoc IStakingVault
@@ -70,16 +73,6 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
         return L1ReadLibrary.spotBalance(address(this), tokenId);
-    }
-
-    /// @dev Function to receive HYPE when msg.data is empty
-    receive() external payable virtual {
-        emit Received(msg.sender, msg.value);
-    }
-
-    /// @dev Fallback function to receive HYPE when msg.data is not empty
-    fallback() external payable virtual {
-        emit Received(msg.sender, msg.value);
     }
 
     /// @notice Internal function to handle HYPE transfers from the vault.
