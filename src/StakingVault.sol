@@ -56,11 +56,6 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function transferHype(address payable recipient, uint256 amount) external onlyManager whenNotPaused {
-        _transfer(recipient, amount);
-    }
-
-    /// @inheritdoc IStakingVault
     function addApiWallet(address apiWalletAddress, string calldata name) external onlyOperator whenNotPaused {
         CoreWriterLibrary.addApiWallet(apiWalletAddress, name);
     }

@@ -67,7 +67,6 @@ function stakingWithdraw(uint64 weiAmount) external onlyManager;
 function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external onlyManager;
 function spotSend(address destination, uint64 token, uint64 weiAmount) external onlyManager;
 function transferHypeToCore(uint256 amount) external onlyManager;
-function transferHype(address payable recipient, uint256 amount) external onlyManager;
 function addApiWallet(address apiWalletAddress, string calldata name) external onlyOperator;
 ```
 

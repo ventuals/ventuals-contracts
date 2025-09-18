@@ -291,45 +291,6 @@ contract StakingVaultTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                  Tests: Transfer Hype                      */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_TransferHype(uint256 amount) public {
-        vm.assume(amount <= 1_000_000_000 * 1e18); // 1 billion tokens max
-
-        address recipient = makeAddr("recipient");
-
-        vm.deal(address(stakingVault), amount);
-        uint256 vaultBalanceBefore = address(stakingVault).balance;
-        uint256 recipientBalanceBefore = recipient.balance;
-
-        vm.prank(manager);
-        stakingVault.transferHype(payable(recipient), amount);
-
-        assertEq(address(stakingVault).balance, vaultBalanceBefore - amount);
-        assertEq(recipient.balance, recipientBalanceBefore + amount);
-    }
-
-    function test_TransferHype_NotManager(address notManager, address payable recipient, uint256 amount) public {
-        vm.assume(notManager != manager);
-        vm.assume(amount > 0);
-
-        vm.deal(address(stakingVault), amount);
-        uint256 vaultBalanceBefore = address(stakingVault).balance;
-        uint256 recipientBalanceBefore = recipient.balance;
-
-        vm.startPrank(notManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
-            )
-        );
-        stakingVault.transferHype(recipient, amount);
-
-        assertEq(address(stakingVault).balance, vaultBalanceBefore);
-        assertEq(recipient.balance, recipientBalanceBefore);
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                 Tests: Add API Wallet                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_AddApiWallet(address apiWalletAddress, string memory name) public {
@@ -470,10 +431,6 @@ contract StakingVaultTest is Test {
         vm.prank(manager);
         vm.expectRevert();
         stakingVault.transferHypeToCore(1e8);
-
-        vm.prank(manager);
-        vm.expectRevert();
-        stakingVault.transferHype(payable(address(0x123)), 1e8);
 
         vm.prank(manager);
         vm.expectRevert();
