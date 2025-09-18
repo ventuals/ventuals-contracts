@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {EnumerableRoles} from "solady/auth/EnumerableRoles.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {Ownable2StepUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
-contract RoleRegistry is Initializable, AccessControlUpgradeable, UUPSUpgradeable, Ownable2StepUpgradeable {
+contract RoleRegistry is Initializable, EnumerableRoles, UUPSUpgradeable, Ownable2StepUpgradeable {
     bytes32 public constant MANAGER_ROLE = keccak256("MANAGER_ROLE");
     bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
@@ -18,25 +18,38 @@ contract RoleRegistry is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     }
 
     function initialize(address initialOwner) public initializer {
-        __AccessControl_init();
         __UUPSUpgradeable_init();
         __Ownable_init(initialOwner);
-
-        _grantRole(DEFAULT_ADMIN_ROLE, initialOwner);
     }
 
     /// @notice Grants a role to an account. Only the owner can grant a role.
     /// @param role The role to grant
     /// @param account The account to grant the role to
-    function grantRole(bytes32 role, address account) public override onlyOwner {
-        _grantRole(role, account);
+    function grantRole(bytes32 role, address account) public {
+        // setRole will check that the msg.sender is the owner()
+        setRole(account, uint256(role), true);
     }
 
     /// @notice Revokes a role from an account. Only the owner can revoke a role.
     /// @param role The role to revoke
     /// @param account The account to revoke the role from
-    function revokeRole(bytes32 role, address account) public override onlyOwner {
-        _revokeRole(role, account);
+    function revokeRole(bytes32 role, address account) public {
+        // setRole will check that the msg.sender is the owner()
+        setRole(account, uint256(role), false);
+    }
+
+    /// @notice Checks if an account has a role.
+    /// @param role The role to check
+    /// @param account The account to check the role for
+    function hasRole(bytes32 role, address account) public view returns (bool) {
+        return super.hasRole(account, uint256(role));
+    }
+
+    /// @notice Returns the list of accounts that have a role.
+    /// @param role The role to check
+    /// @return The list of accounts that have the role
+    function roleHolders(bytes32 role) public view returns (address[] memory) {
+        return super.roleHolders(uint256(role));
     }
 
     /// @notice Checks if a contract is paused.
@@ -58,16 +71,6 @@ contract RoleRegistry is Initializable, AccessControlUpgradeable, UUPSUpgradeabl
     /// @param contractAddress The address of the contract to unpause
     function unpause(address contractAddress) external onlyOwner {
         pausedContracts[contractAddress] = false;
-    }
-
-    /// @notice Accepts ownership of the contract. Only the pending owner can accept ownership.
-    /// @dev Also transfers the DEFAULT_ADMIN_ROLE to the new owner.
-    function acceptOwnership() public override {
-        address previousOwner = owner();
-        super.acceptOwnership();
-
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _revokeRole(DEFAULT_ADMIN_ROLE, previousOwner);
     }
 
     /// @notice Authorizes an upgrade. Only the owner can authorize an upgrade.
