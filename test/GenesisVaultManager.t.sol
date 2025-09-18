@@ -17,6 +17,7 @@ import {Base} from "../src/Base.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Converters} from "../src/libraries/Converters.sol";
+import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 
 contract GenesisVaultManagerTest is Test {
     using Converters for *;
@@ -53,14 +54,14 @@ contract GenesisVaultManagerTest is Test {
         vHYPE = VHYPE(address(vhypeProxy));
 
         // Deploy StakingVault
-        StakingVault stakingVaultImplementation = new StakingVault();
+        StakingVault stakingVaultImplementation = new StakingVault(HYPE_TOKEN_ID);
         bytes memory stakingVaultInitData =
             abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistry));
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
         // Deploy GenesisVaultManager
-        GenesisVaultManager genesisVaultManagerImplementation = new GenesisVaultManager(HYPE_TOKEN_ID);
+        GenesisVaultManager genesisVaultManagerImplementation = new GenesisVaultManager();
         bytes memory genesisVaultManagerInitData = abi.encodeWithSelector(
             GenesisVaultManager.initialize.selector,
             address(roleRegistry),
@@ -103,7 +104,6 @@ contract GenesisVaultManagerTest is Test {
         assertEq(genesisVaultManager.defaultValidator(), defaultValidator);
         assertEq(genesisVaultManager.defaultDepositLimit(), DEFAULT_DEPOSIT_LIMIT);
         assertEq(genesisVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
-        assertEq(genesisVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
     function test_CannotInitializeTwice() public {
@@ -1200,7 +1200,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.transferToCoreAndDelegate();
 
         // Check that lastEvmToCoreTransferBlockNumber was updated
-        assertEq(genesisVaultManager.lastEvmToCoreTransferBlockNumber(), block.number);
+        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
     }
 
     function test_TransferToCoreAndDelegate_SpecificAmount() public {
@@ -1216,7 +1216,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
 
         // Check that lastEvmToCoreTransferBlockNumber was updated
-        assertEq(genesisVaultManager.lastEvmToCoreTransferBlockNumber(), block.number);
+        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
     }
 
     function test_TransferToCoreAndDelegate_NotOperator() public {
@@ -1262,7 +1262,7 @@ contract GenesisVaultManagerTest is Test {
         // Try to make another transfer in the same block - should fail
         vm.deal(address(stakingVault), transferAmount); // Refill balance
         vm.startPrank(operator);
-        vm.expectRevert(GenesisVaultManager.CannotTransferToCoreUntilNextBlock.selector);
+        vm.expectRevert(IStakingVault.CannotTransferToCoreUntilNextBlock.selector);
         genesisVaultManager.transferToCoreAndDelegate(transferAmount);
         vm.stopPrank();
 
@@ -1324,7 +1324,7 @@ contract GenesisVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_UpgradeToAndCall_OnlyOwner() public {
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction();
 
         vm.prank(owner);
         genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
@@ -1340,7 +1340,7 @@ contract GenesisVaultManagerTest is Test {
     }
 
     function test_UpgradeToAndCall_NotOwner() public {
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction();
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
@@ -1366,7 +1366,7 @@ contract GenesisVaultManagerTest is Test {
         assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction();
         vm.prank(newOwner);
         genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
 
@@ -1381,8 +1381,7 @@ contract GenesisVaultManagerTest is Test {
         assertTrue(newProxy.extraFunction());
 
         // Verify that the old owner can no longer upgrade
-        GenesisVaultManagerWithExtraFunction anotherImplementation =
-            new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        GenesisVaultManagerWithExtraFunction anotherImplementation = new GenesisVaultManagerWithExtraFunction();
         vm.prank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         genesisVaultManager.upgradeToAndCall(address(anotherImplementation), "");
@@ -1504,7 +1503,7 @@ contract GenesisVaultManagerTest is Test {
 }
 
 contract GenesisVaultManagerWithExtraFunction is GenesisVaultManager {
-    constructor(uint64 _hypeTokenId) GenesisVaultManager(_hypeTokenId) {}
+    constructor() GenesisVaultManager() {}
 
     function extraFunction() public pure returns (bool) {
         return true;

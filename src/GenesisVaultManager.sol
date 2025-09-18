@@ -79,10 +79,6 @@ contract GenesisVaultManager is Base {
     /// @dev The cumulative amount of HYPE deposited by each address
     mapping(address => uint256) public depositsByAddress;
 
-    /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
-    /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
-    uint256 public lastEvmToCoreTransferBlockNumber;
-
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
