@@ -16,9 +16,6 @@ interface IStakingVault {
     /// @notice Emitted when HYPE is deposited into the vault (HyperEVM -> HyperEVM)
     event Deposit(address indexed sender, uint256 amount);
 
-    /// @notice Thrown when a transfer to HyperCore cannot be made until the next block
-    error CannotTransferToCoreUntilNextBlock();
-
     /// @dev Deposit HYPE into the vault (HyperEVM -> HyperEVM)
     /// @dev msg.value is the amount of HYPE to deposit (18 decimals)
     function deposit() external payable;
@@ -55,12 +52,7 @@ interface IStakingVault {
     /// @dev Get the delegator summary for the staking vault using HyperCore precompiles
     function delegatorSummary() external view returns (L1ReadLibrary.DelegatorSummary memory);
 
-    /// @dev Check if the HYPE spot balance is safe to use
-    /// @return isSafe The spot balance is unsafe if there was a HyperEVM -> HyperCore transfer earlier in the block.
-    function isSpotBalanceSafe() external view returns (bool);
-
-    /// @dev Get the HYPE spot balance using HyperCore precompiles
-    /// @dev Check isSpotBalanceSafe() to ensure the spot balance is safe to use
-    /// @return spotBalance The spot balance for the given token
-    function spotBalance() external view returns (L1ReadLibrary.SpotBalance memory spotBalance);
+    /// @dev Get the spot balance for the given token for the staking vault using HyperCore precompiles
+    /// @param tokenId The token ID to get the spot balance for (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
+    function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory);
 }
