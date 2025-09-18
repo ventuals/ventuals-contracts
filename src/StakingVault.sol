@@ -9,6 +9,10 @@ import {Base} from "./Base.sol";
 contract StakingVault is IStakingVault, Base {
     address public immutable HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
 
+    /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
+    /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
+    uint256 public lastEvmToCoreTransferBlockNumber;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -20,6 +24,11 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function deposit() external payable onlyManager whenNotPaused {
+        // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
+        // the account balances after the transfer are reflected in L1Read precompiles before subsequent deposits
+        // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
+        // would be made against an incorrect balance (and thus an incorrect exchange rate).
+        require(block.number > lastEvmToCoreTransferBlockNumber, CannotDepositUntilNextBlock());
         emit Deposit(msg.sender, msg.value);
     }
 
@@ -45,6 +54,8 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
+        require(block.number > lastEvmToCoreTransferBlockNumber, CannotTransferToCoreUntilNextBlock());
+
         // This is an important safety check - ensures that the StakingVault account is activated on HyperCore.
         // If the StakingVault is not activated on HyperCore, and a HyperEVM -> HyperCore HYPE transfer is made,
         // the transferred HYPE will be lost.
@@ -53,6 +64,8 @@ contract StakingVault is IStakingVault, Base {
             revert NotActivatedOnHyperCore();
         }
         _transfer(payable(HYPE_SYSTEM_ADDRESS), amount);
+
+        lastEvmToCoreTransferBlockNumber = block.number;
     }
 
     /// @inheritdoc IStakingVault
