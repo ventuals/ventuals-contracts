@@ -1,11 +1,15 @@
 # Scripts
 
-This directory contains Node.js scripts for interacting with Ventuals
+This directory contains Node.js and bash scripts for interacting with Ventuals
 contracts.
 
 We generally prefer to write Foundry scripts, but for many functions, we can't
 use Foundry scripts because of HyperCore interactions. For these cases, we use
-Node.js scripts.
+Node.js or bash scripts.
+
+Note that it's basically equivalent to write Node.js or bash scripts. Bash scripts
+use `cast send` to make the contract calls, and don't have the ABI for
+typechecking.
 
 ## Getting started
 
@@ -137,3 +141,138 @@ The script provides detailed output including:
 - ⛽ Current gas price
 - 📝 Transaction hash
 - ✅ Confirmation details
+
+## addApiWallet.sh
+
+A bash script to add an API wallet to the StakingVault contract.
+
+### Description
+
+This script calls the `addApiWallet(address,string)` function on the StakingVault contract to register a new API wallet with a given name.
+
+### Prerequisites
+
+**Environment Variables**
+
+```bash
+OWNER_PRIVATE_KEY=0x...     # Private key with owner permissions
+STAKING_VAULT=0x...         # StakingVault contract address
+API_WALLET_ADDRESS=0x...    # Address of the API wallet to add
+API_WALLET_NAME="..."       # Name for the API wallet
+```
+
+**Owner Role**: Your wallet must have owner permissions on the StakingVault contract.
+
+### Usage
+
+Run the script from the repository root:
+
+```bash
+./scripts/addApiWallet.sh
+```
+
+### What it does
+
+1. **Loads Configuration**: Reads environment variables from `.env` file
+2. **Validation**: Checks that all required environment variables are set
+3. **Transaction**: Calls `addApiWallet()` with the specified address and name
+4. **Confirmation**: Uses Foundry's `cast send` to execute the transaction
+
+### Output
+
+The script provides output including:
+
+- 📋 Contract address being called
+- 🔑 API wallet address being added
+- 📝 Name assigned to the API wallet
+- ✅ Transaction confirmation
+
+## deposit.sh
+
+A bash script to deposit HYPE tokens into the GenesisVaultManager contract.
+
+### Description
+
+This script calls the `deposit()` function on the GenesisVaultManager contract with a specified amount of HYPE tokens.
+
+### Prerequisites
+
+**Environment Variables**
+
+```bash
+ANON_WALLET_PRIVATE_KEY=0x... # Your wallet private key
+GENESIS_VAULT_MANAGER=0x...   # GenesisVaultManager contract address
+DEPOSIT_AMOUNT=1.0            # Amount to deposit in ether (e.g., 1.0 for 1 HYPE)
+```
+
+**HYPE Balance**: Ensure your wallet has sufficient HYPE tokens for the deposit plus gas fees.
+
+### Usage
+
+Run the script from the repository root:
+
+```bash
+./scripts/deposit.sh
+```
+
+### What it does
+
+1. **Loads Configuration**: Reads environment variables from `.env` file
+2. **Validation**: Checks that all required environment variables are set
+3. **Transaction**: Calls `deposit()` with the specified HYPE amount
+4. **Confirmation**: Uses Foundry's `cast send` to execute the transaction
+
+### Output
+
+The script provides output including:
+
+- 📋 Genesis Vault Manager contract address
+- 💰 Deposit amount in HYPE
+- ✅ Transaction confirmation
+
+## transferToCoreAndDelegate.sh
+
+A bash script to transfer HYPE from GenesisVaultManager to HyperCore and delegate it to validators.
+
+### Description
+
+This script calls the `transferToCoreAndDelegate(uint256)` function on the GenesisVaultManager contract to transfer a specific amount (in wei) from the vault's HyperEVM balance to HyperCore and delegate it to validators.
+
+### Prerequisites
+
+**Environment Variables**
+
+```bash
+OWNER_PRIVATE_KEY=0x...     # Private key with operator permissions
+GENESIS_VAULT_MANAGER=0x... # GenesisVaultManager contract address
+WEI_AMOUNT=1000000000000000000  # Amount in wei (e.g., 1000000000000000000 = 1 HYPE)
+```
+
+**Operator Role**: Your wallet must have the OPERATOR role on the GenesisVaultManager contract.
+
+### Usage
+
+Run the script from the repository root:
+
+```bash
+./scripts/transferToCoreAndDelegate.sh
+```
+
+### What it does
+
+1. **Loads Configuration**: Reads environment variables from `.env` file
+2. **Validation**: Checks that all required environment variables are set
+3. **Transaction**: Calls `transferToCoreAndDelegate()` with the specified wei amount
+4. **Core Operations**: The function internally:
+   - Transfers HYPE from HyperEVM to HyperCore
+   - Moves HYPE from spot to staking account
+   - Delegates HYPE to the default validator
+5. **Confirmation**: Uses Foundry's `cast send` to execute the transaction
+
+### Output
+
+The script provides output including:
+
+- 📋 Contract address being called
+- 💰 Transfer amount in wei
+- ✅ Transaction confirmation
