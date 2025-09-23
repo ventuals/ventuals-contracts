@@ -346,10 +346,11 @@ contract GenesisVaultManager is Base {
 
     function _canDeposit() internal view {
         require(totalBalance() < vaultCapacity, VaultFull());
+        uint256 remainingCapacity = vaultCapacity - totalBalance();
         require(
             // The deposit amount should be at least the minimum deposit amount, unless the remaining capacity is less than the minimum deposit amount
             msg.value >= minimumDepositAmount
-                || (msg.value > 0 && vaultCapacity - totalBalance() < minimumDepositAmount),
+                || (msg.value >= remainingCapacity && remainingCapacity < minimumDepositAmount),
             BelowMinimumDepositAmount()
         );
         require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
