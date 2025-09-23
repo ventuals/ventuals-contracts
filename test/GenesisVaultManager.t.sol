@@ -978,6 +978,8 @@ contract GenesisVaultManagerTest is Test {
         address toValidator = makeAddr("toValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
+        _mockDelegations(fromValidator, amount.to8Decimals());
+
         // Mock the undelegate call (from validator)
         _mockAndExpectTokenDelegateCall(fromValidator, amount.to8Decimals(), true);
         // Mock the delegate call (to validator)
@@ -994,6 +996,8 @@ contract GenesisVaultManagerTest is Test {
         address toValidator = makeAddr("toValidator");
         uint256 amount = 100_000 * 1e18;
 
+        _mockDelegations(fromValidator, amount.to8Decimals());
+
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
@@ -1002,6 +1006,8 @@ contract GenesisVaultManagerTest is Test {
     function test_RedelegateStake_ZeroAmount() public {
         address fromValidator = makeAddr("fromValidator");
         address toValidator = makeAddr("toValidator");
+
+        _mockDelegations(fromValidator, 100_000 * 1e8);
 
         vm.startPrank(owner);
         vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
@@ -1012,9 +1018,74 @@ contract GenesisVaultManagerTest is Test {
         address validator = makeAddr("validator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
+        _mockDelegations(validator, amount.to8Decimals());
+
         vm.startPrank(owner);
         vm.expectRevert(GenesisVaultManager.RedelegateToSameValidator.selector);
         genesisVaultManager.redelegateStake(validator, validator, amount);
+    }
+
+    function test_RedelegateStake_InsufficientDelegatedBalance() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint256 requestedAmount = 100_000 * 1e18; // 100k HYPE
+        uint256 delegatedAmount = 50_000 * 1e18; // Only 50k HYPE delegated
+
+        _mockDelegations(fromValidator, delegatedAmount.to8Decimals());
+
+        vm.startPrank(owner);
+        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, requestedAmount);
+    }
+
+    function test_RedelegateStake_StakeLockedUntilFuture() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+        uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
+
+        _mockDelegationsWithLock(fromValidator, amount.to8Decimals(), futureTimestamp);
+
+        vm.startPrank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GenesisVaultManager.StakeLockedUntilTimestamp.selector, fromValidator, futureTimestamp
+            )
+        );
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+    }
+
+    function test_RedelegateStake_StakeUnlockedAtExactTimestamp() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+        uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
+
+        _mockDelegationsWithLock(fromValidator, amount.to8Decimals(), currentTimestamp);
+
+        // Mock the undelegate call (from validator)
+        _mockAndExpectTokenDelegateCall(fromValidator, amount.to8Decimals(), true);
+        // Mock the delegate call (to validator)
+        _mockAndExpectTokenDelegateCall(toValidator, amount.to8Decimals(), false);
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit RedelegateStake(fromValidator, toValidator, amount);
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+    }
+
+    function test_RedelegateStake_ValidatorNotFound() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        address differentValidator = makeAddr("differentValidator");
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+
+        // Mock delegations for a different validator
+        _mockDelegations(differentValidator, amount.to8Decimals());
+
+        vm.startPrank(owner);
+        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
+        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1150,37 +1221,97 @@ contract GenesisVaultManagerTest is Test {
         uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE (in 18 decimals)
 
         _mockDelegatorSummary(withdrawWeiAmount);
+        _mockDelegations(withdrawWeiAmount);
         _mockAndExpectStakingWithdrawCall(withdrawWeiAmount);
         _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), withdrawWeiAmount, true);
 
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit EmergencyStakingWithdraw(owner, withdrawAmount, "Emergency staking withdraw");
-        genesisVaultManager.emergencyStakingWithdraw(withdrawAmount, "Emergency staking withdraw");
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_NotOwner() public {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.emergencyStakingWithdraw(1_000_000 * 1e18, "Emergency staking withdraw");
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, 1_000_000 * 1e18, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_InsufficientBalance() public {
         uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE (in 18 decimals)
 
         _mockDelegatorSummary(50_000 * 1e8); // 50k HYPE delegated (in 8 decimals)
+        _mockDelegations(50_000 * 1e8);
 
         vm.startPrank(owner);
         vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.emergencyStakingWithdraw(withdrawAmount, "Emergency staking withdraw");
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_ZeroAmount() public {
         _mockDelegatorSummary(uint64(1_000_000 * 1e8)); // 1M HYPE delegated
+        _mockDelegations(uint64(1_000_000 * 1e8));
 
         vm.startPrank(owner);
         vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
-        genesisVaultManager.emergencyStakingWithdraw(0, "Emergency staking withdraw");
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, 0, "Emergency staking withdraw");
+    }
+
+    function test_EmergencyStakingWithdraw_InsufficientDelegatedBalance() public {
+        uint256 requestedAmount = 100_000 * 1e18; // 100k HYPE
+        uint256 delegatedAmount = 50_000 * 1e18; // Only 50k HYPE delegated
+
+        _mockDelegatorSummary(delegatedAmount.to8Decimals());
+        _mockDelegations(defaultValidator, delegatedAmount.to8Decimals());
+
+        vm.startPrank(owner);
+        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, requestedAmount, "Emergency withdraw");
+    }
+
+    function test_EmergencyStakingWithdraw_StakeLockedUntilFuture() public {
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+        uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
+
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), futureTimestamp);
+
+        vm.startPrank(owner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                GenesisVaultManager.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp
+            )
+        );
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
+    }
+
+    function test_EmergencyStakingWithdraw_StakeUnlockedAtExactTimestamp() public {
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+        uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
+
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), currentTimestamp);
+
+        _mockAndExpectTokenDelegateCall(defaultValidator, amount.to8Decimals(), true);
+        _mockAndExpectStakingWithdrawCall(amount.to8Decimals());
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit EmergencyStakingWithdraw(owner, amount, "Emergency withdraw");
+        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
+    }
+
+    function test_EmergencyStakingWithdraw_ValidatorNotFound() public {
+        address nonExistentValidator = makeAddr("nonExistentValidator");
+        uint256 amount = 100_000 * 1e18; // 100k HYPE
+
+        _mockDelegatorSummary(amount.to8Decimals());
+        // Mock delegations for a different validator
+        _mockDelegations(defaultValidator, amount.to8Decimals());
+
+        vm.startPrank(owner);
+        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
+        genesisVaultManager.emergencyStakingWithdraw(nonExistentValidator, amount, "Emergency withdraw");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1437,6 +1568,26 @@ contract GenesisVaultManagerTest is Test {
                 })
             )
         );
+    }
+
+    function _mockDelegations(uint64 weiAmount) internal {
+        _mockDelegations(defaultValidator, weiAmount);
+    }
+
+    function _mockDelegations(address validator, uint64 weiAmount) internal {
+        _mockDelegationsWithLock(validator, weiAmount, 0);
+    }
+
+    function _mockDelegationsWithLock(address validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
+        L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](1);
+        mockDelegations[0] = L1ReadLibrary.Delegation({
+            validator: validator,
+            amount: weiAmount,
+            lockedUntilTimestamp: lockedUntilTimestamp
+        });
+
+        bytes memory encodedDelegations = abi.encode(mockDelegations);
+        vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
     }
 
     /// @dev Helper function to mock spot balance for testing staking deposit calls
