@@ -32,6 +32,9 @@ contract GenesisVaultManager is Base {
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
+    /// @notice Thrown if the validator is locked until a timestamp in the future.
+    error StakeLockedUntilTimestamp(address validator, uint64 lockedUntilTimestamp);
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -301,8 +304,11 @@ contract GenesisVaultManager is Base {
     /// @param fromValidator The validator from which the HYPE stake is being moved
     /// @param toValidator The validator to which the HYPE stake is being moved
     /// @param amount The amount of HYPE being moved (in 18 decimals)
-    function redelegateStake(address fromValidator, address toValidator, uint256 amount) external onlyOwner {
-        require(amount > 0, ZeroAmount());
+    function redelegateStake(address fromValidator, address toValidator, uint256 amount)
+        external
+        onlyOwner
+        canUndelegateStake(fromValidator, amount)
+    {
         require(fromValidator != toValidator, RedelegateToSameValidator());
 
         stakingVault.tokenDelegate(fromValidator, amount.to8Decimals(), true);
@@ -313,16 +319,19 @@ contract GenesisVaultManager is Base {
     /// @notice Execute an emergency staking withdraw
     /// @dev Immediately undelegates HYPE and initiates a staking withdraw
     /// @dev Amount will be available in the StakingVault's spot account balance after 7 days.
+    /// @param validator The validator from which the HYPE stake is being moved
     /// @param amount Amount to withdraw (in 18 decimals)
     /// @param purpose Description of withdrawal purpose
-    function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
-        require(amount > 0, ZeroAmount());
-
+    function emergencyStakingWithdraw(address validator, uint256 amount, string calldata purpose)
+        external
+        onlyOwner
+        canUndelegateStake(validator, amount)
+    {
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
         require(delegatorSummary.delegated >= amount.to8Decimals(), InsufficientBalance());
 
         // Immediately undelegate HYPE
-        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), true);
+        stakingVault.tokenDelegate(validator, amount.to8Decimals(), true);
 
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
@@ -344,5 +353,27 @@ contract GenesisVaultManager is Base {
             BelowMinimumDepositAmount()
         );
         require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
+    }
+
+    modifier canUndelegateStake(address validator, uint256 amount) {
+        _canUndelegateStake(validator, amount);
+        _;
+    }
+
+    function _canUndelegateStake(address validator, uint256 amount) internal view {
+        require(amount > 0, ZeroAmount());
+
+        L1ReadLibrary.Delegation[] memory delegations = stakingVault.delegations();
+        uint64 delegatedAmount = 0;
+        uint64 lockedUntilTimestamp = 0;
+        for (uint256 i = 0; i < delegations.length; i++) {
+            if (delegations[i].validator == validator) {
+                delegatedAmount = delegations[i].amount;
+                lockedUntilTimestamp = delegations[i].lockedUntilTimestamp;
+                break;
+            }
+        }
+        require(delegatedAmount >= amount.to8Decimals(), InsufficientBalance());
+        require(lockedUntilTimestamp <= block.timestamp, StakeLockedUntilTimestamp(validator, lockedUntilTimestamp));
     }
 }
