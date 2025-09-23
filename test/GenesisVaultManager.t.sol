@@ -333,7 +333,7 @@ contract GenesisVaultManagerTest is Test {
         genesisVaultManager.deposit{value: 0}();
     }
 
-    function test_Deposit_SmallAmountWhenRemainingCapacityBelowMinimum() public {
+    function test_Deposit_ExactAmountRemainingCapacityBelowMinimum() public {
         // Set up vault to be almost full - remaining capacity less than minimum deposit amount
         uint256 remainingCapacity = MINIMUM_DEPOSIT_AMOUNT / 2; // 0.005 HYPE (half of minimum)
         uint256 existingBalance = VAULT_CAPACITY - remainingCapacity;
@@ -348,19 +348,6 @@ contract GenesisVaultManagerTest is Test {
         // Verify deposit succeeded
         assertEq(vHYPE.balanceOf(user), remainingCapacity);
         assertEq(address(stakingVault).balance, remainingCapacity);
-    }
-
-    function test_Deposit_ZeroAmountWhenRemainingCapacityBelowMinimum() public {
-        // Set up vault to be almost full - remaining capacity less than minimum deposit amount
-        uint256 remainingCapacity = MINIMUM_DEPOSIT_AMOUNT / 2; // 0.005 HYPE (half of minimum)
-        uint256 existingBalance = VAULT_CAPACITY - remainingCapacity;
-        uint256 existingSupply = existingBalance; // 1:1 exchange rate
-        _mockBalancesForExchangeRate(existingBalance, existingSupply);
-
-        // Zero deposits should still fail even when remaining capacity is below minimum
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
-        genesisVaultManager.deposit{value: 0}();
     }
 
     function test_Deposit_ExceedsRemainingCapacityWhenBelowMinimum() public {
@@ -380,6 +367,33 @@ contract GenesisVaultManagerTest is Test {
         assertEq(vHYPE.balanceOf(user), remainingCapacity);
         assertEq(address(stakingVault).balance, remainingCapacity);
         assertEq(user.balance, depositAmount - remainingCapacity); // Refunded amount
+    }
+
+    function test_Deposit_SmallAmountWhenRemainingCapacityBelowMinimum() public {
+        // Set up vault to be almost full - remaining capacity less than minimum deposit amount
+        uint256 remainingCapacity = MINIMUM_DEPOSIT_AMOUNT / 2; // 0.005 HYPE (half of minimum)
+        uint256 existingBalance = VAULT_CAPACITY - remainingCapacity;
+        uint256 existingSupply = existingBalance; // 1:1 exchange rate
+        _mockBalancesForExchangeRate(existingBalance, existingSupply);
+
+        // Small deposits should still fail even when remaining capacity is below minimum
+        vm.deal(user, remainingCapacity / 2);
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
+        genesisVaultManager.deposit{value: remainingCapacity / 2}();
+    }
+
+    function test_Deposit_ZeroAmountWhenRemainingCapacityBelowMinimum() public {
+        // Set up vault to be almost full - remaining capacity less than minimum deposit amount
+        uint256 remainingCapacity = MINIMUM_DEPOSIT_AMOUNT / 2; // 0.005 HYPE (half of minimum)
+        uint256 existingBalance = VAULT_CAPACITY - remainingCapacity;
+        uint256 existingSupply = existingBalance; // 1:1 exchange rate
+        _mockBalancesForExchangeRate(existingBalance, existingSupply);
+
+        // Zero deposits should still fail even when remaining capacity is below minimum
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
+        genesisVaultManager.deposit{value: 0}();
     }
 
     function test_Deposit_RevertWhenContractPaused() public {
