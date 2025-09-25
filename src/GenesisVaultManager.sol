@@ -20,14 +20,8 @@ contract GenesisVaultManager is Base {
     /// @notice Thrown if an amount exceeds the balance.
     error InsufficientBalance();
 
-    /// @notice Thrown if the vault is full.
-    error VaultFull();
-
     /// @notice Thrown if the deposit amount is below the minimum deposit amount.
     error BelowMinimumDepositAmount();
-
-    /// @notice Thrown if the deposit limit is reached.
-    error DepositLimitReached();
 
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
@@ -39,8 +33,7 @@ contract GenesisVaultManager is Base {
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
     /// @param deposited The amount of HYPE deposited (in 18 decimals)
-    /// @param refunded The amount of HYPE refunded (in 18 decimals)
-    event Deposit(address indexed depositor, uint256 minted, uint256 deposited, uint256 refunded);
+    event Deposit(address indexed depositor, uint256 minted, uint256 deposited);
 
     /// @notice Emitted when an HYPE stake is moved from one validator to another
     /// @param fromValidator The validator from which the HYPE stake is being moved
@@ -62,27 +55,14 @@ contract GenesisVaultManager is Base {
 
     IStakingVault public stakingVault;
 
-    /// @notice The total HYPE capacity of the vault (in 18 decimals)
-    /// @dev This is the total amount of HYPE that can be deposited into the vault.
-    /// @dev All HYPE will be moved to the vault's staking account and staked with validators (on HyperCore).
-    uint256 public vaultCapacity;
-
     /// @dev The default validator to delegate HYPE to
     address public defaultValidator;
 
+    /// @dev The minimum amount of HYPE that needs to remain staked in the vault (in 18 decimals)
+    uint256 public minimumStakeBalance;
+
     /// @dev The minimum amount of HYPE that can be deposited (in 18 decimals)
     uint256 public minimumDepositAmount;
-
-    /// @dev The default maximum amount of HYPE that can be deposited for each address (in 18 decimals)
-    uint256 public defaultDepositLimit;
-
-    /// @dev A whitelist of addresses that have different deposit limits
-    /// @dev Addresses may have higher or lower deposit limits than the default. Set the whitelist
-    ///      deposit limit to 0 to disable the whitelist for that address.
-    mapping(address => uint256) public whitelistDepositLimits;
-
-    /// @dev The cumulative amount of HYPE deposited by each address
-    mapping(address => uint256) public depositsByAddress;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -96,9 +76,8 @@ contract GenesisVaultManager is Base {
         /// forge-lint: disable-next-line(mixed-case-variable)
         address _vHYPE,
         address _stakingVault,
-        uint256 _vaultCapacity,
         address _defaultValidator,
-        uint256 _defaultDepositLimit,
+        uint256 _minimumStakeBalance,
         uint256 _minimumDepositAmount
     ) public initializer {
         __Base_init(_roleRegistry);
@@ -106,20 +85,14 @@ contract GenesisVaultManager is Base {
         vHYPE = VHYPE(_vHYPE);
         stakingVault = IStakingVault(payable(_stakingVault));
 
-        vaultCapacity = _vaultCapacity;
         defaultValidator = _defaultValidator;
-        defaultDepositLimit = _defaultDepositLimit;
+        minimumStakeBalance = _minimumStakeBalance;
         minimumDepositAmount = _minimumDepositAmount;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
     function deposit() public payable canDeposit whenNotPaused {
-        uint256 requestedDepositAmount = msg.value;
-        uint256 availableCapacity = Math.min(vaultCapacity - totalBalance(), remainingDepositLimit(msg.sender));
-        uint256 amountToDeposit = Math.min(requestedDepositAmount, availableCapacity);
-
-        // Update cumulative deposits for this address
-        depositsByAddress[msg.sender] += amountToDeposit;
+        uint256 amountToDeposit = msg.value;
 
         // Mint vHYPE
         // IMPORTANT: We need to make sure that we mint the vHYPE _before_ transferring the HYPE to the staking vault,
@@ -133,19 +106,7 @@ contract GenesisVaultManager is Base {
             stakingVault.deposit{value: amountToDeposit}();
         }
 
-        // Refund any excess HYPE
-        uint256 amountToRefund = requestedDepositAmount - amountToDeposit;
-        if (amountToRefund > 0) {
-            (bool success,) = payable(msg.sender).call{value: amountToRefund}("");
-            require(success, TransferFailed(msg.sender, amountToRefund));
-        }
-
-        emit Deposit(
-            msg.sender, /* depositor */
-            amountToMint, /* minted */
-            amountToDeposit, /* deposited */
-            amountToRefund /* refunded */
-        );
+        emit Deposit(msg.sender, amountToMint, amountToDeposit);
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
@@ -212,30 +173,6 @@ contract GenesisVaultManager is Base {
         return spotBalance.total.to18Decimals();
     }
 
-    /// @notice Returns the remaining deposit limit for an address (in 18 decimals)
-    /// @param depositor The address to check the remaining deposit limit for
-    /// @return The remaining deposit limit (in 18 decimals)
-    function remainingDepositLimit(address depositor) public view returns (uint256) {
-        uint256 depositLimit = whitelistDepositLimits[depositor];
-        if (depositLimit == 0) {
-            depositLimit = defaultDepositLimit;
-        }
-
-        // IMPORTANT: We need to prevent possible underflow here. This may happen if we lower the default
-        // deposit limit after a user has already deposited more than the new limit.
-        //
-        // Example:
-        // - Default deposit limit is 100 HYPE
-        // - User deposits 150 HYPE
-        // - We lower the default deposit limit to 50 HYPE
-        // - remainingDepositLimit() should return 0, not underflow
-        (bool success, uint256 remaining) = Math.trySub(depositLimit, depositsByAddress[depositor]);
-        if (!success) {
-            return 0;
-        }
-        return remaining;
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     Operator Actions                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -269,10 +206,10 @@ contract GenesisVaultManager is Base {
     /*                       Owner Actions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Sets the vault capacity (in 18 decimals)
-    /// @dev Vault capacity is the total amount of HYPE that can be deposited into the staking vault
-    function setVaultCapacity(uint256 _vaultCapacity) public onlyOwner {
-        vaultCapacity = _vaultCapacity;
+    /// @notice Sets the minimum stake balance (in 18 decimals)
+    /// @dev Minimum stake balance is the total amount of HYPE that must remain staked in the vault
+    function setMinimumStakeBalance(uint256 _minimumStakeBalance) public onlyOwner {
+        minimumStakeBalance = _minimumStakeBalance;
     }
 
     /// @notice Sets the default validator to delegate HYPE to
@@ -285,19 +222,6 @@ contract GenesisVaultManager is Base {
     /// @param _minimumDepositAmount The minimum deposit amount (in 18 decimals)
     function setMinimumDepositAmount(uint256 _minimumDepositAmount) public onlyOwner {
         minimumDepositAmount = _minimumDepositAmount;
-    }
-
-    /// @notice Sets the default deposit limit per address (in 18 decimals)
-    /// @param _defaultDepositLimit The default deposit limit per address (in 18 decimals)
-    function setDefaultDepositLimit(uint256 _defaultDepositLimit) public onlyOwner {
-        defaultDepositLimit = _defaultDepositLimit;
-    }
-
-    /// @notice Whitelists a deposit limit for an address (in 18 decimals)
-    /// @param depositor The address to whitelist a custom deposit limit for
-    /// @param limit The deposit limit (in 18 decimals)
-    function setWhitelistDepositLimit(address depositor, uint256 limit) public onlyOwner {
-        whitelistDepositLimits[depositor] = limit;
     }
 
     /// @notice Moves an HYPE stake from one validator to another
@@ -345,15 +269,7 @@ contract GenesisVaultManager is Base {
     }
 
     function _canDeposit() internal view {
-        require(totalBalance() < vaultCapacity, VaultFull());
-        uint256 remainingCapacity = vaultCapacity - totalBalance();
-        require(
-            // The deposit amount should be at least the minimum deposit amount, unless the remaining capacity is less than the minimum deposit amount
-            msg.value >= minimumDepositAmount
-                || (msg.value >= remainingCapacity && remainingCapacity < minimumDepositAmount),
-            BelowMinimumDepositAmount()
-        );
-        require(remainingDepositLimit(msg.sender) > 0, DepositLimitReached());
+        require(msg.value >= minimumDepositAmount, BelowMinimumDepositAmount());
     }
 
     modifier canUndelegateStake(address validator, uint256 amount) {
