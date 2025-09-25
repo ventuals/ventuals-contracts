@@ -8,7 +8,7 @@ import {Base} from "./Base.sol";
 import {VHYPE} from "./VHYPE.sol";
 import {Converters} from "./libraries/Converters.sol";
 
-contract GenesisVaultManager is Base {
+contract StakingVaultManager is Base {
     using Converters for *;
 
     /// @notice Thrown if HYPE transfer fails to given recipient for specified amount.
