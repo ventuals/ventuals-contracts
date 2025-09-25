@@ -5,7 +5,7 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {GenesisVaultManager} from "../src/GenesisVaultManager.sol";
+import {StakingVaultManager} from "../src/StakingVaultManager.sol";
 import {RoleRegistry} from "../src/RoleRegistry.sol";
 import {VHYPE} from "../src/VHYPE.sol";
 import {StakingVault} from "../src/StakingVault.sol";
@@ -19,10 +19,10 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 
-contract GenesisVaultManagerTest is Test {
+contract StakingVaultManagerTest is Test {
     using Converters for *;
 
-    GenesisVaultManager genesisVaultManager;
+    StakingVaultManager stakingVaultManager;
     RoleRegistry roleRegistry;
     VHYPE vHYPE;
     StakingVault stakingVault;
@@ -59,10 +59,10 @@ contract GenesisVaultManagerTest is Test {
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
-        // Deploy GenesisVaultManager
-        GenesisVaultManager genesisVaultManagerImplementation = new GenesisVaultManager(HYPE_TOKEN_ID);
-        bytes memory genesisVaultManagerInitData = abi.encodeWithSelector(
-            GenesisVaultManager.initialize.selector,
+        // Deploy StakingVaultManager
+        StakingVaultManager stakingVaultManagerImplementation = new StakingVaultManager(HYPE_TOKEN_ID);
+        bytes memory stakingVaultManagerInitData = abi.encodeWithSelector(
+            StakingVaultManager.initialize.selector,
             address(roleRegistry),
             address(vHYPE),
             address(stakingVault),
@@ -70,13 +70,13 @@ contract GenesisVaultManagerTest is Test {
             MINIMUM_STAKE_BALANCE,
             MINIMUM_DEPOSIT_AMOUNT
         );
-        ERC1967Proxy genesisVaultManagerProxy =
-            new ERC1967Proxy(address(genesisVaultManagerImplementation), genesisVaultManagerInitData);
-        genesisVaultManager = GenesisVaultManager(payable(genesisVaultManagerProxy));
+        ERC1967Proxy stakingVaultManagerProxy =
+            new ERC1967Proxy(address(stakingVaultManagerImplementation), stakingVaultManagerInitData);
+        stakingVaultManager = StakingVaultManager(payable(stakingVaultManagerProxy));
 
         // Setup roles
         vm.startPrank(owner);
-        roleRegistry.grantRole(roleRegistry.MANAGER_ROLE(), address(genesisVaultManager));
+        roleRegistry.grantRole(roleRegistry.MANAGER_ROLE(), address(stakingVaultManager));
         roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
 
@@ -95,18 +95,18 @@ contract GenesisVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_Initialize() public view {
-        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
-        assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
-        assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
-        assertEq(genesisVaultManager.defaultValidator(), defaultValidator);
-        assertEq(genesisVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
-        assertEq(genesisVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
-        assertEq(genesisVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
+        assertEq(address(stakingVaultManager.roleRegistry()), address(roleRegistry));
+        assertEq(address(stakingVaultManager.vHYPE()), address(vHYPE));
+        assertEq(address(stakingVaultManager.stakingVault()), address(stakingVault));
+        assertEq(stakingVaultManager.defaultValidator(), defaultValidator);
+        assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
+        assertEq(stakingVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
+        assertEq(stakingVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
     function test_CannotInitializeTwice() public {
         vm.expectRevert(Initializable.InvalidInitialization.selector);
-        genesisVaultManager.initialize(
+        stakingVaultManager.initialize(
             address(roleRegistry),
             address(vHYPE),
             address(stakingVault),
@@ -125,13 +125,13 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
+        stakingVaultManager.deposit{value: depositAmount}();
 
         // Check that we minted 1:1 vHYPE when vault is empty
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
 
         assertEq(userVHYPEBalance, depositAmount);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -149,12 +149,12 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
+        stakingVaultManager.deposit{value: depositAmount}();
 
         // Check vHYPE was minted at 1:1 exchange rate
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
         assertEq(userVHYPEBalance, depositAmount);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -172,11 +172,11 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
+        stakingVaultManager.deposit{value: depositAmount}();
 
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
         assertEq(userVHYPEBalance, depositAmount / 2);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -194,11 +194,11 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        genesisVaultManager.deposit{value: depositAmount}();
+        stakingVaultManager.deposit{value: depositAmount}();
 
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
         assertEq(userVHYPEBalance, depositAmount * 2);
-        assertEq(genesisVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -214,7 +214,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, MINIMUM_DEPOSIT_AMOUNT);
         vm.prank(user);
-        genesisVaultManager.deposit{value: MINIMUM_DEPOSIT_AMOUNT}();
+        stakingVaultManager.deposit{value: MINIMUM_DEPOSIT_AMOUNT}();
 
         // vHYPE should be minted
         assertEq(vHYPE.balanceOf(user), MINIMUM_DEPOSIT_AMOUNT);
@@ -232,8 +232,8 @@ contract GenesisVaultManagerTest is Test {
 
         vm.deal(user, belowMinimumAmount);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
-        genesisVaultManager.deposit{value: belowMinimumAmount}();
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
+        stakingVaultManager.deposit{value: belowMinimumAmount}();
     }
 
     function test_Deposit_ZeroAmount() public {
@@ -242,8 +242,8 @@ contract GenesisVaultManagerTest is Test {
         _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 1
 
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
-        genesisVaultManager.deposit{value: 0}();
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
+        stakingVaultManager.deposit{value: 0}();
     }
 
     function test_Deposit_RevertWhenContractPaused() public {
@@ -255,12 +255,12 @@ contract GenesisVaultManagerTest is Test {
 
         // Pause the contract
         vm.prank(owner);
-        roleRegistry.pause(address(genesisVaultManager));
+        roleRegistry.pause(address(stakingVaultManager));
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(genesisVaultManager)));
-        genesisVaultManager.deposit{value: depositAmount}();
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVaultManager)));
+        stakingVaultManager.deposit{value: depositAmount}();
 
         // Check that no HYPE was transferred to staking vault (vault balance should remain 0)
         assertEq(address(stakingVault).balance, 0);
@@ -288,7 +288,7 @@ contract GenesisVaultManagerTest is Test {
             encodedDelegatorSummary
         );
 
-        uint256 balance = genesisVaultManager.stakingAccountBalance();
+        uint256 balance = stakingVaultManager.stakingAccountBalance();
         // (1e8 + 5e7 + 2e7) * 1e10 = 1.7e18
         assertEq(balance, 1.7e18);
     }
@@ -307,7 +307,7 @@ contract GenesisVaultManagerTest is Test {
             encodedSpotBalance
         );
 
-        uint256 balance = genesisVaultManager.spotAccountBalance();
+        uint256 balance = stakingVaultManager.spotAccountBalance();
         // 3e8 * 1e10 = 3e18
         assertEq(balance, 3e18);
     }
@@ -337,7 +337,7 @@ contract GenesisVaultManagerTest is Test {
         // Add some balance to the staking vault contract itself
         vm.deal(address(stakingVault), 1e18); // 1 HYPE
 
-        uint256 totalBalance = genesisVaultManager.totalBalance();
+        uint256 totalBalance = stakingVaultManager.totalBalance();
         // 1e18 (staking) + 2e18 (spot) + 1e18 (contract balance) = 4e18
         assertEq(totalBalance, 4e18);
     }
@@ -368,10 +368,10 @@ contract GenesisVaultManagerTest is Test {
         );
 
         // Mint 2 vHYPE tokens
-        vm.prank(address(genesisVaultManager));
+        vm.prank(address(stakingVaultManager));
         vHYPE.mint(user, 2e18);
 
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         // 4e18 (total balance) / 2e18 (total supply) = 2
         assertEq(exchangeRate, 2e18);
     }
@@ -398,10 +398,10 @@ contract GenesisVaultManagerTest is Test {
         );
 
         // Mint 8 vHYPE tokens
-        vm.prank(address(genesisVaultManager));
+        vm.prank(address(stakingVaultManager));
         vHYPE.mint(user, 8e18);
 
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         // 4e18 (total balance) / 8e18 (total supply) = 0.5
         assertEq(exchangeRate, 0.5e18);
     }
@@ -428,10 +428,10 @@ contract GenesisVaultManagerTest is Test {
         );
 
         // Mint some vHYPE tokens
-        vm.prank(address(genesisVaultManager));
+        vm.prank(address(stakingVaultManager));
         vHYPE.mint(user, 2e18); // 2 vHYPE tokens
 
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         assertEq(exchangeRate, 0);
     }
 
@@ -458,7 +458,7 @@ contract GenesisVaultManagerTest is Test {
 
         // No vHYPE tokens minted, so total supply is 0
 
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         assertEq(exchangeRate, 1e18);
     }
 
@@ -469,7 +469,7 @@ contract GenesisVaultManagerTest is Test {
         vm.assume(totalBalance > vHYPESupply);
         _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
 
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         assertGt(exchangeRate, 1e18); // exchange rate >= 1
     }
 
@@ -480,7 +480,7 @@ contract GenesisVaultManagerTest is Test {
         vm.assume(totalBalance < vHYPESupply);
         _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
 
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         assertLt(exchangeRate, 1e18); // exchange rate <= 1
     }
 
@@ -490,52 +490,52 @@ contract GenesisVaultManagerTest is Test {
 
     function test_HYPETovHYPE_ExchangeRateAboveOne() public {
         _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
-        assertEq(genesisVaultManager.HYPETovHYPE(2e18), 1e18);
+        assertEq(stakingVaultManager.HYPETovHYPE(2e18), 1e18);
     }
 
     function test_HYPETovHYPE_ExchangeRateBelowOne() public {
         _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 4e18 /* 4 vHYPE */ ); // exchange rate = 0.5
-        assertEq(genesisVaultManager.HYPETovHYPE(2e18), 4e18);
+        assertEq(stakingVaultManager.HYPETovHYPE(2e18), 4e18);
     }
 
     function test_HYPETovHYPE_ZeroAmount() public {
         _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
-        assertEq(genesisVaultManager.HYPETovHYPE(0), 0);
+        assertEq(stakingVaultManager.HYPETovHYPE(0), 0);
     }
 
     function test_HYPETovHYPE_ZeroExchangeRate_ZeroBalance() public {
         _mockBalancesForExchangeRate(0, /* 0 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 0
-        assertEq(genesisVaultManager.HYPETovHYPE(1e18), 0);
+        assertEq(stakingVaultManager.HYPETovHYPE(1e18), 0);
     }
 
     function test_HYPETovHYPE_OneExchangeRate_ZeroSupply() public {
         _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 0 /* 0 vHYPE */ ); // exchange rate = 1
-        assertEq(genesisVaultManager.HYPETovHYPE(2e18), 2e18);
+        assertEq(stakingVaultManager.HYPETovHYPE(2e18), 2e18);
     }
 
     function test_vHYPEtoHYPE_ExchangeRateAboveOne() public {
         _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
-        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 2e18);
+        assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 2e18);
     }
 
     function test_vHYPEtoHYPE_ExchangeRateBelowOne() public {
         _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 4e18 /* 4 vHYPE */ ); // exchange rate = 0.5
-        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 0.5e18);
+        assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 0.5e18);
     }
 
     function test_vHYPEtoHYPE_ZeroAmount() public {
         _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
-        assertEq(genesisVaultManager.vHYPEtoHYPE(0), 0);
+        assertEq(stakingVaultManager.vHYPEtoHYPE(0), 0);
     }
 
     function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroBalance() public {
         _mockBalancesForExchangeRate(0, /* 0 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 0
-        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 0);
+        assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 0);
     }
 
     function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroSupply() public {
         _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 0 /* 0 vHYPE */ ); // exchange rate = 1
-        assertEq(genesisVaultManager.vHYPEtoHYPE(1e18), 1e18);
+        assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 1e18);
     }
 
     function test_HYPETovHYPE_vHYPEtoHYPE_Roundtrip(
@@ -555,11 +555,11 @@ contract GenesisVaultManagerTest is Test {
         // Extremely high exchange rates are very unlikely to occur in practice. 1e15 is a very geneerous upper
         // bound for the exchange rate (it's 1 million * 1 million, which would only occur if we've earned
         // 1 million HYPE for every vHYPE minted).
-        uint256 exchangeRate = genesisVaultManager.exchangeRate();
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
         vm.assume(exchangeRate > 0 && exchangeRate < 1e15);
 
-        uint256 vHYPEAmount = genesisVaultManager.HYPETovHYPE(hypeAmountToConvert);
-        uint256 convertedBackHYPE = genesisVaultManager.vHYPEtoHYPE(vHYPEAmount);
+        uint256 vHYPEAmount = stakingVaultManager.HYPETovHYPE(hypeAmountToConvert);
+        uint256 convertedBackHYPE = stakingVaultManager.vHYPEtoHYPE(vHYPEAmount);
 
         // Allow for 1-2 wei difference due to rounding
         assertApproxEqAbs(convertedBackHYPE, hypeAmountToConvert, 2);
@@ -573,9 +573,9 @@ contract GenesisVaultManagerTest is Test {
         uint256 newMinimumStakeBalance = 600_000 * 1e18;
 
         vm.prank(owner);
-        genesisVaultManager.setMinimumStakeBalance(newMinimumStakeBalance);
+        stakingVaultManager.setMinimumStakeBalance(newMinimumStakeBalance);
 
-        assertEq(genesisVaultManager.minimumStakeBalance(), newMinimumStakeBalance);
+        assertEq(stakingVaultManager.minimumStakeBalance(), newMinimumStakeBalance);
     }
 
     function test_SetMinimumStakeBalance_NotOwner() public {
@@ -583,7 +583,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.setMinimumStakeBalance(newMinimumStakeBalance);
+        stakingVaultManager.setMinimumStakeBalance(newMinimumStakeBalance);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -594,9 +594,9 @@ contract GenesisVaultManagerTest is Test {
         address newValidator = makeAddr("newValidator");
 
         vm.prank(owner);
-        genesisVaultManager.setDefaultValidator(newValidator);
+        stakingVaultManager.setDefaultValidator(newValidator);
 
-        assertEq(genesisVaultManager.defaultValidator(), newValidator);
+        assertEq(stakingVaultManager.defaultValidator(), newValidator);
     }
 
     function test_SetDefaultValidator_NotOwner() public {
@@ -604,7 +604,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.setDefaultValidator(newValidator);
+        stakingVaultManager.setDefaultValidator(newValidator);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -615,9 +615,9 @@ contract GenesisVaultManagerTest is Test {
         uint256 newMinimumAmount = 5e16; // 0.05 HYPE
 
         vm.prank(owner);
-        genesisVaultManager.setMinimumDepositAmount(newMinimumAmount);
+        stakingVaultManager.setMinimumDepositAmount(newMinimumAmount);
 
-        assertEq(genesisVaultManager.minimumDepositAmount(), newMinimumAmount);
+        assertEq(stakingVaultManager.minimumDepositAmount(), newMinimumAmount);
     }
 
     function test_SetMinimumDepositAmount_NotOwner() public {
@@ -625,7 +625,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.setMinimumDepositAmount(newMinimumAmount);
+        stakingVaultManager.setMinimumDepositAmount(newMinimumAmount);
     }
 
     function test_SetMinimumDepositAmount_UpdatesDepositValidation() public {
@@ -634,7 +634,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Set new minimum amount
         vm.prank(owner);
-        genesisVaultManager.setMinimumDepositAmount(newMinimumAmount);
+        stakingVaultManager.setMinimumDepositAmount(newMinimumAmount);
 
         // Mock balances for deposit
         uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
@@ -644,12 +644,12 @@ contract GenesisVaultManagerTest is Test {
         // Try to deposit below new minimum - should fail
         vm.deal(user, belowNewMinimum);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(GenesisVaultManager.BelowMinimumDepositAmount.selector));
-        genesisVaultManager.deposit{value: belowNewMinimum}();
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
+        stakingVaultManager.deposit{value: belowNewMinimum}();
 
         // Deposit exactly the new minimum - should succeed
         vm.deal(user, newMinimumAmount);
-        genesisVaultManager.deposit{value: newMinimumAmount}();
+        stakingVaultManager.deposit{value: newMinimumAmount}();
 
         // Verify deposit succeeded
         assertEq(vHYPE.balanceOf(user), newMinimumAmount);
@@ -677,7 +677,7 @@ contract GenesisVaultManagerTest is Test {
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit RedelegateStake(fromValidator, toValidator, amount);
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
     function test_RedelegateStake_NotOwner() public {
@@ -689,7 +689,7 @@ contract GenesisVaultManagerTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
     function test_RedelegateStake_ZeroAmount() public {
@@ -699,8 +699,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(fromValidator, 100_000 * 1e8);
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, 0);
+        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, 0);
     }
 
     function test_RedelegateStake_SameValidator() public {
@@ -710,8 +710,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(validator, amount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.RedelegateToSameValidator.selector);
-        genesisVaultManager.redelegateStake(validator, validator, amount);
+        vm.expectRevert(StakingVaultManager.RedelegateToSameValidator.selector);
+        stakingVaultManager.redelegateStake(validator, validator, amount);
     }
 
     function test_RedelegateStake_InsufficientDelegatedBalance() public {
@@ -723,8 +723,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(fromValidator, delegatedAmount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, requestedAmount);
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, requestedAmount);
     }
 
     function test_RedelegateStake_StakeLockedUntilFuture() public {
@@ -738,10 +738,10 @@ contract GenesisVaultManagerTest is Test {
         vm.startPrank(owner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                GenesisVaultManager.StakeLockedUntilTimestamp.selector, fromValidator, futureTimestamp
+                StakingVaultManager.StakeLockedUntilTimestamp.selector, fromValidator, futureTimestamp
             )
         );
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
     function test_RedelegateStake_StakeUnlockedAtExactTimestamp() public {
@@ -760,7 +760,7 @@ contract GenesisVaultManagerTest is Test {
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit RedelegateStake(fromValidator, toValidator, amount);
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
     function test_RedelegateStake_ValidatorNotFound() public {
@@ -773,8 +773,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(differentValidator, amount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -788,18 +788,18 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegatorSummary(withdrawWeiAmount);
         _mockDelegations(withdrawWeiAmount);
         _mockAndExpectStakingWithdrawCall(withdrawWeiAmount);
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), withdrawWeiAmount, true);
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.defaultValidator(), withdrawWeiAmount, true);
 
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit EmergencyStakingWithdraw(owner, withdrawAmount, "Emergency staking withdraw");
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_NotOwner() public {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, 1_000_000 * 1e18, "Emergency staking withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, 1_000_000 * 1e18, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_InsufficientBalance() public {
@@ -809,8 +809,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(50_000 * 1e8);
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_ZeroAmount() public {
@@ -818,8 +818,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(uint64(1_000_000 * 1e8));
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, 0, "Emergency staking withdraw");
+        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, 0, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_InsufficientDelegatedBalance() public {
@@ -830,8 +830,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(defaultValidator, delegatedAmount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, requestedAmount, "Emergency withdraw");
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, requestedAmount, "Emergency withdraw");
     }
 
     function test_EmergencyStakingWithdraw_StakeLockedUntilFuture() public {
@@ -844,10 +844,10 @@ contract GenesisVaultManagerTest is Test {
         vm.startPrank(owner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                GenesisVaultManager.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp
+                StakingVaultManager.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp
             )
         );
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
     }
 
     function test_EmergencyStakingWithdraw_StakeUnlockedAtExactTimestamp() public {
@@ -863,7 +863,7 @@ contract GenesisVaultManagerTest is Test {
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit EmergencyStakingWithdraw(owner, amount, "Emergency withdraw");
-        genesisVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
     }
 
     function test_EmergencyStakingWithdraw_ValidatorNotFound() public {
@@ -875,8 +875,8 @@ contract GenesisVaultManagerTest is Test {
         _mockDelegations(defaultValidator, amount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.emergencyStakingWithdraw(nonExistentValidator, amount, "Emergency withdraw");
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.emergencyStakingWithdraw(nonExistentValidator, amount, "Emergency withdraw");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -890,11 +890,11 @@ contract GenesisVaultManagerTest is Test {
         // Mock the expected calls for transferring all balance
         _mockAndExpectStakingDepositCall(stakingVaultBalance.to8Decimals());
         _mockAndExpectTokenDelegateCall(
-            genesisVaultManager.defaultValidator(), stakingVaultBalance.to8Decimals(), false
+            stakingVaultManager.defaultValidator(), stakingVaultBalance.to8Decimals(), false
         );
 
         vm.prank(operator);
-        genesisVaultManager.transferToCoreAndDelegate();
+        stakingVaultManager.transferToCoreAndDelegate();
 
         // Check that lastEvmToCoreTransferBlockNumber was updated
         assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
@@ -907,10 +907,10 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock the expected calls for transferring specific amount
         _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         vm.prank(operator);
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
 
         // Check that lastEvmToCoreTransferBlockNumber was updated
         assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
@@ -926,13 +926,13 @@ contract GenesisVaultManagerTest is Test {
                 IAccessControl.AccessControlUnauthorizedAccount.selector, user, roleRegistry.OPERATOR_ROLE()
             )
         );
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
     }
 
     function test_TransferToCoreAndDelegate_ZeroAmount() public {
         vm.startPrank(operator);
-        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
-        genesisVaultManager.transferToCoreAndDelegate(0);
+        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
+        stakingVaultManager.transferToCoreAndDelegate(0);
     }
 
     function test_TransferToCoreAndDelegate_InsufficientBalance() public {
@@ -941,8 +941,8 @@ contract GenesisVaultManagerTest is Test {
         vm.deal(address(stakingVault), stakingVaultBalance);
 
         vm.startPrank(operator);
-        vm.expectRevert(GenesisVaultManager.InsufficientBalance.selector);
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
     }
 
     function test_TransferToCoreAndDelegate_OneBlockDelayRestriction() public {
@@ -951,25 +951,25 @@ contract GenesisVaultManagerTest is Test {
 
         // First, make a transfer to set lastEvmToCoreTransferBlockNumber
         _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         vm.prank(operator);
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
 
         // Try to make another transfer in the same block - should fail
         vm.deal(address(stakingVault), transferAmount); // Refill balance
         vm.startPrank(operator);
         vm.expectRevert(IStakingVault.CannotTransferToCoreUntilNextBlock.selector);
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
         vm.stopPrank();
 
         // Advance to next block - should succeed
         _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         vm.roll(block.number + 1);
         vm.prank(operator);
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
     }
 
     function test_TransferToCoreAndDelegate_BlocksDepositInSameBlock() public {
@@ -981,24 +981,24 @@ contract GenesisVaultManagerTest is Test {
 
         // Mock the expected calls for the transfer
         _mockAndExpectStakingDepositCall(transferAmount.to8Decimals());
-        _mockAndExpectTokenDelegateCall(genesisVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.defaultValidator(), transferAmount.to8Decimals(), false);
 
         // Execute the transfer to HyperCore
         vm.prank(operator);
-        genesisVaultManager.transferToCoreAndDelegate(transferAmount);
+        stakingVaultManager.transferToCoreAndDelegate(transferAmount);
 
         // Try to make a deposit in the same block - should fail due to one-block delay
         vm.deal(user, depositAmount);
         vm.startPrank(user);
         vm.expectRevert(IStakingVault.CannotDepositUntilNextBlock.selector);
-        genesisVaultManager.deposit{value: depositAmount}();
+        stakingVaultManager.deposit{value: depositAmount}();
         vm.stopPrank();
 
         // Advance to next block - deposit should now succeed
         vm.roll(block.number + 1);
         vm.prank(user);
 
-        genesisVaultManager.deposit{value: depositAmount}();
+        stakingVaultManager.deposit{value: depositAmount}();
 
         // Verify deposit succeeded
         assertEq(vHYPE.balanceOf(user), depositAmount);
@@ -1012,8 +1012,8 @@ contract GenesisVaultManagerTest is Test {
         vm.roll(block.number + 1);
 
         vm.startPrank(operator);
-        vm.expectRevert(GenesisVaultManager.ZeroAmount.selector);
-        genesisVaultManager.transferToCoreAndDelegate();
+        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
+        stakingVaultManager.transferToCoreAndDelegate();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1021,27 +1021,27 @@ contract GenesisVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_UpgradeToAndCall_OnlyOwner() public {
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
 
         vm.prank(owner);
-        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+        stakingVaultManager.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
-        assertEq(genesisVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
+        assertEq(address(stakingVaultManager.roleRegistry()), address(roleRegistry));
+        assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
 
         // Check that the extra function is available
-        GenesisVaultManagerWithExtraFunction newProxy =
-            GenesisVaultManagerWithExtraFunction(payable(address(genesisVaultManager)));
+        StakingVaultManagerWithExtraFunction newProxy =
+            StakingVaultManagerWithExtraFunction(payable(address(stakingVaultManager)));
         assertTrue(newProxy.extraFunction());
     }
 
     function test_UpgradeToAndCall_NotOwner() public {
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+        stakingVaultManager.upgradeToAndCall(address(newImplementation), "");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1063,26 +1063,26 @@ contract GenesisVaultManagerTest is Test {
         assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
-        GenesisVaultManagerWithExtraFunction newImplementation = new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
         vm.prank(newOwner);
-        genesisVaultManager.upgradeToAndCall(address(newImplementation), "");
+        stakingVaultManager.upgradeToAndCall(address(newImplementation), "");
 
         // Verify upgrade preserved state
-        assertEq(address(genesisVaultManager.roleRegistry()), address(roleRegistry));
-        assertEq(address(genesisVaultManager.vHYPE()), address(vHYPE));
-        assertEq(address(genesisVaultManager.stakingVault()), address(stakingVault));
+        assertEq(address(stakingVaultManager.roleRegistry()), address(roleRegistry));
+        assertEq(address(stakingVaultManager.vHYPE()), address(vHYPE));
+        assertEq(address(stakingVaultManager.stakingVault()), address(stakingVault));
 
         // Check that the extra function is available
-        GenesisVaultManagerWithExtraFunction newProxy =
-            GenesisVaultManagerWithExtraFunction(payable(address(genesisVaultManager)));
+        StakingVaultManagerWithExtraFunction newProxy =
+            StakingVaultManagerWithExtraFunction(payable(address(stakingVaultManager)));
         assertTrue(newProxy.extraFunction());
 
         // Verify that the old owner can no longer upgrade
-        GenesisVaultManagerWithExtraFunction anotherImplementation =
-            new GenesisVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction anotherImplementation =
+            new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
         vm.prank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
-        genesisVaultManager.upgradeToAndCall(address(anotherImplementation), "");
+        stakingVaultManager.upgradeToAndCall(address(anotherImplementation), "");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1113,7 +1113,7 @@ contract GenesisVaultManagerTest is Test {
 
         // Mint the desired total supply to owner
         if (vHYPESupply > 0) {
-            vm.prank(address(genesisVaultManager));
+            vm.prank(address(stakingVaultManager));
             vHYPE.mint(owner, vHYPESupply);
         }
     }
@@ -1220,8 +1220,8 @@ contract GenesisVaultManagerTest is Test {
     }
 }
 
-contract GenesisVaultManagerWithExtraFunction is GenesisVaultManager {
-    constructor(uint64 _hypeTokenId) GenesisVaultManager(_hypeTokenId) {}
+contract StakingVaultManagerWithExtraFunction is StakingVaultManager {
+    constructor(uint64 _hypeTokenId) StakingVaultManager(_hypeTokenId) {}
 
     function extraFunction() public pure returns (bool) {
         return true;
