@@ -18,8 +18,8 @@ if [ -z "$ANON_WALLET_PRIVATE_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$GENESIS_VAULT_MANAGER" ]; then
-    echo "Error: GENESIS_VAULT_MANAGER is not set. Please add it to your .env file."
+if [ -z "$STAKING_VAULT_MANAGER" ]; then
+    echo "Error: STAKING_VAULT_MANAGER is not set. Please add it to your .env file."
     exit 1
 fi
 
@@ -29,10 +29,10 @@ if [ -z "$DEPOSIT_AMOUNT" ]; then
 fi
 
 echo "Calling deposit function..."
-echo "Genesis Vault Manager Contract: $GENESIS_VAULT_MANAGER"
+echo "Staking Vault Manager Contract: $STAKING_VAULT_MANAGER"
 echo "Deposit Amount: $DEPOSIT_AMOUNT HYPE"
 echo ""
-cast send $GENESIS_VAULT_MANAGER \
+cast send $STAKING_VAULT_MANAGER \
     "deposit()" \
     --value "${DEPOSIT_AMOUNT}ether" \
     --rpc-url $RPC_URL \

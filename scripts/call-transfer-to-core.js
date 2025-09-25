@@ -2,7 +2,7 @@ require("dotenv").config();
 const { ethers } = require("ethers");
 
 // Contract configuration
-const CONTRACT_ADDRESS = process.env.GENESIS_VAULT_MANAGER;
+const CONTRACT_ADDRESS = process.env.STAKING_VAULT_MANAGER;
 const STAKING_VAULT_ADDRESS = process.env.STAKING_VAULT;
 const IS_TESTNET = process.env.IS_TESTNET !== "false"; // Default to true if not specified
 
@@ -34,7 +34,7 @@ async function main() {
   try {
     // Validate required environment variables
     if (!CONTRACT_ADDRESS) {
-      throw new Error("GENESIS_VAULT_MANAGER environment variable is required");
+      throw new Error("STAKING_VAULT_MANAGER environment variable is required");
     }
     if (!STAKING_VAULT_ADDRESS) {
       throw new Error("STAKING_VAULT environment variable is required");
@@ -58,7 +58,7 @@ async function main() {
     }
     const wallet = new ethers.Wallet(privateKey, provider);
 
-    // Connect to the GenesisVaultManager contract
+    // Connect to the StakingVaultManager contract
     const contract = new ethers.Contract(
       CONTRACT_ADDRESS,
       CONTRACT_ABI,
@@ -67,7 +67,7 @@ async function main() {
 
     console.log(`🌐 Network: ${IS_TESTNET ? "Testnet" : "Mainnet"}`);
     console.log(
-      `📋 Calling transferToCoreAndDelegate() on GenesisVaultManager: ${CONTRACT_ADDRESS}`
+      `📋 Calling transferToCoreAndDelegate() on StakingVaultManager: ${CONTRACT_ADDRESS}`
     );
     console.log(`👤 Using wallet: ${wallet.address}`);
 
@@ -146,7 +146,7 @@ async function main() {
     }
     if (error.message.includes("AccessControlUnauthorizedAccount")) {
       console.error(
-        "💡 Make sure your wallet has the OPERATOR role on the GenesisVaultManager"
+        "💡 Make sure your wallet has the OPERATOR role on the StakingVaultManager"
       );
     }
     process.exit(1);

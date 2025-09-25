@@ -19,13 +19,13 @@ From repository root:
 npm install
 ```
 
-## call-genesis-deposit.js
+## call-deposit.js
 
-A script to deposit HYPE tokens into the GenesisVaultManager contract.
+A script to deposit HYPE tokens into the StakingVaultManager contract.
 
 ### Description
 
-This script calls the `deposit()` function on the GenesisVaultManager contract with 0.01 HYPE.
+This script calls the `deposit()` function on the StakingVaultManager contract with 0.01 HYPE.
 
 ### Prerequisites
 
@@ -33,7 +33,7 @@ This script calls the `deposit()` function on the GenesisVaultManager contract w
 
 ```bash
 IS_TESTNET=true             # true for testnet, false for mainnet
-GENESIS_VAULT_MANAGER=0x... # Contract address
+STAKING_VAULT_MANAGER=0x... # Contract address
 PRIVATE_KEY=0x...           # Your wallet private key
 ```
 
@@ -44,13 +44,13 @@ PRIVATE_KEY=0x...           # Your wallet private key
 Run the script using npm:
 
 ```bash
-npm run genesis-deposit
+npm run deposit
 ```
 
 Or directly with node:
 
 ```bash
-node scripts/call-genesis-deposit.js
+node scripts/call-deposit.js
 ```
 
 ### What it does
@@ -77,11 +77,11 @@ The script provides detailed output including:
 
 ## call-transfer-to-core.js
 
-A script to transfer HYPE from GenesisVaultManager's HyperEVM balance to HyperCore and delegate it to validators.
+A script to transfer HYPE from StakingVaultManager's HyperEVM balance to HyperCore and delegate it to validators.
 
 ### Description
 
-This script calls the `transferToCoreAndDelegate()` function on the GenesisVaultManager contract. This function transfers HYPE from the vault's HyperEVM balance to HyperCore and automatically delegates it to the default validator. You can either transfer all available balance or specify a specific amount.
+This script calls the `transferToCoreAndDelegate()` function on the StakingVaultManager contract. This function transfers HYPE from the vault's HyperEVM balance to HyperCore and automatically delegates it to the default validator. You can either transfer all available balance or specify a specific amount.
 
 ### Prerequisites
 
@@ -89,12 +89,12 @@ This script calls the `transferToCoreAndDelegate()` function on the GenesisVault
 
 ```bash
 IS_TESTNET=true             # true for testnet, false for mainnet
-GENESIS_VAULT_MANAGER=0x... # GenesisVaultManager contract address
+STAKING_VAULT_MANAGER=0x... # StakingVaultManager contract address
 STAKING_VAULT=0x...         # StakingVault contract address
 PRIVATE_KEY=0x...           # Your wallet private key (must have OPERATOR role)
 ```
 
-**Operator Role**: Your wallet must have the OPERATOR role on the GenesisVaultManager contract.
+**Operator Role**: Your wallet must have the OPERATOR role on the StakingVaultManager contract.
 
 ### Usage
 
@@ -189,11 +189,11 @@ The script provides output including:
 
 ## deposit.sh
 
-A bash script to deposit HYPE tokens into the GenesisVaultManager contract.
+A bash script to deposit HYPE tokens into the StakingVaultManager contract.
 
 ### Description
 
-This script calls the `deposit()` function on the GenesisVaultManager contract with a specified amount of HYPE tokens.
+This script calls the `deposit()` function on the StakingVaultManager contract with a specified amount of HYPE tokens.
 
 ### Prerequisites
 
@@ -201,7 +201,7 @@ This script calls the `deposit()` function on the GenesisVaultManager contract w
 
 ```bash
 ANON_WALLET_PRIVATE_KEY=0x... # Your wallet private key
-GENESIS_VAULT_MANAGER=0x...   # GenesisVaultManager contract address
+STAKING_VAULT_MANAGER=0x...   # StakingVaultManager contract address
 DEPOSIT_AMOUNT=1.0            # Amount to deposit in ether (e.g., 1.0 for 1 HYPE)
 ```
 
@@ -226,29 +226,29 @@ Run the script from the repository root:
 
 The script provides output including:
 
-- 📋 Genesis Vault Manager contract address
+- 📋 Staking Vault Manager contract address
 - 💰 Deposit amount in HYPE
 - ✅ Transaction confirmation
 
 ## transferToCoreAndDelegate.sh
 
-A bash script to transfer HYPE from GenesisVaultManager to HyperCore and delegate it to validators.
+A bash script to transfer HYPE from StakingVaultManager to HyperCore and delegate it to validators.
 
 ### Description
 
-This script calls the `transferToCoreAndDelegate(uint256)` function on the GenesisVaultManager contract to transfer a specific amount (in wei) from the vault's HyperEVM balance to HyperCore and delegate it to validators.
+This script calls the `transferToCoreAndDelegate(uint256)` function on the StakingVaultManager contract to transfer a specific amount (in wei) from the vault's HyperEVM balance to HyperCore and delegate it to validators.
 
 ### Prerequisites
 
 **Environment Variables**
 
 ```bash
-OWNER_PRIVATE_KEY=0x...     # Private key with operator permissions
-GENESIS_VAULT_MANAGER=0x... # GenesisVaultManager contract address
-WEI_AMOUNT=1000000000000000000  # Amount in wei (e.g., 1000000000000000000 = 1 HYPE)
+OWNER_PRIVATE_KEY=0x...          # Private key with operator permissions
+STAKING_VAULT_MANAGER=0x...      # StakingVaultManager contract address
+WEI_AMOUNT=1000000000000000000   # Amount in wei (e.g., 1000000000000000000 = 1 HYPE)
 ```
 
-**Operator Role**: Your wallet must have the OPERATOR role on the GenesisVaultManager contract.
+**Operator Role**: Your wallet must have the OPERATOR role on the StakingVaultManager contract.
 
 ### Usage
 

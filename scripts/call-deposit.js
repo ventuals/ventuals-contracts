@@ -2,7 +2,7 @@ require("dotenv").config();
 const { ethers } = require("ethers");
 
 // Contract configuration
-const CONTRACT_ADDRESS = process.env.GENESIS_VAULT_MANAGER;
+const CONTRACT_ADDRESS = process.env.STAKING_VAULT_MANAGER;
 const DEPOSIT_AMOUNT = ethers.parseEther("0.01"); // 0.01 HYPE
 const IS_TESTNET = process.env.IS_TESTNET !== "false"; // Default to true if not specified
 
@@ -21,7 +21,7 @@ async function main() {
   try {
     // Validate required environment variables
     if (!CONTRACT_ADDRESS) {
-      throw new Error("GENESIS_VAULT_MANAGER environment variable is required");
+      throw new Error("STAKING_VAULT_MANAGER environment variable is required");
     }
 
     // Set up provider based on network
@@ -38,7 +38,7 @@ async function main() {
     }
     const wallet = new ethers.Wallet(privateKey, provider);
 
-    // Connect to the GenesisVaultManager contract
+    // Connect to the StakingVaultManager contract
     const contract = new ethers.Contract(
       CONTRACT_ADDRESS,
       CONTRACT_ABI,
@@ -47,7 +47,7 @@ async function main() {
 
     console.log(`🌐 Network: ${IS_TESTNET ? "Testnet" : "Mainnet"}`);
     console.log(
-      `📋 Calling deposit() on GenesisVaultManager: ${CONTRACT_ADDRESS}`
+      `📋 Calling deposit() on StakingVaultManager: ${CONTRACT_ADDRESS}`
     );
     console.log(`👤 Using wallet: ${wallet.address}`);
     console.log(
@@ -86,7 +86,7 @@ async function main() {
     console.log(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
     console.log(`⛽ Gas used: ${receipt.gasUsed.toString()}`);
 
-    console.log("\n🎉 Successfully deposited HYPE to GenesisVaultManager!");
+    console.log("\n🎉 Successfully deposited HYPE to StakingVaultManager!");
     console.log(`Amount deposited: ${ethers.formatEther(DEPOSIT_AMOUNT)} HYPE`);
   } catch (error) {
     console.error("❌ Error calling deposit():", error.message);
