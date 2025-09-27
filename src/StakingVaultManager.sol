@@ -47,6 +47,21 @@ contract StakingVaultManager is Base {
     /// @param purpose The purpose of the withdrawal
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
+    struct Batch {
+        uint256 withdrawAmountProcessed;
+        uint256 processedAt;
+        uint256 snapshotExchangeRate;
+        uint256 slashedExchangeRate;
+        bool slashed;
+    }
+
+    struct Withdraw {
+        address account;
+        uint256 vhypeAmount;
+        uint256 batchIndex;
+        bool claimed;
+    }
+
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
 
@@ -63,6 +78,24 @@ contract StakingVaultManager is Base {
 
     /// @dev The minimum amount of HYPE that can be deposited (in 18 decimals)
     uint256 public minimumDepositAmount;
+
+    /// @dev Batches of withdraws
+    Batch[] batches;
+
+    /// @dev The current batch index
+    uint256 currentBatchIndex;
+
+    /// @dev The withdraw queue (append-only)
+    Withdraw[] withdrawQueue;
+
+    /// @dev The next withdraw index
+    uint256 nextWithdrawIndex;
+
+    /// @dev The total amount of withdrawn HYPE claimed (in 18 decimals)
+    uint256 totalWithdrawAmountClaimed;
+
+    /// @dev The total amount of HYPE processed. Gets adjusted if we retroactively apply a slash to a batch
+    uint256 totalWithdrawAmountProcessed;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -109,12 +142,84 @@ contract StakingVaultManager is Base {
         emit Deposit(msg.sender, amountToMint, amountToDeposit);
     }
 
+    /// @notice Queues a withdraw from the vault
+    /// @param vhypeAmount The amount of vHYPE to redeem (in 18 decimals)
+    /// @return The ID of the withdraw
+    function queueWithdraw(uint256 vhypeAmount) public whenNotPaused returns (uint256) {
+        require(vhypeAmount > 0, ZeroAmount());
+
+        vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
+
+        Withdraw memory withdraw = Withdraw({
+            account: msg.sender,
+            vhypeAmount: vhypeAmount,
+            batchIndex: type(uint256).max, // Not assigned to a batch yet
+            claimed: false
+        });
+        withdrawQueue.push(withdraw);
+
+        // ID of the withdraw is the index of the withdraw in the queue
+        return withdrawQueue.length - 1;
+    }
+
+    /// @notice Claims a withdraw
+    /// @param withdrawId The ID of the withdraw to claim
+    /// @param destination The address to send the HYPE to
+    function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
+        Withdraw memory withdraw = withdrawQueue[withdrawId];
+        require(msg.sender == withdraw.account, "Not authoritzed");
+        require(withdraw.vhypeAmount > 0, "Withdraw was cancelled");
+        require(withdraw.claimed == false, "Already claimed");
+
+        Batch memory batch = batches[withdraw.batchIndex];
+        require(block.timestamp > batch.processedAt + 7 days, "Cannot claim");
+
+        uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
+        uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
+
+        // Note: If the destination account doesn't exist on HyperCore, the spotSend will silently fail
+        // and the HYPE will not actually be sent.
+        L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(destination);
+        require(coreUserExists.exists, "Destination does not exist on HyperCore");
+
+        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
+        // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
+        L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
+        require(spotBalance.total >= hypeAmount, "Not enough HYPE");
+
+        stakingVault.spotSend(destination, HYPE_TOKEN_ID, hypeAmount.to8Decimals());
+
+        withdraw.claimed = true;
+    }
+
+    /// @notice Cancels a withdraw. A withdraw can only be cancelled if it has not been processed yet.
+    /// @param withdrawId The ID of the withdraw to cancel
+    function cancelWithdraw(uint256 withdrawId) public whenNotPaused {
+        Withdraw memory withdraw = withdrawQueue[withdrawId];
+        require(msg.sender == withdraw.account, "Not authoritzed");
+        require(withdrawId >= nextWithdrawIndex, "Withdraw was already processed");
+        require(withdraw.vhypeAmount > 0, "Withdraw was already cancelled");
+
+        vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
+
+        // Set to 0 to indicate that the withdraw was cancelled
+        withdraw.vhypeAmount = 0;
+    }
+
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
     /// @param hypeAmount The HYPE amount to convert (in 18 decimals)
     /// @return The vHYPE amount (in 18 decimals)
     /// forge-lint: disable-next-line(mixed-case-function)
     function HYPETovHYPE(uint256 hypeAmount) public view returns (uint256) {
-        uint256 _exchangeRate = exchangeRate();
+        return _HYPETovHYPE(hypeAmount, exchangeRate());
+    }
+
+    /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the provided exchange rate
+    /// @param hypeAmount The HYPE amount to convert (in 18 decimals)
+    /// @param _exchangeRate The exchange rate to use (in 18 decimals)
+    /// @return The vHYPE amount (in 18 decimals)
+    /// forge-lint: disable-next-line(mixed-case-function)
+    function _HYPETovHYPE(uint256 hypeAmount, uint256 _exchangeRate) internal pure returns (uint256) {
         if (_exchangeRate == 0) {
             return 0;
         }
@@ -126,7 +231,15 @@ contract StakingVaultManager is Base {
     /// @return The HYPE amount (in 18 decimals)
     /// forge-lint: disable-next-line(mixed-case-function, mixed-case-variable)
     function vHYPEtoHYPE(uint256 vHYPEAmount) public view returns (uint256) {
-        uint256 _exchangeRate = exchangeRate();
+        return _vHYPEtoHYPE(vHYPEAmount, exchangeRate());
+    }
+
+    /// @notice Calculates the HYPE amount for a given vHYPE amount, based on the provided exchange rate
+    /// @param vHYPEAmount The vHYPE amount to convert (in 18 decimals)
+    /// @param _exchangeRate The exchange rate to use (in 18 decimals)
+    /// @return The HYPE amount (in 18 decimals)
+    /// forge-lint: disable-next-line(mixed-case-function, mixed-case-variable)
+    function _vHYPEtoHYPE(uint256 vHYPEAmount, uint256 _exchangeRate) internal pure returns (uint256) {
         if (_exchangeRate == 0) {
             return 0;
         }
