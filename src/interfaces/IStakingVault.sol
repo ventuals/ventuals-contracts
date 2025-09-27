@@ -19,6 +19,12 @@ interface IStakingVault {
     /// @notice Thrown when a transfer to HyperCore cannot be made until the next block
     error CannotTransferToCoreUntilNextBlock();
 
+    /// @notice Cannot read delegations until the next block
+    error CannotReadDelegationUntilNextBlock();
+
+    /// @notice Thrown if the validator is locked until a timestamp in the future.
+    error StakeLockedUntilTimestamp(address validator, uint64 lockedUntilTimestamp);
+
     /// @notice Emitted when HYPE is deposited into the vault (HyperEVM -> HyperEVM)
     event Deposit(address indexed sender, uint256 amount);
 
