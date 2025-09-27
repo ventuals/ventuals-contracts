@@ -256,7 +256,8 @@ contract StakingVaultManager is Base {
                 break;
             }
 
-            // TODO: Burn the vHYPE
+            // Burn the escrowed vHYPE
+            vHYPE.burn(withdraw.vhypeAmount);
 
             batch.vhypeProcessed += withdraw.vhypeAmount;
             withdraw.batchIndex = currentBatchIndex;
