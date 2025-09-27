@@ -23,6 +23,24 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the deposit amount is below the minimum deposit amount.
     error BelowMinimumDepositAmount();
 
+    /// @notice Thrown if the caller is not authorized to perform the action.
+    error NotAuthorized();
+
+    /// @notice Thrown if the withdraw was cancelled.
+    error WithdrawCancelled();
+
+    /// @notice Thrown if the withdraw was already processed.
+    error WithdrawProcessed();
+
+    /// @notice Thrown if the withdraw was already claimed.
+    error WithdrawClaimed();
+
+    /// @notice Thrown if the withdraw is not claimable yet.
+    error WithdrawUnclaimable();
+
+    /// @notice Thrown if the account does not exist on HyperCore.
+    error CoreUserDoesNotExist(address account);
+
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
@@ -179,12 +197,12 @@ contract StakingVaultManager is Base {
     /// @param destination The address to send the HYPE to
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
         Withdraw memory withdraw = withdrawQueue[withdrawId];
-        require(msg.sender == withdraw.account, "Not authoritzed");
-        require(withdraw.vhypeAmount > 0, "Withdraw was cancelled");
-        require(withdraw.claimed == false, "Already claimed");
+        require(msg.sender == withdraw.account, NotAuthorized());
+        require(withdraw.vhypeAmount > 0, WithdrawCancelled());
+        require(withdraw.claimed == false, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
-        require(block.timestamp > batch.processedAt + 7 days, "Cannot claim");
+        require(block.timestamp > batch.processedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
 
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
@@ -192,12 +210,12 @@ contract StakingVaultManager is Base {
         // Note: If the destination account doesn't exist on HyperCore, the spotSend will silently fail
         // and the HYPE will not actually be sent.
         L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(destination);
-        require(coreUserExists.exists, "Destination does not exist on HyperCore");
+        require(coreUserExists.exists, CoreUserDoesNotExist(destination));
 
         // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
         // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
         L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
-        require(spotBalance.total >= hypeAmount, "Not enough HYPE");
+        require(spotBalance.total >= hypeAmount, InsufficientBalance());
 
         stakingVault.spotSend(destination, HYPE_TOKEN_ID, hypeAmount.to8Decimals());
 
@@ -208,9 +226,9 @@ contract StakingVaultManager is Base {
     /// @param withdrawId The ID of the withdraw to cancel
     function cancelWithdraw(uint256 withdrawId) public whenNotPaused {
         Withdraw memory withdraw = withdrawQueue[withdrawId];
-        require(msg.sender == withdraw.account, "Not authoritzed");
-        require(withdrawId >= nextWithdrawIndex, "Withdraw was already processed");
-        require(withdraw.vhypeAmount > 0, "Withdraw was already cancelled");
+        require(msg.sender == withdraw.account, NotAuthorized());
+        require(withdraw.vhypeAmount > 0, WithdrawCancelled());
+        require(withdrawId >= nextWithdrawIndex, WithdrawProcessed());
 
         vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
 
