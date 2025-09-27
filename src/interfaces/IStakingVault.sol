@@ -25,6 +25,12 @@ interface IStakingVault {
     /// @notice Thrown if the validator is locked until a timestamp in the future.
     error StakeLockedUntilTimestamp(address validator, uint64 lockedUntilTimestamp);
 
+    /// @notice Thrown if the from and to validators are the same.
+    error RedelegateToSameValidator();
+
+    /// @notice Thrown if the amount is 0.
+    error ZeroAmount();
+
     /// @notice Emitted when HYPE is deposited into the vault (HyperEVM -> HyperEVM)
     event Deposit(address indexed sender, uint256 amount);
 
@@ -49,6 +55,12 @@ interface IStakingVault {
     /// @param validator The validator address to undelegate from
     /// @param weiAmount The amount of wei to undelegate (8 decimals)
     function tokenUndelegate(address validator, uint64 weiAmount) external;
+
+    /// @dev Redelegate HYPE from a validator to another validator
+    /// @param fromValidator The validator address to undelegate from
+    /// @param toValidator The validator address to delegate to
+    /// @param weiAmount The amount of wei to delegate (8 decimals)
+    function tokenRedelegate(address fromValidator, address toValidator, uint64 weiAmount) external;
 
     /// @dev Transfer a token from Core spot. See https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/hypercore-less-than-greater-than-hyperevm-transfers for more info
     /// @param destination The destination address to send the token to

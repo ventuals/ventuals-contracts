@@ -48,7 +48,7 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function tokenDelegate(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
+    function tokenDelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
         CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
 
         // Update the last delegation change block number
@@ -56,7 +56,7 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function tokenUndelegate(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
+    function tokenUndelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
         // Check if we have enough HYPE to undelegate
         (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
         require(exists && delegation.amount >= weiAmount, InsufficientHYPEBalance());
@@ -72,6 +72,19 @@ contract StakingVault is IStakingVault, Base {
 
         // Update the last delegation change block number
         lastDelegationChangeBlockNumber[validator] = block.number;
+    }
+
+    /// @inheritdoc IStakingVault
+    function tokenRedelegate(address fromValidator, address toValidator, uint64 weiAmount)
+        external
+        onlyManager
+        whenNotPaused
+    {
+        require(fromValidator != toValidator, RedelegateToSameValidator());
+        require(weiAmount > 0, ZeroAmount());
+
+        tokenUndelegate(fromValidator, weiAmount); // Will revert if the stake is locked, or if the validator does not have enough HYPE to undelegate
+        tokenDelegate(toValidator, weiAmount);
     }
 
     /// @inheritdoc IStakingVault
