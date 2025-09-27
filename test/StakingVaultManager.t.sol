@@ -287,8 +287,12 @@ contract StakingVaultManagerTest is Test {
         // Queue the withdraw
         uint256 withdrawId = stakingVaultManager.queueWithdraw(vhypeAmount);
 
-        // Verify withdraw ID is correct (should be 0 for first withdraw)
         assertEq(withdrawId, 0);
+        assertEq(stakingVaultManager.getWithdrawQueueLength(), 1);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId).vhypeAmount, vhypeAmount);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId).claimed, false);
 
         // Verify vHYPE was transferred to the staking vault manager
         assertEq(vHYPE.balanceOf(user), 0);
@@ -347,6 +351,19 @@ contract StakingVaultManagerTest is Test {
         // Verify withdraw IDs are sequential
         assertEq(withdrawId1, 0);
         assertEq(withdrawId2, 1);
+
+        // Verify withdraw queue length
+        assertEq(stakingVaultManager.getWithdrawQueueLength(), 2);
+
+        // Verify withdraw queue contents
+        assertEq(stakingVaultManager.getWithdraw(withdrawId1).vhypeAmount, vhypeAmount1);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId1).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId1).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId1).claimed, false);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId2).vhypeAmount, vhypeAmount2);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId2).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId2).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawId2).claimed, false);
 
         // Verify all vHYPE was transferred to the staking vault manager
         assertEq(vHYPE.balanceOf(user), 0);
