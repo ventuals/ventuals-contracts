@@ -295,10 +295,14 @@ contract StakingVaultManager is Base {
         return Math.mulDiv(balance, 1e18, totalSupply);
     }
 
-    /// @notice Returns the total HYPE balance in the vault (in 18 decimals)
-    /// @dev Sum of staking account balance (on HyperCore), spot account balance (on HyperCore), contract balance (on HyperEVM)
+    /// @notice Returns the total HYPE balance that belongs to the vault (in 18 decimals)
     function totalBalance() public view returns (uint256) {
-        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance;
+        // The total amount of HYPE that is reserved to be returned to users for withdraws, but is still in
+        // under the StakingVault accounts because they have not finished processing or been claimed
+        uint256 outstandingWithdrawAmount = totalWithdrawAmountProcessed - totalWithdrawAmountClaimed;
+
+        return
+            stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance - outstandingWithdrawAmount;
     }
 
     /// @notice Total HYPE balance in the staking vault's staking account balance (in 18 decimals)
