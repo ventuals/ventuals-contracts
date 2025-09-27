@@ -41,6 +41,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the account does not exist on HyperCore.
     error CoreUserDoesNotExist(address account);
 
+    /// @notice Thrown if the batch is not ready to be processed.
+    error BatchNotReady(uint256 readyAt);
+
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
@@ -236,7 +239,16 @@ contract StakingVaultManager is Base {
         withdraw.vhypeAmount = 0;
     }
 
+    /// @notice Processes the current batch of withdraws
+    /// @dev It's safe for this function to be called by anyone, as it will only process the batch if it's ready to be processed
     function processCurrentBatch() public whenNotPaused {
+        // Check if it's been at least one day since the last batch was processed
+        uint256 previousBatchIndex = currentBatchIndex == 0 ? 0 : currentBatchIndex - 1;
+        require(
+            block.timestamp > batches[previousBatchIndex].processedAt + 1 days,
+            BatchNotReady(batches[previousBatchIndex].processedAt + 1 days)
+        );
+
         uint256 snapshotExchangeRate = exchangeRate();
         uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance;
 
