@@ -835,10 +835,6 @@ contract StakingVaultManagerTest is Test {
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
-        // Setup: Enable batch processing
-        vm.prank(owner);
-        stakingVaultManager.setBatchProcessingPaused(false);
-
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
 
@@ -970,10 +966,6 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Setup: Enable batch processing
-        vm.prank(owner);
-        stakingVaultManager.setBatchProcessingPaused(false);
 
         // Setup: Mock vault balance with deposits but no withdraws
         vm.deal(address(stakingVault), hypeDeposits);
