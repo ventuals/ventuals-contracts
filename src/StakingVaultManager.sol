@@ -237,6 +237,8 @@ contract StakingVaultManager is Base {
         L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
         require(spotBalance.total.to18Decimals() >= hypeAmount, InsufficientBalance());
 
+        // NOTE: We don't need to worry about transfer to Core timings here, because claimable HYPE is excluded
+        // from the total balance (via `totalHypeProcessed`)
         stakingVault.spotSend(destination, HYPE_TOKEN_ID, hypeAmount.to8Decimals());
 
         withdraw.claimed = true;
