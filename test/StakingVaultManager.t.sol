@@ -87,7 +87,7 @@ contract StakingVaultManagerTest is Test {
         _mockDelegatorSummary(0);
 
         // Mock the core user exists check to return true
-        _mockCoreUserExists(true);
+        _mockCoreUserExists(address(stakingVault), true);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1192,14 +1192,13 @@ contract StakingVaultManagerTest is Test {
     /*                    Helper Functions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @dev Helper function to mock the core user exists check
+    /// @dev Helper function to mock the core user exists check for a specific destination
+    /// @param destination The destination address to check
     /// @param exists Whether the core user should exist on HyperCore
-    function _mockCoreUserExists(bool exists) internal {
+    function _mockCoreUserExists(address destination, bool exists) internal {
         L1ReadLibrary.CoreUserExists memory mockCoreUserExists = L1ReadLibrary.CoreUserExists({exists: exists});
         bytes memory encodedCoreUserExists = abi.encode(mockCoreUserExists);
-        vm.mockCall(
-            L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedCoreUserExists
-        );
+        vm.mockCall(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(destination), encodedCoreUserExists);
     }
 
     /// @dev Helper function to mock balances for testing exchange rate calculations
