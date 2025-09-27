@@ -212,7 +212,7 @@ contract StakingVaultManager is Base {
         L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(destination);
         require(coreUserExists.exists, CoreUserDoesNotExist(destination));
 
-        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
+        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call willtrans
         // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
         L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
         require(spotBalance.total >= hypeAmount, InsufficientBalance());
@@ -267,10 +267,37 @@ contract StakingVaultManager is Base {
 
         batches.push(batch);
         currentBatchIndex++;
+
+        _finalizeBatch(batch);
     }
 
     function _finalizeBatch(Batch memory batch) internal {
-        // TODO
+        uint256 depositsInBatch = address(stakingVault).balance;
+        uint256 withdrawsInBatch = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
+
+        // Net out the deposits and withdraws in the batch
+        if (depositsInBatch == withdrawsInBatch) {
+            stakingVault.transferHypeToCore(depositsInBatch);
+        } else if (depositsInBatch > withdrawsInBatch) {
+            // All withdraws are covered by deposits
+
+            // Transfer the HYPE amount to HyperCore to cover the withdraws
+            stakingVault.transferHypeToCore(withdrawsInBatch);
+
+            // Transfer the excess deposits to HyperCore and delegate
+            uint256 amountToDeposit = depositsInBatch - withdrawsInBatch;
+            _transferToCoreAndDelegate(amountToDeposit);
+        } else if (depositsInBatch < withdrawsInBatch) {
+            // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
+
+            // Transfer all deposited HYPE to HyperCore spot account
+            stakingVault.transferHypeToCore(depositsInBatch);
+
+            // Withdraw the amount not covered by deposits from the staking vault
+            uint256 amountToWithdraw = withdrawsInBatch - depositsInBatch;
+            stakingVault.tokenDelegate(defaultValidator, amountToWithdraw.to8Decimals(), true /* isUndelegate */ );
+            stakingVault.stakingWithdraw(amountToWithdraw.to8Decimals());
+        }
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
