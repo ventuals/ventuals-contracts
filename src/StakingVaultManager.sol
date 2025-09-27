@@ -44,6 +44,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the batch is not ready to be processed.
     error BatchNotReady(uint256 readyAt);
 
+    /// @notice Thrown if the batch is invalid.
+    error InvalidBatch(uint256 batch);
+
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
@@ -445,6 +448,18 @@ contract StakingVaultManager is Base {
     /// @param _minimumDepositAmount The minimum deposit amount (in 18 decimals)
     function setMinimumDepositAmount(uint256 _minimumDepositAmount) public onlyOwner {
         minimumDepositAmount = _minimumDepositAmount;
+    }
+
+    /// @notice Applies a slash to a batch
+    /// @param batch The batch to apply the slash to
+    /// @param slashedExchangeRate The new exchange rate that should be applied to the batch (in 18 decimals)
+    function applySlash(uint256 batch, uint256 slashedExchangeRate) public onlyOwner {
+        require(batch < batches.length, InvalidBatch(batch));
+        Batch memory batch = batches[batch];
+        batch.slashedExchangeRate = slashedExchangeRate;
+
+        totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
+        totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, batch.slashedExchangeRate);
     }
 
     /// @notice Moves an HYPE stake from one validator to another
