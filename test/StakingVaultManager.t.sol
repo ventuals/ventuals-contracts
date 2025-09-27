@@ -395,6 +395,126 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Cancel Withdraw                  */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_CancelWithdraw_Success() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(owner, vhypeAmount);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Verify initial state
+        assertEq(vHYPE.balanceOf(user), 0);
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), vhypeAmount);
+
+        // User cancels the withdraw
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+
+        // Verify the withdraw was cancelled
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertEq(withdraw.vhypeAmount, 0, "Withdraw amount should be 0 after cancellation");
+
+        // Verify vHYPE was refunded
+        assertEq(vHYPE.balanceOf(user), vhypeAmount, "User should receive vHYPE refund");
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), 0, "Contract should have no vHYPE");
+    }
+
+    function test_CancelWithdraw_NotAuthorized() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        address otherUser = makeAddr("otherUser");
+
+        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(owner, vhypeAmount);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Another user tries to cancel the withdraw
+        vm.prank(otherUser);
+        vm.expectRevert(StakingVaultManager.NotAuthorized.selector);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+    }
+
+    function test_CancelWithdraw_AlreadyCancelled() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(owner, vhypeAmount);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // User cancels the withdraw
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+
+        // User tries to cancel again
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.WithdrawCancelled.selector);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+    }
+
+    function test_CancelWithdraw_AlreadyProcessed() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Mock batch processing calls
+        _mockBatchProcessingCalls();
+
+        // Process the batch
+        stakingVaultManager.processCurrentBatch();
+
+        // Verify the withdraw was processed
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 1, "Withdraw should be processed");
+
+        // User tries to cancel the processed withdraw
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.WithdrawProcessed.selector);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+    }
+
+    function test_CancelWithdraw_WhenContractPaused() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(owner, vhypeAmount);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVaultManager));
+
+        // User tries to cancel when contract is paused
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVaultManager)));
+        stakingVaultManager.cancelWithdraw(withdrawId);
+    }
+
+    function test_CancelWithdraw_InvalidWithdrawId() public {
+        // Try to cancel a withdraw that doesn't exist
+        vm.prank(user);
+        vm.expectRevert(); // Should revert with array out of bounds or similar
+        stakingVaultManager.cancelWithdraw(999);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Process Batch                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
