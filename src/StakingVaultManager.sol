@@ -90,6 +90,7 @@ contract StakingVaultManager is Base {
         /// @dev The account that requested the withdraw
         address account;
         /// @dev The amount of vHYPE to redeem (in 18 decimals)
+        /// @dev A 0 amount indicates that the withdraw was cancelled
         uint256 vhypeAmount;
         /// @dev The index of the batch this withdraw was assigned to
         /// @dev If the withdraw has not been assigned to a batch, this is set to type(uint256).max
@@ -184,6 +185,7 @@ contract StakingVaultManager is Base {
     function queueWithdraw(uint256 vhypeAmount) public whenNotPaused returns (uint256) {
         require(vhypeAmount > 0, ZeroAmount());
 
+        // This contract escrows the vHYPE until the withdraw is processed
         bool success = vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
         require(success, TransferFailed(msg.sender, vhypeAmount));
 
@@ -215,11 +217,12 @@ contract StakingVaultManager is Base {
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
 
         // Note: If the destination account doesn't exist on HyperCore, the spotSend will silently fail
-        // and the HYPE will not actually be sent.
+        // and the HYPE will not actually be sent. We check the account exists before making the call,
+        // so users don't lose their HYPE if their HyperCore account doesn't exist.
         L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(destination);
         require(coreUserExists.exists, CoreUserDoesNotExist(destination));
 
-        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call willtrans
+        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
         // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
         L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
         require(spotBalance.total >= hypeAmount, InsufficientBalance());
@@ -235,7 +238,7 @@ contract StakingVaultManager is Base {
         Withdraw memory withdraw = withdrawQueue[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(withdraw.vhypeAmount > 0, WithdrawCancelled());
-        require(withdrawId >= nextWithdrawIndex, WithdrawProcessed());
+        require(withdrawId > nextWithdrawIndex, WithdrawProcessed());
 
         // Refund vHYPE
         bool success = vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
