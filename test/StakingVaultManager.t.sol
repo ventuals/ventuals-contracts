@@ -117,7 +117,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     Tests: Deposit Function               */
+    /*                       Tests: Deposit                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_Deposit_EmptyVault() public {
@@ -267,6 +267,109 @@ contract StakingVaultManagerTest is Test {
 
         // Check that no vHYPE was minted
         assertEq(vHYPE.balanceOf(user), 0);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Queue Withdraw                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_QueueWithdraw_Success() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: User has vHYPE balance
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(user, vhypeAmount);
+
+        // User approves the staking vault manager to spend vHYPE
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+
+        // Queue the withdraw
+        uint256 withdrawId = stakingVaultManager.queueWithdraw(vhypeAmount);
+
+        // Verify withdraw ID is correct (should be 0 for first withdraw)
+        assertEq(withdrawId, 0);
+
+        // Verify vHYPE was transferred to the staking vault manager
+        assertEq(vHYPE.balanceOf(user), 0);
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), vhypeAmount);
+    }
+
+    function test_QueueWithdraw_ZeroAmount() public {
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
+        stakingVaultManager.queueWithdraw(0);
+    }
+
+    function test_QueueWithdraw_InsufficientBalance() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // User doesn't have any vHYPE balance
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+
+        vm.expectRevert();
+        stakingVaultManager.queueWithdraw(vhypeAmount);
+    }
+
+    function test_QueueWithdraw_InsufficientAllowance() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: User has vHYPE balance but no allowance
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(user, vhypeAmount);
+
+        // Queue the withdraw without approval
+        vm.startPrank(user);
+        vm.expectRevert();
+        stakingVaultManager.queueWithdraw(vhypeAmount);
+    }
+
+    function test_QueueWithdraw_MultipleWithdraws() public {
+        uint256 vhypeAmount1 = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount2 = 25_000 * 1e18; // 25k vHYPE
+        uint256 totalVhype = vhypeAmount1 + vhypeAmount2;
+
+        // Setup: User has vHYPE balance
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(user, totalVhype);
+
+        // User approves the staking vault manager to spend vHYPE
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), totalVhype);
+
+        // Queue first withdraw
+        uint256 withdrawId1 = stakingVaultManager.queueWithdraw(vhypeAmount1);
+
+        // Queue second withdraw
+        uint256 withdrawId2 = stakingVaultManager.queueWithdraw(vhypeAmount2);
+
+        // Verify withdraw IDs are sequential
+        assertEq(withdrawId1, 0);
+        assertEq(withdrawId2, 1);
+
+        // Verify all vHYPE was transferred to the staking vault manager
+        assertEq(vHYPE.balanceOf(user), 0);
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), totalVhype);
+    }
+
+    function test_QueueWithdraw_WhenContractPaused() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: User has vHYPE balance and approval
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(user, vhypeAmount);
+        vm.prank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVaultManager));
+
+        // Try to queue withdraw when paused
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVaultManager)));
+        stakingVaultManager.queueWithdraw(vhypeAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
