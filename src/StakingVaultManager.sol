@@ -463,6 +463,7 @@ contract StakingVaultManager is Base {
         require(batchIndex < batches.length, InvalidBatch(batchIndex));
         Batch storage batch = batches[batchIndex];
         batch.slashedExchangeRate = slashedExchangeRate;
+        batch.slashed = true;
 
         totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
         totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, batch.slashedExchangeRate);
