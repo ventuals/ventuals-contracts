@@ -440,35 +440,6 @@ contract StakingVaultManager is Base {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     Operator Actions                       */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @notice Transfers all HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @dev This function can only be called by the operator
-    function transferToCoreAndDelegate() public onlyOperator {
-        uint256 amount = address(stakingVault).balance;
-        _transferToCoreAndDelegate(amount);
-    }
-
-    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @dev This function can only be called by the operator
-    /// @param amount The amount of HYPE to transfer (in 18 decimals)
-    function transferToCoreAndDelegate(uint256 amount) public onlyOperator {
-        _transferToCoreAndDelegate(amount);
-    }
-
-    /// @notice Transfers HYPE from the vault's HyperEVM balance to HyperCore and delegates it
-    /// @param amount The amount of HYPE to transfer (in 18 decimals)
-    function _transferToCoreAndDelegate(uint256 amount) internal {
-        require(amount > 0, ZeroAmount());
-        require(amount <= address(stakingVault).balance, InsufficientBalance());
-
-        stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
-        stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
-        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals()); // Delegate HYPE to validator (from HyperCore staking)
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       Owner Actions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
