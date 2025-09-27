@@ -46,6 +46,7 @@ contract StakingVaultTest is Test {
     /*                  Tests: Staking Deposit                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_StakingDeposit(uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
         vm.assume(weiAmount < type(uint64).max);
 
         // Mock the CoreWriter call
@@ -83,10 +84,18 @@ contract StakingVaultTest is Test {
         stakingVault.stakingDeposit(1e10);
     }
 
+    function test_StakingDeposit_ZeroAmount() public {
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.stakingDeposit(0);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Staking Withdraw                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_StakingWithdraw(uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -121,10 +130,18 @@ contract StakingVaultTest is Test {
         stakingVault.stakingWithdraw(1e8);
     }
 
+    function test_StakingWithdraw_ZeroAmount() public {
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.stakingWithdraw(0);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Token Delegate                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TokenDelegate(address validator, uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(validator, weiAmount, false);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -192,11 +209,21 @@ contract StakingVaultTest is Test {
         stakingVault.tokenDelegate(validator, weiAmount);
     }
 
+    function test_TokenDelegate_ZeroAmount() public {
+        address validator = makeAddr("validator");
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.tokenDelegate(validator, 0);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Token Undelegate                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_TokenUndelegate(address validator, uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(validator, weiAmount, true);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -307,6 +334,14 @@ contract StakingVaultTest is Test {
             )
         );
         stakingVault.tokenUndelegate(validator, weiAmount);
+    }
+
+    function test_TokenUndelegate_ZeroAmount() public {
+        address validator = makeAddr("validator");
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.tokenUndelegate(validator, 0);
     }
 
     function test_TokenUndelegate_CannotCallTwiceInSameBlock() public {
@@ -686,6 +721,8 @@ contract StakingVaultTest is Test {
     /*                  Tests: Spot Send                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_SpotSend(address destination, uint64 token, uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(destination, token, weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -722,6 +759,15 @@ contract StakingVaultTest is Test {
             )
         );
         stakingVault.spotSend(destination, token, weiAmount);
+    }
+
+    function test_SpotSend_ZeroAmount() public {
+        address destination = address(0x456);
+        uint64 token = 0;
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.spotSend(destination, token, 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -823,10 +869,17 @@ contract StakingVaultTest is Test {
         vm.stopPrank();
     }
 
+    function test_Deposit_ZeroAmount() public {
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.deposit{value: 0}();
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                Tests: Transfer Hype To Core                */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TransferHypeToCore(uint256 amount) public {
+        vm.assume(amount > 0);
         vm.deal(address(stakingVault), amount);
         uint256 vaultBalanceBefore = address(stakingVault).balance;
         uint256 systemAddressBalanceBefore = stakingVault.HYPE_SYSTEM_ADDRESS().balance;
@@ -897,7 +950,8 @@ contract StakingVaultTest is Test {
         vm.deal(address(stakingVault), vaultBalance);
         uint256 systemAddressBalanceBefore = stakingVault.HYPE_SYSTEM_ADDRESS().balance;
 
-        vm.prank(manager);
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
         stakingVault.transferHypeToCore(0);
 
         assertEq(address(stakingVault).balance, vaultBalance);

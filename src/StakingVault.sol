@@ -34,29 +34,33 @@ contract StakingVault is IStakingVault, Base {
         // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
         // would be made against an incorrect balance (and thus an incorrect exchange rate).
         require(block.number > lastEvmToCoreTransferBlockNumber, CannotDepositUntilNextBlock());
+        require(msg.value > 0, ZeroAmount());
         emit Deposit(msg.sender, msg.value);
     }
 
     /// @inheritdoc IStakingVault
     function stakingDeposit(uint64 weiAmount) external onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.stakingDeposit(weiAmount);
     }
 
     /// @inheritdoc IStakingVault
     function stakingWithdraw(uint64 weiAmount) external onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.stakingWithdraw(weiAmount);
     }
 
     /// @inheritdoc IStakingVault
     function tokenDelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
-
-        // Update the last delegation change block number
         lastDelegationChangeBlockNumber[validator] = block.number;
     }
 
     /// @inheritdoc IStakingVault
     function tokenUndelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
+
         // Check if we have enough HYPE to undelegate
         (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
         require(exists && delegation.amount >= weiAmount, InsufficientHYPEBalance());
@@ -80,8 +84,8 @@ contract StakingVault is IStakingVault, Base {
         onlyManager
         whenNotPaused
     {
-        require(fromValidator != toValidator, RedelegateToSameValidator());
         require(weiAmount > 0, ZeroAmount());
+        require(fromValidator != toValidator, RedelegateToSameValidator());
 
         tokenUndelegate(fromValidator, weiAmount); // Will revert if the stake is locked, or if the validator does not have enough HYPE to undelegate
         tokenDelegate(toValidator, weiAmount);
@@ -89,11 +93,13 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function spotSend(address destination, uint64 token, uint64 weiAmount) external onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.spotSend(destination, token, weiAmount);
     }
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
+        require(amount > 0, ZeroAmount());
         require(block.number > lastEvmToCoreTransferBlockNumber, CannotTransferToCoreUntilNextBlock());
 
         // This is an important safety check - ensures that the StakingVault account is activated on HyperCore.
