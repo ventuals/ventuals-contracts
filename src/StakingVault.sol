@@ -137,7 +137,7 @@ contract StakingVault is IStakingVault, Base {
             CannotReadDelegationUntilNextBlock()
         );
 
-        L1ReadLibrary.Delegation[] memory delegations = delegations();
+        L1ReadLibrary.Delegation[] memory delegations = L1ReadLibrary.delegations(address(this));
         for (uint256 i = 0; i < delegations.length; i++) {
             if (delegations[i].validator == _validator) {
                 return (true, delegations[i]);
