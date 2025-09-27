@@ -248,7 +248,7 @@ contract StakingVaultManager is Base {
         Withdraw storage withdraw = withdrawQueue[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(withdraw.vhypeAmount > 0, WithdrawCancelled());
-        require(withdrawId > nextWithdrawIndex, WithdrawProcessed());
+        require(withdrawId >= nextWithdrawIndex, WithdrawProcessed());
 
         // Refund vHYPE
         bool success = vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
@@ -283,7 +283,7 @@ contract StakingVaultManager is Base {
 
         // Process withdraws from the queue until we run out of capacity, or until we run out of withdraws
         if (withdrawQueue.length > 0) {
-            while (withdrawCapacityAvailable > 0 || nextWithdrawIndex < withdrawQueue.length) {
+            while (withdrawCapacityAvailable > 0 && nextWithdrawIndex < withdrawQueue.length) {
                 Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
                 uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, snapshotExchangeRate);
                 if (expectedHypeAmount > withdrawCapacityAvailable) {
