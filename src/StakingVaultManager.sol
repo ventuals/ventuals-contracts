@@ -311,27 +311,25 @@ contract StakingVaultManager is Base {
         uint256 depositsInBatch = address(stakingVault).balance;
         uint256 withdrawsInBatch = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
-        // Net out the deposits and withdraws in the batch
-        if (depositsInBatch == withdrawsInBatch) {
+        if (depositsInBatch > 0) {
+            // Transfer all deposited HYPE to HyperCore spot account
             stakingVault.transferHypeToCore(depositsInBatch);
-        } else if (depositsInBatch > withdrawsInBatch) {
+        }
+
+        // Net out the deposits and withdraws in the batch
+        if (depositsInBatch > withdrawsInBatch) {
             // All withdraws are covered by deposits
 
-            // Transfer the HYPE amount to HyperCore to cover the withdraws
-            stakingVault.transferHypeToCore(withdrawsInBatch);
-
-            // Transfer the excess deposits to HyperCore and delegate
-            uint256 amountToDeposit = depositsInBatch - withdrawsInBatch;
-            _transferToCoreAndDelegate(amountToDeposit);
+            // Stake the excess HYPE
+            uint256 amountToStake = depositsInBatch - withdrawsInBatch;
+            stakingVault.stakingDeposit(amountToStake.to8Decimals());
+            stakingVault.tokenDelegate(defaultValidator, amountToStake.to8Decimals());
         } else if (depositsInBatch < withdrawsInBatch) {
             // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
 
-            // Transfer all deposited HYPE to HyperCore spot account
-            stakingVault.transferHypeToCore(depositsInBatch);
-
             // Withdraw the amount not covered by deposits from the staking vault
             uint256 amountToWithdraw = withdrawsInBatch - depositsInBatch;
-            stakingVault.tokenDelegate(defaultValidator, amountToWithdraw.to8Decimals(), true /* isUndelegate */ );
+            stakingVault.tokenUndelegate(defaultValidator, amountToWithdraw.to8Decimals());
             stakingVault.stakingWithdraw(amountToWithdraw.to8Decimals());
         }
     }
