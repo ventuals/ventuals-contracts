@@ -205,7 +205,7 @@ contract StakingVaultManager is Base {
     /// @param withdrawId The ID of the withdraw to claim
     /// @param destination The address to send the HYPE to
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
-        Withdraw memory withdraw = withdrawQueue[withdrawId];
+        Withdraw storage withdraw = withdrawQueue[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(withdraw.vhypeAmount > 0, WithdrawCancelled());
         require(withdraw.claimed == false, WithdrawClaimed());
@@ -235,7 +235,7 @@ contract StakingVaultManager is Base {
     /// @notice Cancels a withdraw. A withdraw can only be cancelled if it has not been processed yet.
     /// @param withdrawId The ID of the withdraw to cancel
     function cancelWithdraw(uint256 withdrawId) public whenNotPaused {
-        Withdraw memory withdraw = withdrawQueue[withdrawId];
+        Withdraw storage withdraw = withdrawQueue[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(withdraw.vhypeAmount > 0, WithdrawCancelled());
         require(withdrawId > nextWithdrawIndex, WithdrawProcessed());
@@ -271,7 +271,7 @@ contract StakingVaultManager is Base {
 
         // Process withdraws from the queue until we run out of capacity, or until we run out of withdraws
         while (withdrawCapacityAvailable > 0 || nextWithdrawIndex < withdrawQueue.length) {
-            Withdraw memory withdraw = withdrawQueue[nextWithdrawIndex];
+            Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
             uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, snapshotExchangeRate);
             if (expectedHypeAmount > withdrawCapacityAvailable) {
                 break;
@@ -461,7 +461,7 @@ contract StakingVaultManager is Base {
     /// @param slashedExchangeRate The new exchange rate that should be applied to the batch (in 18 decimals)
     function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) public onlyOwner {
         require(batchIndex < batches.length, InvalidBatch(batchIndex));
-        Batch memory batch = batches[batchIndex];
+        Batch storage batch = batches[batchIndex];
         batch.slashedExchangeRate = slashedExchangeRate;
 
         totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
