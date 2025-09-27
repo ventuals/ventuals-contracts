@@ -47,6 +47,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the batch is invalid.
     error InvalidBatch(uint256 batch);
 
+    /// @notice Thrown if batch processing is paused.
+    error BatchProcessingPaused();
+
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
@@ -116,6 +119,9 @@ contract StakingVaultManager is Base {
     /// @dev The minimum amount of HYPE that can be deposited (in 18 decimals)
     uint256 public minimumDepositAmount;
 
+    /// @dev Whether batch processing is paused
+    bool public isBatchProcessingPaused;
+
     /// @dev Batches of deposits and withdraws
     Batch[] batches;
 
@@ -158,6 +164,10 @@ contract StakingVaultManager is Base {
         defaultValidator = _defaultValidator;
         minimumStakeBalance = _minimumStakeBalance;
         minimumDepositAmount = _minimumDepositAmount;
+
+        // Set batch processing to paused by default. OWNER will enable
+        // it when batches are ready to be processed
+        isBatchProcessingPaused = true;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -249,14 +259,16 @@ contract StakingVaultManager is Base {
     }
 
     /// @notice Processes the current batch of withdraws
-    /// @dev It's safe for this function to be called by anyone, as it will only process the batch if it's ready to be processed
-    function processCurrentBatch() public whenNotPaused {
+    /// @dev Safe to be called by anyone, as it will only process the batch if it's ready to be processed
+    function processCurrentBatch() public whenNotPaused whenBatchProcessingNotPaused {
         // Check if it's been at least one day since the last batch was processed
-        uint256 previousBatchIndex = currentBatchIndex == 0 ? 0 : currentBatchIndex - 1;
-        require(
-            block.timestamp > batches[previousBatchIndex].processedAt + 1 days,
-            BatchNotReady(batches[previousBatchIndex].processedAt + 1 days)
-        );
+        if (currentBatchIndex > 0) {
+            uint256 previousBatchIndex = currentBatchIndex - 1;
+            require(
+                block.timestamp > batches[previousBatchIndex].processedAt + 1 days, // TODO: Should we add a buffer?
+                BatchNotReady(batches[previousBatchIndex].processedAt + 1 days)
+            );
+        }
 
         uint256 snapshotExchangeRate = exchangeRate();
         uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance;
@@ -456,6 +468,12 @@ contract StakingVaultManager is Base {
         minimumDepositAmount = _minimumDepositAmount;
     }
 
+    /// @notice Sets whether batch processing is paused
+    /// @param _isBatchProcessingPaused Whether batch processing is paused
+    function setBatchProcessingPaused(bool _isBatchProcessingPaused) public onlyOwner {
+        isBatchProcessingPaused = _isBatchProcessingPaused;
+    }
+
     /// @notice Applies a slash to a batch
     /// @param batchIndex The index of the batch to apply the slash to
     /// @param slashedExchangeRate The new exchange rate that should be applied to the batch (in 18 decimals)
@@ -515,6 +533,15 @@ contract StakingVaultManager is Base {
 
     function _canDeposit() internal view {
         require(msg.value >= minimumDepositAmount, BelowMinimumDepositAmount());
+    }
+
+    modifier whenBatchProcessingNotPaused() {
+        _whenBatchProcessingNotPaused();
+        _;
+    }
+
+    function _whenBatchProcessingNotPaused() internal view {
+        require(!isBatchProcessingPaused, BatchProcessingPaused());
     }
 
     modifier canUndelegateStake(address validator, uint256 amount) {
