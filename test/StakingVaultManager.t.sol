@@ -1744,7 +1744,13 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*          Tests: Redelegate Stake (Only Owner)              */
+    /*              Tests: Apply Slash (Only Owner)               */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    // TODO
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*          Tests: Redelegate Stake (Only Owner)             */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
@@ -2033,6 +2039,153 @@ contract StakingVaultManagerTest is Test {
         vm.prank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         stakingVaultManager.upgradeToAndCall(address(anotherImplementation), "");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Apply Slash Tests                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_ApplySlash_ValidBatch() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Check initial state
+        StakingVaultManager.Batch memory batchBefore = stakingVaultManager.getBatch(0);
+        assertEq(stakingVaultManager.totalHypeProcessed(), vhypeAmount);
+
+        // Apply slash - 50% slash (0.5 exchange rate)
+        uint256 slashedExchangeRate = 5e17; // 0.5
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, slashedExchangeRate);
+
+        // Verify batch was slashed
+        StakingVaultManager.Batch memory batchAfter = stakingVaultManager.getBatch(0);
+        assertTrue(batchAfter.slashed);
+        assertEq(batchAfter.slashedExchangeRate, slashedExchangeRate);
+        assertEq(batchAfter.snapshotExchangeRate, batchBefore.snapshotExchangeRate); // Original rate unchanged
+
+        // Verify totalHypeProcessed was updated correctly
+        assertEq(stakingVaultManager.totalHypeProcessed(), 50_000 * 1e18);
+    }
+
+    function test_ApplySlash_InvalidBatch() public {
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.InvalidBatch.selector, 999));
+        stakingVaultManager.applySlash(999, 5e17);
+    }
+
+    function test_ApplySlash_NotOwner() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Try to apply slash as non-owner
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.applySlash(0, 5e17);
+    }
+
+    function test_ApplySlash_ZeroSlashedExchangeRate() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Apply slash with zero exchange rate (100% slash)
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 0);
+
+        // Verify batch was slashed to zero
+        StakingVaultManager.Batch memory batch = stakingVaultManager.getBatch(0);
+        assertTrue(batch.slashed);
+        assertEq(batch.slashedExchangeRate, 0);
+
+        // Verify totalHypeProcessed was updated correctly
+        assertEq(stakingVaultManager.totalHypeProcessed(), 0);
+    }
+
+    function test_ApplySlash_MultipleBatches() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + (vhypeAmount * 2);
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Create first batch
+        _mockBatchProcessingCalls();
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast forward by 1 day
+        vm.warp(block.timestamp + 1 days + 1);
+
+        // Setup: Create second batch
+        _mockBatchProcessingCalls();
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processCurrentBatch();
+
+        // Apply different slashes to different batches
+        vm.startPrank(owner);
+        stakingVaultManager.applySlash(0, 5e17); // 50% slash on batch 0
+        stakingVaultManager.applySlash(1, 2e17); // 80% slash on batch 1
+
+        // Verify both batches were slashed correctly
+        StakingVaultManager.Batch memory batch0 = stakingVaultManager.getBatch(0);
+        StakingVaultManager.Batch memory batch1 = stakingVaultManager.getBatch(1);
+
+        assertTrue(batch0.slashed);
+        assertEq(batch0.slashedExchangeRate, 5e17);
+
+        assertTrue(batch1.slashed);
+        assertEq(batch1.slashedExchangeRate, 2e17);
+
+        // Verify totalHypeProcessed was updated correctly
+        assertEq(stakingVaultManager.totalHypeProcessed(), 25_000 * 1e18 + 10_000 * 1e18);
+    }
+
+    function test_ApplySlash_ReapplySlash() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Apply first slash
+        vm.startPrank(owner);
+        stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
+        stakingVaultManager.applySlash(0, 3e17); // 0.3 exchange rate
+
+        // Verify the second slash overwrote the first
+        StakingVaultManager.Batch memory batch = stakingVaultManager.getBatch(0);
+        assertTrue(batch.slashed);
+        assertEq(batch.slashedExchangeRate, 3e17);
+
+        // Verify totalHypeProcessed was updated correctly
+        assertEq(stakingVaultManager.totalHypeProcessed(), 30_000 * 1e18);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
