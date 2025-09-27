@@ -850,6 +850,12 @@ contract StakingVaultManagerTest is Test {
 
         // Verify vHYPE state
         assertEq(vHYPE.balanceOf(address(stakingVaultManager)), 0, "All escrowed vHYPE should be burned");
+
+        // Verify process state
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), vhypeAmount, "Total HYPE processed should match vHYPE amount"
+        );
+        assertEq(stakingVaultManager.totalHypeClaimed(), 0, "Total HYPE claimed should be 0");
     }
 
     function test_ProcessCurrentBatch_WithTimingRestriction() public {
@@ -902,6 +908,11 @@ contract StakingVaultManagerTest is Test {
 
         // Verify vHYPE escrow balance
         assertEq(vHYPE.balanceOf(address(stakingVaultManager)), 0, "All escrowed vHYPE should be burned");
+
+        // Verify process state
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), vhypeAmount, "Total HYPE processed should match vHYPE amount"
+        );
     }
 
     function test_ProcessCurrentBatch_WhenBatchProcessingPaused() public {
@@ -968,6 +979,9 @@ contract StakingVaultManagerTest is Test {
 
         // Verify vHYPE escrow balance
         assertEq(vHYPE.balanceOf(address(stakingVaultManager)), vhypeAmount, "vHYPE should still be in contract");
+
+        // Verify process state
+        assertEq(stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0");
     }
 
     function test_ProcessCurrentBatch_PartialProcessing() public {
@@ -1012,6 +1026,11 @@ contract StakingVaultManagerTest is Test {
             vhypeAmount2,
             "The second withdraw vHYPE should still be escrowed"
         );
+
+        // Verify process state
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), vhypeAmount1, "Total HYPE processed should match vHYPE amount"
+        );
     }
 
     function test_ProcessCurrentBatch_EmptyQueue() public {
@@ -1036,6 +1055,9 @@ contract StakingVaultManagerTest is Test {
 
         // Verify vHYPE state
         assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not have changed");
+
+        // Verify process state
+        assertEq(stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0");
     }
 
     function test_ProcessCurrentBatch_CancelledWithdrawsSkipped() public {
@@ -1072,6 +1094,11 @@ contract StakingVaultManagerTest is Test {
             vHYPE.totalSupply(),
             totalBalance - vhypeAmount2,
             "vHYPE supply should be reduced by the second withdraw amount"
+        );
+
+        // Verify process state
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), vhypeAmount2, "Total HYPE processed should match vHYPE amount"
         );
     }
 
@@ -1114,6 +1141,13 @@ contract StakingVaultManagerTest is Test {
             "vHYPE supply should be reduced by the total withdraw amount"
         );
         assertEq(vHYPE.balanceOf(address(stakingVaultManager)), 0, "All escrowed vHYPE should be burned");
+
+        // Verify process state
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(),
+            vhypeAmount1 + vhypeAmount2 + vhypeAmount3,
+            "Total HYPE processed should match vHYPE amount"
+        );
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
