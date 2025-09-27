@@ -89,6 +89,7 @@ contract StakingVaultManagerTest is Test {
 
         // Mock the core user exists check to return true
         _mockCoreUserExists(address(stakingVault), true);
+        _mockCoreUserExists(user, true);
 
         // Set batch processing to enabled
         vm.prank(owner);
@@ -392,6 +393,285 @@ contract StakingVaultManagerTest is Test {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVaultManager)));
         stakingVaultManager.queueWithdraw(vhypeAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Claim Withdraw                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_ClaimWithdraw_Success() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time to make withdraw claimable (7 days + 1 second)
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Mock spot balance check (vault has enough HYPE)
+        _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
+
+        // Mock spotSend call
+        _mockAndExpectSpotSendCall(user, HYPE_TOKEN_ID, vhypeAmount.to8Decimals());
+
+        // User claims the withdraw
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // Verify the withdraw was claimed
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertTrue(withdraw.claimed, "Withdraw should be marked as claimed");
+    }
+
+    function test_ClaimWithdraw_NotAuthorized() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        address otherUser = makeAddr("otherUser");
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Another user tries to claim the withdraw
+        vm.prank(otherUser);
+        vm.expectRevert(StakingVaultManager.NotAuthorized.selector);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_WithdrawCancelled() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mint vHYPE to owner and setup withdraw
+        vm.prank(address(stakingVaultManager));
+        vHYPE.mint(owner, vhypeAmount);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Setup: User cancels the withdraw
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+
+        // User tries to claim the cancelled withdraw
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.WithdrawCancelled.selector);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_AlreadyClaimed() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time to make withdraw claimable (7 days + 1 second)
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Mock spot balance check (vault has enough HYPE)
+        _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
+
+        // Mock spotSend call
+        _mockAndExpectSpotSendCall(user, HYPE_TOKEN_ID, vhypeAmount.to8Decimals());
+
+        // User claims the withdraw
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // User tries to claim again
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.WithdrawClaimed.selector);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_TooEarly() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 6 days);
+
+        // User tries to claim too early
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.WithdrawUnclaimable.selector);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_ExactlySevenDays() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 7 days);
+
+        // User tries to claim too early
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.WithdrawUnclaimable.selector);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_CoreUserDoesNotExist() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Mock spot balance check (vault has enough HYPE)
+        _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
+
+        // Core user does not exist
+        address destination = makeAddr("destination");
+        _mockCoreUserExists(destination, false);
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.CoreUserDoesNotExist.selector, destination));
+        stakingVaultManager.claimWithdraw(withdrawId, destination);
+    }
+
+    function test_ClaimWithdraw_InsufficientBalance() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Mock insufficient spot balance (only half of what's needed)
+        _mockSpotBalance((vhypeAmount / 2).to8Decimals());
+
+        // User tries to claim but vault has insufficient balance
+        vm.prank(user);
+        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_WhenContractPaused() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Mock spot balance check (vault has enough HYPE)
+        _mockSpotBalance(vhypeAmount.to8Decimals());
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVaultManager));
+
+        // User tries to claim when contract is paused
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVaultManager)));
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+    }
+
+    function test_ClaimWithdraw_WithSlashedBatch() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing (1:1 exchange rate)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Slash the batch
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
+
+        // Fast-forward time
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // Mock spot balance check (vault has enough HYPE)
+        _mockSpotBalance(vhypeAmount.to8Decimals());
+
+        // Mock spotSend call (should send half of the amount)
+        _mockAndExpectSpotSendCall(user, HYPE_TOKEN_ID, vhypeAmount.to8Decimals() / 2);
+
+        // User claims the slashed withdraw
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // Verify the withdraw was claimed
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertTrue(withdraw.claimed, "Withdraw should be marked as claimed");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1882,6 +2162,24 @@ contract StakingVaultManagerTest is Test {
 
     function _expectNoTokenUndelegateCall() internal {
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.tokenUndelegate.selector), 0);
+    }
+
+    function _mockAndExpectSpotSendCall(address destination, uint64 tokenId, uint64 weiAmount) internal {
+        bytes memory encodedAction = abi.encode(destination, tokenId, weiAmount);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x06; // Spot send action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 }
 
