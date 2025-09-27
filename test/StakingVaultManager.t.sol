@@ -1233,7 +1233,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*       Tests: Set Minimum Deposit Amount (Only Owner)      */
+    /*       Tests: Set Minimum Deposit Amount (Only Owner)       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_SetMinimumDepositAmount_OnlyOwner() public {
@@ -1279,6 +1279,28 @@ contract StakingVaultManagerTest is Test {
         // Verify deposit succeeded
         assertEq(vHYPE.balanceOf(user), newMinimumAmount);
         assertEq(address(stakingVault).balance, newMinimumAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*         Tests: Set Batch Processing Paused (Only Owner)    */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetBatchProcessingPaused_OnlyOwner() public {
+        // Owner can unpause processing
+        vm.prank(owner);
+        stakingVaultManager.setBatchProcessingPaused(false);
+        assertFalse(stakingVaultManager.isBatchProcessingPaused(), "Batch processing should be unpaused");
+
+        // Owner can pause processing
+        vm.prank(owner);
+        stakingVaultManager.setBatchProcessingPaused(true);
+        assertTrue(stakingVaultManager.isBatchProcessingPaused(), "Batch processing should be paused");
+    }
+
+    function test_SetBatchProcessingPaused_NotOwner() public {
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.setBatchProcessingPaused(false);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
