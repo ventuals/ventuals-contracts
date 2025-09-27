@@ -282,21 +282,23 @@ contract StakingVaultManager is Base {
         });
 
         // Process withdraws from the queue until we run out of capacity, or until we run out of withdraws
-        while (withdrawCapacityAvailable > 0 || nextWithdrawIndex < withdrawQueue.length) {
-            Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
-            uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, snapshotExchangeRate);
-            if (expectedHypeAmount > withdrawCapacityAvailable) {
-                break;
+        if (withdrawQueue.length > 0) {
+            while (withdrawCapacityAvailable > 0 || nextWithdrawIndex < withdrawQueue.length) {
+                Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
+                uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, snapshotExchangeRate);
+                if (expectedHypeAmount > withdrawCapacityAvailable) {
+                    break;
+                }
+
+                // Burn the escrowed vHYPE
+                vHYPE.burn(withdraw.vhypeAmount);
+
+                batch.vhypeProcessed += withdraw.vhypeAmount;
+                withdraw.batchIndex = currentBatchIndex;
+                totalHypeProcessed += expectedHypeAmount;
+                withdrawCapacityAvailable -= expectedHypeAmount;
+                nextWithdrawIndex++;
             }
-
-            // Burn the escrowed vHYPE
-            vHYPE.burn(withdraw.vhypeAmount);
-
-            batch.vhypeProcessed += withdraw.vhypeAmount;
-            withdraw.batchIndex = currentBatchIndex;
-            totalHypeProcessed += expectedHypeAmount;
-            withdrawCapacityAvailable -= expectedHypeAmount;
-            nextWithdrawIndex++;
         }
 
         batches.push(batch);
