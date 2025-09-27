@@ -65,10 +65,10 @@ contract StakingVaultManager is Base {
     /// @param purpose The purpose of the withdrawal
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
-    /// @dev A batch of deposits and withdraws that are processed together
+    /// @dev A batch of withdraws that are processed together
     struct Batch {
         /// @dev The total amount of withdraws processed in this batch (vHYPE; in 18 decimals)
-        uint256 withdrawAmountProcessed;
+        uint256 vhypeProcessed;
         /// @dev The timestamp when the batch was processed
         uint256 processedAt;
         /// @dev The exchange rate at the time the batch was processed (in 18 decimals)
@@ -122,10 +122,10 @@ contract StakingVaultManager is Base {
     uint256 nextWithdrawIndex;
 
     /// @dev The total amount of withdrawn HYPE claimed (in 18 decimals)
-    uint256 totalWithdrawAmountClaimed;
+    uint256 totalHypeClaimed;
 
     /// @dev The total amount of HYPE processed. Gets adjusted if we retroactively apply a slash to a batch
-    uint256 totalWithdrawAmountProcessed;
+    uint256 totalHypeProcessed;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -236,6 +236,43 @@ contract StakingVaultManager is Base {
         withdraw.vhypeAmount = 0;
     }
 
+    function processCurrentBatch() public whenNotPaused {
+        uint256 snapshotExchangeRate = exchangeRate();
+        uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance;
+
+        Batch memory batch = Batch({
+            vhypeProcessed: 0,
+            processedAt: block.timestamp,
+            snapshotExchangeRate: snapshotExchangeRate,
+            slashedExchangeRate: 0,
+            slashed: false
+        });
+
+        // Process withdraws from the queue until we run out of capacity, or until we run out of withdraws
+        while (withdrawCapacityAvailable > 0 || nextWithdrawIndex < withdrawQueue.length) {
+            Withdraw memory withdraw = withdrawQueue[nextWithdrawIndex];
+            uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, snapshotExchangeRate);
+            if (expectedHypeAmount > withdrawCapacityAvailable) {
+                break;
+            }
+
+            // TODO: Burn the vHYPE
+
+            batch.vhypeProcessed += withdraw.vhypeAmount;
+            withdraw.batchIndex = currentBatchIndex;
+            totalHypeProcessed += expectedHypeAmount;
+            withdrawCapacityAvailable -= expectedHypeAmount;
+            nextWithdrawIndex++;
+        }
+
+        batches.push(batch);
+        currentBatchIndex++;
+    }
+
+    function _finalizeBatch(Batch memory batch) internal {
+        // TODO
+    }
+
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
     /// @param hypeAmount The HYPE amount to convert (in 18 decimals)
     /// @return The vHYPE amount (in 18 decimals)
@@ -299,10 +336,9 @@ contract StakingVaultManager is Base {
     function totalBalance() public view returns (uint256) {
         // The total amount of HYPE that is reserved to be returned to users for withdraws, but is still in
         // under the StakingVault accounts because they have not finished processing or been claimed
-        uint256 outstandingWithdrawAmount = totalWithdrawAmountProcessed - totalWithdrawAmountClaimed;
+        uint256 outstandingWithdrawnHype = totalHypeProcessed - totalHypeClaimed;
 
-        return
-            stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance - outstandingWithdrawAmount;
+        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance - outstandingWithdrawnHype;
     }
 
     /// @notice Total HYPE balance in the staking vault's staking account balance (in 18 decimals)
