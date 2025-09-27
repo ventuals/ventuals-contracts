@@ -32,6 +32,7 @@ contract StakingVaultManagerTest is Test {
     address public user = makeAddr("user");
 
     address public defaultValidator = makeAddr("defaultValidator");
+    address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant MINIMUM_STAKE_BALANCE = 500_000 * 1e18; // 500k HYPE
     uint256 public constant MINIMUM_DEPOSIT_AMOUNT = 1e16; // 0.01 HYPE
@@ -82,7 +83,7 @@ contract StakingVaultManagerTest is Test {
 
         // Mock HYPE system contract
         MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
-        vm.etch(0x2222222222222222222222222222222222222222, address(mockHypeSystemContract).code);
+        vm.etch(HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
         _mockSpotBalance(0);
         _mockDelegatorSummary(0);
 
@@ -699,6 +700,198 @@ contract StakingVaultManagerTest is Test {
             "vHYPE supply should be reduced by the total withdraw amount"
         );
         assertEq(vHYPE.balanceOf(address(stakingVaultManager)), 0, "All escrowed vHYPE should be burned");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                Tests: _finalizeBatch Logic                 */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_ProcessCurrentBatch_FinalizeBatch_DepositsEqualWithdraws() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        address user2 = makeAddr("user2");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Enable batch processing
+        vm.prank(owner);
+        stakingVaultManager.setBatchProcessingPaused(false);
+
+        // Setup: User 1 queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: User 2 deposits HYPE into the vault
+        vm.deal(user2, hypeDeposits);
+        vm.prank(user2);
+        stakingVaultManager.deposit{value: hypeDeposits}();
+
+        // Only expect a transfer to HyperCore call
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        _expectNoStakingDepositCall();
+        _expectNoStakingWithdrawCall();
+        _expectNoTokenDelegateCall();
+        _expectNoTokenUndelegateCall();
+
+        // Process the batch
+        stakingVaultManager.processCurrentBatch();
+
+        // Verify batch was processed
+        assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, vhypeAmount, "Batch should have processed all vHYPE");
+        assertEq(stakingVaultManager.currentBatchIndex(), 1, "Current batch index should be 1");
+    }
+
+    function test_ProcessCurrentBatch_FinalizeBatch_DepositsGreaterThanWithdraws() public {
+        uint256 vhypeAmount = 30_000 * 1e18; // 30k vHYPE withdraw
+        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        address user2 = makeAddr("user2");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User 1 queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: User 2 deposits HYPE into the vault
+        vm.deal(user2, hypeDeposits);
+        vm.prank(user2);
+        stakingVaultManager.deposit{value: hypeDeposits}();
+
+        // Mock and expect calls for deposits > withdraws scenario
+
+        // First call: transfer all deposits to HyperCore
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+
+        // Second call: transfer excess 20k HYPE to staking
+        _mockAndExpectStakingDepositCall((hypeDeposits - vhypeAmount).to8Decimals());
+
+        // Third call: delegate excess 20k HYPE to validator
+        _mockAndExpectTokenDelegateCall(
+            defaultValidator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */
+        );
+
+        // No undelegate call or staking withdraw call expected
+        _expectNoTokenUndelegateCall();
+        _expectNoStakingWithdrawCall();
+
+        // Process the batch
+        stakingVaultManager.processCurrentBatch();
+    }
+
+    function test_ProcessCurrentBatch_FinalizeBatch_DepositsLessThanWithdraws() public {
+        uint256 vhypeAmount = 70_000 * 1e18; // 70k vHYPE withdraw
+        uint256 hypeDeposits = 30_000 * 1e18; // 30k HYPE deposits (exchange rate = 1)
+        address user2 = makeAddr("user2");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User 1 queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: User 2 deposits HYPE into the vault
+        vm.deal(user2, hypeDeposits);
+        vm.prank(user2);
+        stakingVaultManager.deposit{value: hypeDeposits}();
+
+        // Mock and expect calls for deposits < withdraws scenario
+
+        // First call: transfer all deposits to core
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+
+        // Second call: undelegate shortfall amount (use CoreWriter helper)
+        _mockAndExpectTokenDelegateCall(
+            defaultValidator, (vhypeAmount - hypeDeposits).to8Decimals(), true /* isUndelegate */
+        );
+
+        // Third call: withdraw shortfall from staking (use CoreWriter helper)
+        _mockAndExpectStakingWithdrawCall((vhypeAmount - hypeDeposits).to8Decimals());
+
+        // No staking deposit or delegate call expected
+        _expectNoStakingDepositCall();
+        _expectNoTokenDelegateCall();
+
+        // Process the batch
+        stakingVaultManager.processCurrentBatch();
+    }
+
+    function test_ProcessCurrentBatch_FinalizeBatch_ZeroDeposits() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE withdraw
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Mock and expect calls for zero deposits scenario
+
+        // Should undelegate the full withdraw amount
+        _mockAndExpectTokenDelegateCall(defaultValidator, vhypeAmount.to8Decimals(), true /* isUndelegate */ );
+
+        // Should withdraw the full amount from staking
+        _mockAndExpectStakingWithdrawCall(vhypeAmount.to8Decimals());
+
+        // No staking deposit or delegate call expected
+        _expectNoStakingDepositCall();
+        _expectNoTokenDelegateCall();
+
+        // Process the batch
+        stakingVaultManager.processCurrentBatch();
+    }
+
+    function test_ProcessCurrentBatch_FinalizeBatch_ZeroWithdraws() public {
+        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Enable batch processing
+        vm.prank(owner);
+        stakingVaultManager.setBatchProcessingPaused(false);
+
+        // Setup: Mock vault balance with deposits but no withdraws
+        vm.deal(address(stakingVault), hypeDeposits);
+
+        // Mock and expect calls for zero withdraws scenario
+
+        // First call: transfer all deposits to core
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+
+        // Second call: stake all deposits
+        _mockAndExpectStakingDepositCall(hypeDeposits.to8Decimals());
+
+        // Third call: delegate all deposits
+        _mockAndExpectTokenDelegateCall(defaultValidator, hypeDeposits.to8Decimals(), false /* isUndelegate */ );
+
+        // No undelegate call or staking withdraw call expected
+        _expectNoTokenUndelegateCall();
+        _expectNoStakingWithdrawCall();
+
+        // Process the batch
+        stakingVaultManager.processCurrentBatch();
+    }
+
+    function test_ProcessCurrentBatch_FinalizeBatch_ZeroDepositsZeroWithdraws() public {
+        // Setup: Mock sufficient balance for processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // No HyperCore deposit expected
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
+
+        _expectNoStakingDepositCall();
+        _expectNoTokenDelegateCall();
+        _expectNoStakingWithdrawCall();
+        _expectNoTokenUndelegateCall();
+
+        // Process the batch - should not make any external calls
+        stakingVaultManager.processCurrentBatch();
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1553,7 +1746,8 @@ contract StakingVaultManagerTest is Test {
         // Mock the calls that _finalizeBatch makes
         vm.mockCall(address(stakingVault), abi.encodeWithSignature("transferHypeToCore(uint256)"), abi.encode());
         vm.mockCall(address(stakingVault), abi.encodeWithSignature("stakingDeposit(uint64)"), abi.encode());
-        vm.mockCall(address(stakingVault), abi.encodeWithSignature("tokenDelegate(address,uint64,bool)"), abi.encode());
+        vm.mockCall(address(stakingVault), abi.encodeWithSignature("tokenDelegate(address,uint64)"), abi.encode());
+        vm.mockCall(address(stakingVault), abi.encodeWithSignature("tokenUndelegate(address,uint64)"), abi.encode());
         vm.mockCall(address(stakingVault), abi.encodeWithSignature("stakingWithdraw(uint64)"), abi.encode());
     }
 
@@ -1641,6 +1835,10 @@ contract StakingVaultManagerTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 
+    function _expectNoStakingDepositCall() internal {
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stakingDeposit.selector), 0);
+    }
+
     function _mockAndExpectStakingWithdrawCall(uint64 weiAmount) internal {
         bytes memory encodedAction = abi.encode(weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -1659,6 +1857,10 @@ contract StakingVaultManagerTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 
+    function _expectNoStakingWithdrawCall() internal {
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stakingWithdraw.selector), 0);
+    }
+
     function _mockAndExpectTokenDelegateCall(address validator, uint64 weiAmount, bool isUndelegate) internal {
         bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -1675,6 +1877,14 @@ contract StakingVaultManagerTest is Test {
             abi.encode()
         );
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+    }
+
+    function _expectNoTokenDelegateCall() internal {
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.tokenDelegate.selector), 0);
+    }
+
+    function _expectNoTokenUndelegateCall() internal {
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.tokenUndelegate.selector), 0);
     }
 }
 

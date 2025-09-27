@@ -43,8 +43,13 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external onlyManager whenNotPaused {
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, isUndelegate);
+    function tokenDelegate(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
+    }
+
+    /// @inheritdoc IStakingVault
+    function tokenUndelegate(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true);
     }
 
     /// @inheritdoc IStakingVault

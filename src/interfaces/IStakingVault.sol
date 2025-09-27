@@ -34,11 +34,15 @@ interface IStakingVault {
     /// @param weiAmount The amount of wei to withdraw (8 decimals)
     function stakingWithdraw(uint64 weiAmount) external;
 
-    /// @dev Delegate or undelegate HYPE to a validator
-    /// @param validator The validator address to delegate or undelegate to
-    /// @param weiAmount The amount of wei to delegate or undelegate (8 decimals)
-    /// @param isUndelegate Whether to undelegate or delegate
-    function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external;
+    /// @dev Delegate HYPE to a validator
+    /// @param validator The validator address to delegate to
+    /// @param weiAmount The amount of wei to delegate (8 decimals)
+    function tokenDelegate(address validator, uint64 weiAmount) external;
+
+    /// @dev Undelegate HYPE from a validator
+    /// @param validator The validator address to undelegate from
+    /// @param weiAmount The amount of wei to undelegate (8 decimals)
+    function tokenUndelegate(address validator, uint64 weiAmount) external;
 
     /// @dev Transfer a token from Core spot. See https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/hypercore-less-than-greater-than-hyperevm-transfers for more info
     /// @param destination The destination address to send the token to

@@ -465,7 +465,7 @@ contract StakingVaultManager is Base {
 
         stakingVault.transferHypeToCore(amount); // HyperEVM -> HyperCore spot
         stakingVault.stakingDeposit(amount.to8Decimals()); // HyperCore spot -> HyperCore staking
-        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals(), false); // Delegate HYPE to validator (from HyperCore staking)
+        stakingVault.tokenDelegate(defaultValidator, amount.to8Decimals()); // Delegate HYPE to validator (from HyperCore staking)
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -520,8 +520,8 @@ contract StakingVaultManager is Base {
     {
         require(fromValidator != toValidator, RedelegateToSameValidator());
 
-        stakingVault.tokenDelegate(fromValidator, amount.to8Decimals(), true);
-        stakingVault.tokenDelegate(toValidator, amount.to8Decimals(), false);
+        stakingVault.tokenUndelegate(fromValidator, amount.to8Decimals());
+        stakingVault.tokenDelegate(toValidator, amount.to8Decimals());
         emit RedelegateStake(fromValidator, toValidator, amount);
     }
 
@@ -540,7 +540,7 @@ contract StakingVaultManager is Base {
         require(delegatorSummary.delegated >= amount.to8Decimals(), InsufficientBalance());
 
         // Immediately undelegate HYPE
-        stakingVault.tokenDelegate(validator, amount.to8Decimals(), true);
+        stakingVault.tokenUndelegate(validator, amount.to8Decimals());
 
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
