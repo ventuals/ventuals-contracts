@@ -474,11 +474,14 @@ contract StakingVaultManager is Base {
     function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) public onlyOwner {
         require(batchIndex < batches.length, InvalidBatch(batchIndex));
         Batch storage batch = batches[batchIndex];
+
+        uint256 oldExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
+
+        totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, oldExchangeRate);
+        totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, slashedExchangeRate);
+
         batch.slashedExchangeRate = slashedExchangeRate;
         batch.slashed = true;
-
-        totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
-        totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, batch.slashedExchangeRate);
     }
 
     /// @notice Moves an HYPE stake from one validator to another
