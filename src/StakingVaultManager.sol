@@ -47,18 +47,30 @@ contract StakingVaultManager is Base {
     /// @param purpose The purpose of the withdrawal
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
+    /// @dev A batch of deposits and withdraws that are processed together
     struct Batch {
+        /// @dev The total amount of withdraws processed in this batch (vHYPE; in 18 decimals)
         uint256 withdrawAmountProcessed;
+        /// @dev The timestamp when the batch was processed
         uint256 processedAt;
+        /// @dev The exchange rate at the time the batch was processed (in 18 decimals)
         uint256 snapshotExchangeRate;
+        /// @dev The exchange rate if a slash was applied to the batch (in 18 decimals)
         uint256 slashedExchangeRate;
+        /// @dev Whether the batch was slashed
         bool slashed;
     }
 
+    /// @dev A withdraw from the vault
     struct Withdraw {
+        /// @dev The account that requested the withdraw
         address account;
+        /// @dev The amount of vHYPE to redeem (in 18 decimals)
         uint256 vhypeAmount;
+        /// @dev The index of the batch this withdraw was assigned to
+        /// @dev If the withdraw has not been assigned to a batch, this is set to type(uint256).max
         uint256 batchIndex;
+        /// @dev Whether the withdraw has been claimed
         bool claimed;
     }
 
@@ -79,7 +91,7 @@ contract StakingVaultManager is Base {
     /// @dev The minimum amount of HYPE that can be deposited (in 18 decimals)
     uint256 public minimumDepositAmount;
 
-    /// @dev Batches of withdraws
+    /// @dev Batches of deposits and withdraws
     Batch[] batches;
 
     /// @dev The current batch index
