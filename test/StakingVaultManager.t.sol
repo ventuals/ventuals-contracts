@@ -429,6 +429,10 @@ contract StakingVaultManagerTest is Test {
         // Verify the withdraw was claimed
         StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
         assertTrue(withdraw.claimed, "Withdraw should be marked as claimed");
+        assertEq(stakingVaultManager.totalHypeClaimed(), vhypeAmount, "Total HYPE claimed should match withdraw amount");
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), vhypeAmount, "Total HYPE processed should match withdraw amount"
+        );
     }
 
     function test_ClaimWithdraw_NotAuthorized() public {
@@ -672,6 +676,16 @@ contract StakingVaultManagerTest is Test {
         // Verify the withdraw was claimed
         StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
         assertTrue(withdraw.claimed, "Withdraw should be marked as claimed");
+        assertEq(
+            stakingVaultManager.totalHypeClaimed(),
+            vhypeAmount / 2,
+            "Total HYPE claimed should match slashed withdraw amount"
+        );
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(),
+            vhypeAmount / 2,
+            "Total HYPE processed should match slashed withdraw amount"
+        );
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

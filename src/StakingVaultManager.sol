@@ -240,6 +240,7 @@ contract StakingVaultManager is Base {
         stakingVault.spotSend(destination, HYPE_TOKEN_ID, hypeAmount.to8Decimals());
 
         withdraw.claimed = true;
+        totalHypeClaimed += hypeAmount;
     }
 
     /// @notice Cancels a withdraw. A withdraw can only be cancelled if it has not been processed yet.
