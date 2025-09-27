@@ -184,7 +184,8 @@ contract StakingVaultManager is Base {
     function queueWithdraw(uint256 vhypeAmount) public whenNotPaused returns (uint256) {
         require(vhypeAmount > 0, ZeroAmount());
 
-        vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
+        bool success = vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
+        require(success, TransferFailed(msg.sender, vhypeAmount));
 
         Withdraw memory withdraw = Withdraw({
             account: msg.sender,
@@ -236,7 +237,9 @@ contract StakingVaultManager is Base {
         require(withdraw.vhypeAmount > 0, WithdrawCancelled());
         require(withdrawId >= nextWithdrawIndex, WithdrawProcessed());
 
-        vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
+        // Refund vHYPE
+        bool success = vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
+        require(success, TransferFailed(msg.sender, withdraw.vhypeAmount));
 
         // Set to 0 to indicate that the withdraw was cancelled
         withdraw.vhypeAmount = 0;
@@ -451,11 +454,11 @@ contract StakingVaultManager is Base {
     }
 
     /// @notice Applies a slash to a batch
-    /// @param batch The batch to apply the slash to
+    /// @param batchIndex The index of the batch to apply the slash to
     /// @param slashedExchangeRate The new exchange rate that should be applied to the batch (in 18 decimals)
-    function applySlash(uint256 batch, uint256 slashedExchangeRate) public onlyOwner {
-        require(batch < batches.length, InvalidBatch(batch));
-        Batch memory batch = batches[batch];
+    function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) public onlyOwner {
+        require(batchIndex < batches.length, InvalidBatch(batchIndex));
+        Batch memory batch = batches[batchIndex];
         batch.slashedExchangeRate = slashedExchangeRate;
 
         totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
