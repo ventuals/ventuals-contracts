@@ -385,9 +385,9 @@ contract StakingVaultManager is Base {
     function totalBalance() public view returns (uint256) {
         // The total amount of HYPE that is reserved to be returned to users for withdraws, but is still in
         // under the StakingVault accounts because they have not finished processing or been claimed
-        uint256 outstandingWithdrawnHype = totalHypeProcessed - totalHypeClaimed;
+        uint256 reservedHypeForWithdraws = totalHypeProcessed - totalHypeClaimed;
 
-        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance - outstandingWithdrawnHype;
+        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance - reservedHypeForWithdraws;
     }
 
     /// @notice Total HYPE balance in the staking vault's staking account balance (in 18 decimals)
