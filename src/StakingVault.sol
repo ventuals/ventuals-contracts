@@ -106,11 +106,6 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function delegations() public view returns (L1ReadLibrary.Delegation[] memory) {
-        return L1ReadLibrary.delegations(address(this));
-    }
-
-    /// @inheritdoc IStakingVault
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
         return L1ReadLibrary.spotBalance(address(this), tokenId);
     }
