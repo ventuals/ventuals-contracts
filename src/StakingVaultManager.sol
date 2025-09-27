@@ -235,7 +235,7 @@ contract StakingVaultManager is Base {
         // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
         // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
         L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
-        require(spotBalance.total >= hypeAmount, InsufficientBalance());
+        require(spotBalance.total.to18Decimals() >= hypeAmount, InsufficientBalance());
 
         stakingVault.spotSend(destination, HYPE_TOKEN_ID, hypeAmount.to8Decimals());
 
