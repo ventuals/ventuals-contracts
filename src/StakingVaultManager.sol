@@ -123,22 +123,22 @@ contract StakingVaultManager is Base {
     bool public isBatchProcessingPaused;
 
     /// @dev Batches of deposits and withdraws
-    Batch[] batches;
+    Batch[] private batches;
 
     /// @dev The current batch index
-    uint256 currentBatchIndex;
+    uint256 public currentBatchIndex;
 
     /// @dev The withdraw queue (append-only)
-    Withdraw[] withdrawQueue;
+    Withdraw[] private withdrawQueue;
 
     /// @dev The next withdraw index
-    uint256 nextWithdrawIndex;
+    uint256 public nextWithdrawIndex;
 
     /// @dev The total amount of withdrawn HYPE claimed (in 18 decimals)
-    uint256 totalHypeClaimed;
+    uint256 public totalHypeClaimed;
 
     /// @dev The total amount of HYPE processed. Gets adjusted if we retroactively apply a slash to a batch
-    uint256 totalHypeProcessed;
+    uint256 public totalHypeProcessed;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(uint64 _hypeTokenId) {
@@ -334,6 +334,28 @@ contract StakingVaultManager is Base {
             stakingVault.tokenDelegate(defaultValidator, amountToWithdraw.to8Decimals(), true /* isUndelegate */ );
             stakingVault.stakingWithdraw(amountToWithdraw.to8Decimals());
         }
+    }
+
+    /// @notice Returns the batch at the given index
+    /// @param index The index of the batch to return
+    function getBatch(uint256 index) public view returns (Batch memory) {
+        return batches[index];
+    }
+
+    /// @notice Returns the length of the batches array
+    function getBatchesLength() public view returns (uint256) {
+        return batches.length;
+    }
+
+    /// @notice Returns the withdraw at the given index
+    /// @param index The index of the withdraw to return
+    function getWithdraw(uint256 index) public view returns (Withdraw memory) {
+        return withdrawQueue[index];
+    }
+
+    /// @notice Returns the length of the withdraw queue
+    function getWithdrawQueueLength() public view returns (uint256) {
+        return withdrawQueue.length;
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
