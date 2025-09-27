@@ -110,8 +110,8 @@ contract StakingVaultManager is Base {
 
     IStakingVault public stakingVault;
 
-    /// @dev The default validator to delegate HYPE to
-    address public defaultValidator;
+    /// @dev The validator to delegate and undelegate HYPE to
+    address public validator;
 
     /// @dev The minimum amount of HYPE that needs to remain staked in the vault (in 18 decimals)
     uint256 public minimumStakeBalance;
@@ -152,7 +152,7 @@ contract StakingVaultManager is Base {
         /// forge-lint: disable-next-line(mixed-case-variable)
         address _vHYPE,
         address _stakingVault,
-        address _defaultValidator,
+        address _validator,
         uint256 _minimumStakeBalance,
         uint256 _minimumDepositAmount
     ) public initializer {
@@ -161,7 +161,7 @@ contract StakingVaultManager is Base {
         vHYPE = VHYPE(_vHYPE);
         stakingVault = IStakingVault(payable(_stakingVault));
 
-        defaultValidator = _defaultValidator;
+        validator = _validator;
         minimumStakeBalance = _minimumStakeBalance;
         minimumDepositAmount = _minimumDepositAmount;
 
@@ -326,13 +326,13 @@ contract StakingVaultManager is Base {
             // Stake the excess HYPE
             uint256 amountToStake = depositsInBatch - withdrawsInBatch;
             stakingVault.stakingDeposit(amountToStake.to8Decimals());
-            stakingVault.tokenDelegate(defaultValidator, amountToStake.to8Decimals());
+            stakingVault.tokenDelegate(validator, amountToStake.to8Decimals());
         } else if (depositsInBatch < withdrawsInBatch) {
             // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
 
             // Withdraw the amount not covered by deposits from the staking vault
             uint256 amountToWithdraw = withdrawsInBatch - depositsInBatch;
-            stakingVault.tokenUndelegate(defaultValidator, amountToWithdraw.to8Decimals());
+            stakingVault.tokenUndelegate(validator, amountToWithdraw.to8Decimals());
             stakingVault.stakingWithdraw(amountToWithdraw.to8Decimals());
         }
     }
@@ -452,10 +452,15 @@ contract StakingVaultManager is Base {
         minimumStakeBalance = _minimumStakeBalance;
     }
 
-    /// @notice Sets the default validator to delegate HYPE to
-    /// @param _defaultValidator The default validator to delegate HYPE to
-    function setDefaultValidator(address _defaultValidator) public onlyOwner {
-        defaultValidator = _defaultValidator;
+    /// @notice Switches the validator to delegate HYPE to
+    /// @param newValidator The new validator
+    function switchValidator(address newValidator) public onlyOwner canUndelegateStake {
+        require(newValidator != validator, RedelegateToSameValidator());
+
+        L1ReadLibrary.Delegation memory delegation = _getDelegation(validator);
+        stakingVault.tokenUndelegate(validator, delegation.amount);
+        stakingVault.tokenDelegate(newValidator, delegation.amount);
+        validator = newValidator;
     }
 
     /// @notice Sets the minimum deposit amount (in 18 decimals)
@@ -486,35 +491,16 @@ contract StakingVaultManager is Base {
         batch.slashed = true;
     }
 
-    /// @notice Moves an HYPE stake from one validator to another
-    /// @param fromValidator The validator from which the HYPE stake is being moved
-    /// @param toValidator The validator to which the HYPE stake is being moved
-    /// @param amount The amount of HYPE being moved (in 18 decimals)
-    function redelegateStake(address fromValidator, address toValidator, uint256 amount)
-        external
-        onlyOwner
-        canUndelegateStake(fromValidator, amount)
-    {
-        require(fromValidator != toValidator, RedelegateToSameValidator());
-
-        stakingVault.tokenUndelegate(fromValidator, amount.to8Decimals());
-        stakingVault.tokenDelegate(toValidator, amount.to8Decimals());
-        emit RedelegateStake(fromValidator, toValidator, amount);
-    }
-
     /// @notice Execute an emergency staking withdraw
     /// @dev Immediately undelegates HYPE and initiates a staking withdraw
     /// @dev Amount will be available in the StakingVault's spot account balance after 7 days.
-    /// @param validator The validator from which the HYPE stake is being moved
     /// @param amount Amount to withdraw (in 18 decimals)
     /// @param purpose Description of withdrawal purpose
-    function emergencyStakingWithdraw(address validator, uint256 amount, string calldata purpose)
-        external
-        onlyOwner
-        canUndelegateStake(validator, amount)
-    {
-        L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
-        require(delegatorSummary.delegated >= amount.to8Decimals(), InsufficientBalance());
+    function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner canUndelegateStake {
+        require(amount > 0, ZeroAmount());
+
+        L1ReadLibrary.Delegation memory delegation = _getDelegation(validator);
+        require(delegation.amount >= amount.to8Decimals(), InsufficientBalance());
 
         // Immediately undelegate HYPE
         stakingVault.tokenUndelegate(validator, amount.to8Decimals());
@@ -523,6 +509,19 @@ contract StakingVaultManager is Base {
         // the StakingVault's spot account balance after 7 days.
         stakingVault.stakingWithdraw(amount.to8Decimals());
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
+    }
+
+    /// @notice Returns the delegation for a given validator
+    /// @param _validator The validator to get the delegation for
+    /// @return The delegation for the given validator
+    function _getDelegation(address _validator) internal view returns (L1ReadLibrary.Delegation memory) {
+        L1ReadLibrary.Delegation[] memory delegations = stakingVault.delegations();
+        for (uint256 i = 0; i < delegations.length; i++) {
+            if (delegations[i].validator == _validator) {
+                return delegations[i];
+            }
+        }
+        return L1ReadLibrary.Delegation({validator: address(0), amount: 0, lockedUntilTimestamp: 0});
     }
 
     modifier canDeposit() {
@@ -543,25 +542,16 @@ contract StakingVaultManager is Base {
         require(!isBatchProcessingPaused, BatchProcessingPaused());
     }
 
-    modifier canUndelegateStake(address validator, uint256 amount) {
-        _canUndelegateStake(validator, amount);
+    modifier canUndelegateStake() {
+        _canUndelegateStake();
         _;
     }
 
-    function _canUndelegateStake(address validator, uint256 amount) internal view {
-        require(amount > 0, ZeroAmount());
-
-        L1ReadLibrary.Delegation[] memory delegations = stakingVault.delegations();
-        uint64 delegatedAmount = 0;
-        uint64 lockedUntilTimestamp = 0;
-        for (uint256 i = 0; i < delegations.length; i++) {
-            if (delegations[i].validator == validator) {
-                delegatedAmount = delegations[i].amount;
-                lockedUntilTimestamp = delegations[i].lockedUntilTimestamp;
-                break;
-            }
-        }
-        require(delegatedAmount >= amount.to8Decimals(), InsufficientBalance());
-        require(lockedUntilTimestamp <= block.timestamp, StakeLockedUntilTimestamp(validator, lockedUntilTimestamp));
+    function _canUndelegateStake() internal view {
+        L1ReadLibrary.Delegation memory delegation = _getDelegation(validator);
+        require(
+            delegation.lockedUntilTimestamp <= block.timestamp,
+            StakeLockedUntilTimestamp(validator, delegation.lockedUntilTimestamp)
+        );
     }
 }
