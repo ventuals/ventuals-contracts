@@ -46,6 +46,7 @@ contract StakingVaultTest is Test {
     /*                  Tests: Staking Deposit                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_StakingDeposit(uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
         vm.assume(weiAmount < type(uint64).max);
 
         // Mock the CoreWriter call
@@ -83,10 +84,18 @@ contract StakingVaultTest is Test {
         stakingVault.stakingDeposit(1e10);
     }
 
+    function test_StakingDeposit_ZeroAmount() public {
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.stakingDeposit(0);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Staking Withdraw                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_StakingWithdraw(uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -121,12 +130,20 @@ contract StakingVaultTest is Test {
         stakingVault.stakingWithdraw(1e8);
     }
 
+    function test_StakingWithdraw_ZeroAmount() public {
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.stakingWithdraw(0);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Token Delegate                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_TokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) public {
+    function test_TokenDelegate(address validator, uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
-        bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
+        bytes memory encodedAction = abi.encode(validator, weiAmount, false);
         bytes memory data = new bytes(4 + encodedAction.length);
         data[0] = 0x01;
         data[1] = 0x00;
@@ -144,7 +161,37 @@ contract StakingVaultTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
 
         vm.prank(manager);
-        stakingVault.tokenDelegate(validator, weiAmount, isUndelegate);
+        stakingVault.tokenDelegate(validator, weiAmount);
+
+        // Verify lastDelegationChangeBlockNumber was updated
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
+    }
+
+    function test_TokenDelegate_CanCallInSameBlock() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        // Mock the CoreWriter call
+        bytes memory encodedAction = abi.encode(validator, weiAmount, false);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data), 2);
+
+        vm.startPrank(manager);
+        stakingVault.tokenDelegate(validator, weiAmount);
+        stakingVault.tokenDelegate(validator, weiAmount);
     }
 
     function test_TokenDelegate_NotManager(address notManager) public {
@@ -159,13 +206,523 @@ contract StakingVaultTest is Test {
                 IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
             )
         );
-        stakingVault.tokenDelegate(validator, weiAmount, false);
+        stakingVault.tokenDelegate(validator, weiAmount);
+    }
+
+    function test_TokenDelegate_ZeroAmount() public {
+        address validator = makeAddr("validator");
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.tokenDelegate(validator, 0);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Token Undelegate                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TokenUndelegate(address validator, uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
+        // Mock the CoreWriter call
+        bytes memory encodedAction = abi.encode(validator, weiAmount, true);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+
+        _mockDelegations(validator, weiAmount);
+
+        vm.prank(manager);
+        stakingVault.tokenUndelegate(validator, weiAmount);
+
+        // Verify lastDelegationChangeBlockNumber was updated
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
+    }
+
+    function test_TokenUndelegate_InsufficientBalance() public {
+        address validator = makeAddr("validator");
+        uint64 delegatedAmount = 50_000 * 1e8; // 50k HYPE delegated
+        uint64 requestedAmount = 100_000 * 1e8; // 100k HYPE requested
+
+        _mockDelegations(validator, delegatedAmount);
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVault.tokenUndelegate(validator, requestedAmount);
+    }
+
+    function test_TokenUndelegate_ValidatorNotFound() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        // Mock empty delegations (validator not found)
+        L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](0);
+        bytes memory encodedDelegations = abi.encode(mockDelegations);
+        vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVault.tokenUndelegate(validator, weiAmount);
+    }
+
+    function test_TokenUndelegate_StakeLockedUntilFuture() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+        uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
+
+        _mockDelegationsWithLock(validator, weiAmount, futureTimestamp);
+
+        vm.startPrank(manager);
+        vm.expectRevert(
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, validator, futureTimestamp)
+        );
+        stakingVault.tokenUndelegate(validator, weiAmount);
+    }
+
+    function test_TokenUndelegate_StakeUnlockedAtExactTimestamp() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+        uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
+
+        // Mock the CoreWriter call
+        bytes memory encodedAction = abi.encode(validator, weiAmount, true);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+
+        _mockDelegationsWithLock(validator, weiAmount, currentTimestamp);
+
+        vm.prank(manager);
+        stakingVault.tokenUndelegate(validator, weiAmount);
+
+        // Should succeed and update block number
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
+    }
+
+    function test_TokenUndelegate_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
+
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
+        stakingVault.tokenUndelegate(validator, weiAmount);
+    }
+
+    function test_TokenUndelegate_ZeroAmount() public {
+        address validator = makeAddr("validator");
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.tokenUndelegate(validator, 0);
+    }
+
+    function test_TokenUndelegate_CannotCallTwiceInSameBlock() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        // Mock the CoreWriter call
+        bytes memory encodedAction = abi.encode(validator, weiAmount, true);
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = 0x01;
+        data[1] = 0x00;
+        data[2] = 0x00;
+        data[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+            abi.encode()
+        );
+
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+
+        _mockDelegations(validator, weiAmount);
+
+        vm.startPrank(manager);
+        stakingVault.tokenUndelegate(validator, weiAmount);
+
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVault.tokenUndelegate(validator, weiAmount);
+    }
+
+    function test_TokenUndelegate_CannotCallAfterTokenDelegateInSameBlock() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        // Mock CoreWriter calls for tokenDelegate
+        bytes memory delegateAction = abi.encode(validator, weiAmount, false);
+        bytes memory delegateData = new bytes(4 + delegateAction.length);
+        delegateData[0] = 0x01;
+        delegateData[1] = 0x00;
+        delegateData[2] = 0x00;
+        delegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < delegateAction.length; i++) {
+            delegateData[4 + i] = delegateAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, delegateData),
+            abi.encode()
+        );
+
+        // Mock delegations for the validator so tokenUndelegate can try to undelegate from it
+        _mockDelegations(validator, weiAmount);
+
+        vm.startPrank(manager);
+
+        // First call tokenDelegate on the validator
+        stakingVault.tokenDelegate(validator, weiAmount);
+
+        // Now try to call tokenUndelegate on the same validator in the same block - should fail
+        // because we can't read delegations for the validator in the same block
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVault.tokenUndelegate(validator, weiAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                  Tests: Token Redelegate                   */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_TokenRedelegate(address fromValidator, address toValidator, uint64 weiAmount) public {
+        vm.assume(fromValidator != toValidator);
+        vm.assume(weiAmount > 0);
+
+        // Mock the CoreWriter calls for both undelegate and delegate
+        bytes memory undelegateAction = abi.encode(fromValidator, weiAmount, true);
+        bytes memory undelegateData = new bytes(4 + undelegateAction.length);
+        undelegateData[0] = 0x01;
+        undelegateData[1] = 0x00;
+        undelegateData[2] = 0x00;
+        undelegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < undelegateAction.length; i++) {
+            undelegateData[4 + i] = undelegateAction[i];
+        }
+
+        bytes memory delegateAction = abi.encode(toValidator, weiAmount, false);
+        bytes memory delegateData = new bytes(4 + delegateAction.length);
+        delegateData[0] = 0x01;
+        delegateData[1] = 0x00;
+        delegateData[2] = 0x00;
+        delegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < delegateAction.length; i++) {
+            delegateData[4 + i] = delegateAction[i];
+        }
+
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, undelegateData),
+            abi.encode()
+        );
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, delegateData),
+            abi.encode()
+        );
+
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, undelegateData));
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, delegateData));
+
+        _mockDelegations(fromValidator, weiAmount);
+
+        vm.prank(manager);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+
+        // Verify both validators' lastDelegationChangeBlockNumber were updated
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(fromValidator), block.number);
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(toValidator), block.number);
+    }
+
+    function test_TokenRedelegate_SameValidator() public {
+        address validator = makeAddr("validator");
+        uint64 weiAmount = 1e8;
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.RedelegateToSameValidator.selector);
+        stakingVault.tokenRedelegate(validator, validator, weiAmount);
+    }
+
+    function test_TokenRedelegate_ZeroAmount() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, 0);
+    }
+
+    function test_TokenRedelegate_InsufficientBalance() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 delegatedAmount = 50_000 * 1e8; // 50k HYPE delegated
+        uint64 requestedAmount = 100_000 * 1e8; // 100k HYPE requested
+
+        _mockDelegations(fromValidator, delegatedAmount);
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, requestedAmount);
+    }
+
+    function test_TokenRedelegate_ValidatorNotFound() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 weiAmount = 1e8;
+
+        // Mock empty delegations (validator not found)
+        L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](0);
+        bytes memory encodedDelegations = abi.encode(mockDelegations);
+        vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+    }
+
+    function test_TokenRedelegate_StakeLockedUntilFuture() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 weiAmount = 1e8;
+        uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
+
+        _mockDelegationsWithLock(fromValidator, weiAmount, futureTimestamp);
+
+        vm.startPrank(manager);
+        vm.expectRevert(
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, fromValidator, futureTimestamp)
+        );
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+    }
+
+    function test_TokenRedelegate_StakeUnlockedAtExactTimestamp() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 weiAmount = 1e8;
+        uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
+
+        // Mock the CoreWriter calls for both undelegate and delegate
+        bytes memory undelegateAction = abi.encode(fromValidator, weiAmount, true);
+        bytes memory undelegateData = new bytes(4 + undelegateAction.length);
+        undelegateData[0] = 0x01;
+        undelegateData[1] = 0x00;
+        undelegateData[2] = 0x00;
+        undelegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < undelegateAction.length; i++) {
+            undelegateData[4 + i] = undelegateAction[i];
+        }
+
+        bytes memory delegateAction = abi.encode(toValidator, weiAmount, false);
+        bytes memory delegateData = new bytes(4 + delegateAction.length);
+        delegateData[0] = 0x01;
+        delegateData[1] = 0x00;
+        delegateData[2] = 0x00;
+        delegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < delegateAction.length; i++) {
+            delegateData[4 + i] = delegateAction[i];
+        }
+
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, undelegateData),
+            abi.encode()
+        );
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, delegateData),
+            abi.encode()
+        );
+
+        _mockDelegationsWithLock(fromValidator, weiAmount, currentTimestamp);
+
+        vm.prank(manager);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+
+        // Should succeed and update block numbers for both validators
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(fromValidator), block.number);
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(toValidator), block.number);
+    }
+
+    function test_TokenRedelegate_NotManager(address notManager) public {
+        vm.assume(notManager != manager);
+
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 weiAmount = 1e8;
+
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+    }
+
+    function test_TokenRedelegate_WhenPaused() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 weiAmount = 1e8;
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVault));
+
+        vm.startPrank(manager);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVault)));
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+    }
+
+    function test_TokenRedelegate_CannotCallTwiceInSameBlock() public {
+        address fromValidator = makeAddr("fromValidator");
+        address toValidator = makeAddr("toValidator");
+        uint64 weiAmount = 1e8;
+
+        // Mock the CoreWriter calls for both undelegate and delegate
+        bytes memory undelegateAction = abi.encode(fromValidator, weiAmount, true);
+        bytes memory undelegateData = new bytes(4 + undelegateAction.length);
+        undelegateData[0] = 0x01;
+        undelegateData[1] = 0x00;
+        undelegateData[2] = 0x00;
+        undelegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < undelegateAction.length; i++) {
+            undelegateData[4 + i] = undelegateAction[i];
+        }
+
+        bytes memory delegateAction = abi.encode(toValidator, weiAmount, false);
+        bytes memory delegateData = new bytes(4 + delegateAction.length);
+        delegateData[0] = 0x01;
+        delegateData[1] = 0x00;
+        delegateData[2] = 0x00;
+        delegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < delegateAction.length; i++) {
+            delegateData[4 + i] = delegateAction[i];
+        }
+
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, undelegateData),
+            abi.encode()
+        );
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, delegateData),
+            abi.encode()
+        );
+
+        _mockDelegations(fromValidator, weiAmount);
+
+        vm.startPrank(manager);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+
+        // Second call in same block should fail during the tokenUndelegate call
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+    }
+
+    function test_TokenRedelegate_CannotCallAfterTokenDelegateInSameBlock() public {
+        address validator1 = makeAddr("validator1");
+        address validator2 = makeAddr("validator2");
+        uint64 weiAmount = 1e8;
+
+        // Mock CoreWriter calls for tokenDelegate
+        bytes memory delegateAction = abi.encode(validator1, weiAmount, false);
+        bytes memory delegateData = new bytes(4 + delegateAction.length);
+        delegateData[0] = 0x01;
+        delegateData[1] = 0x00;
+        delegateData[2] = 0x00;
+        delegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < delegateAction.length; i++) {
+            delegateData[4 + i] = delegateAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, delegateData),
+            abi.encode()
+        );
+
+        // Mock delegations for validator1 so tokenRedelegate can try to undelegate from it
+        _mockDelegations(validator1, weiAmount);
+
+        vm.startPrank(manager);
+
+        // First call tokenDelegate on validator1
+        stakingVault.tokenDelegate(validator1, weiAmount);
+
+        // Now try to call tokenRedelegate FROM validator1 in the same block - should fail
+        // because we can't read delegations for validator1 in the same block
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVault.tokenRedelegate(validator1, validator2, weiAmount);
+    }
+
+    function test_TokenRedelegate_CannotCallAfterTokenUndelegateInSameBlock() public {
+        address validator1 = makeAddr("validator1");
+        address validator2 = makeAddr("validator2");
+        uint64 weiAmount = 1e8;
+
+        // Mock CoreWriter calls for tokenUndelegate
+        bytes memory undelegateAction = abi.encode(validator1, weiAmount, true);
+        bytes memory undelegateData = new bytes(4 + undelegateAction.length);
+        undelegateData[0] = 0x01;
+        undelegateData[1] = 0x00;
+        undelegateData[2] = 0x00;
+        undelegateData[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < undelegateAction.length; i++) {
+            undelegateData[4 + i] = undelegateAction[i];
+        }
+        vm.mockCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, undelegateData),
+            abi.encode()
+        );
+
+        _mockDelegations(validator1, weiAmount);
+
+        vm.startPrank(manager);
+
+        // First call tokenUndelegate on validator1
+        stakingVault.tokenUndelegate(validator1, weiAmount);
+
+        // Now try to call tokenRedelegate FROM validator1 in the same block - should fail
+        // because we can't read delegations for validator1 in the same block
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVault.tokenRedelegate(validator1, validator2, weiAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Spot Send                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_SpotSend(address destination, uint64 token, uint64 weiAmount) public {
+        vm.assume(weiAmount > 0);
+
         // Mock the CoreWriter call
         bytes memory encodedAction = abi.encode(destination, token, weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -202,6 +759,15 @@ contract StakingVaultTest is Test {
             )
         );
         stakingVault.spotSend(destination, token, weiAmount);
+    }
+
+    function test_SpotSend_ZeroAmount() public {
+        address destination = address(0x456);
+        uint64 token = 0;
+
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.spotSend(destination, token, 0);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -303,10 +869,17 @@ contract StakingVaultTest is Test {
         vm.stopPrank();
     }
 
+    function test_Deposit_ZeroAmount() public {
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVault.deposit{value: 0}();
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                Tests: Transfer Hype To Core                */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_TransferHypeToCore(uint256 amount) public {
+        vm.assume(amount > 0);
         vm.deal(address(stakingVault), amount);
         uint256 vaultBalanceBefore = address(stakingVault).balance;
         uint256 systemAddressBalanceBefore = stakingVault.HYPE_SYSTEM_ADDRESS().balance;
@@ -377,7 +950,8 @@ contract StakingVaultTest is Test {
         vm.deal(address(stakingVault), vaultBalance);
         uint256 systemAddressBalanceBefore = stakingVault.HYPE_SYSTEM_ADDRESS().balance;
 
-        vm.prank(manager);
+        vm.startPrank(manager);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
         stakingVault.transferHypeToCore(0);
 
         assertEq(address(stakingVault).balance, vaultBalance);
@@ -579,7 +1153,15 @@ contract StakingVaultTest is Test {
 
         vm.prank(manager);
         vm.expectRevert();
-        stakingVault.tokenDelegate(address(0x123), 1e8, false);
+        stakingVault.tokenDelegate(address(0x123), 1e8);
+
+        vm.prank(manager);
+        vm.expectRevert();
+        stakingVault.tokenUndelegate(address(0x123), 1e8);
+
+        vm.prank(manager);
+        vm.expectRevert();
+        stakingVault.tokenRedelegate(address(0x123), address(0x456), 1e8);
 
         vm.prank(manager);
         vm.expectRevert();
@@ -701,6 +1283,22 @@ contract StakingVaultTest is Test {
         vm.mockCall(
             L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedCoreUserExists
         );
+    }
+
+    function _mockDelegations(address validator, uint64 weiAmount) internal {
+        _mockDelegationsWithLock(validator, weiAmount, 0);
+    }
+
+    function _mockDelegationsWithLock(address validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
+        L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](1);
+        mockDelegations[0] = L1ReadLibrary.Delegation({
+            validator: validator,
+            amount: weiAmount,
+            lockedUntilTimestamp: lockedUntilTimestamp
+        });
+
+        bytes memory encodedDelegations = abi.encode(mockDelegations);
+        vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
     }
 }
 

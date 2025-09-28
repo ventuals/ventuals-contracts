@@ -60,6 +60,57 @@ contract VHYPETest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                       Tests: Burn                          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    function test_CanBurnOwnTokens(address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user != address(0));
+        vm.assume(amount > 0);
+        vm.assume(amount > burnAmount);
+
+        vm.prank(manager);
+        vHYPE.mint(user, amount);
+
+        vm.prank(user);
+        vHYPE.burn(burnAmount);
+
+        assertEq(vHYPE.balanceOf(user), amount - burnAmount);
+        assertEq(vHYPE.totalSupply(), amount - burnAmount);
+    }
+
+    function test_CanBurnWithApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user1 != address(0));
+        vm.assume(user2 != address(0));
+        vm.assume(amount > 0);
+        vm.assume(amount > burnAmount);
+
+        vm.prank(manager);
+        vHYPE.mint(user1, amount);
+
+        vm.prank(user1);
+        vHYPE.approve(user2, burnAmount);
+
+        vm.prank(user2);
+        vHYPE.burnFrom(user1, burnAmount);
+
+        assertEq(vHYPE.balanceOf(user1), amount - burnAmount);
+        assertEq(vHYPE.totalSupply(), amount - burnAmount);
+        assertEq(vHYPE.allowance(user1, user2), 0);
+    }
+
+    function test_CannotBurnMoreThanBalance(address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user != address(0));
+        vm.assume(amount > 0);
+        vm.assume(burnAmount > amount);
+
+        vm.prank(manager);
+        vHYPE.mint(user, amount);
+
+        vm.prank(user);
+        vm.expectRevert();
+        vHYPE.burn(burnAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       Tests: Transfer                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_Transfer(uint256 amount, uint256 transferAmount) public {
