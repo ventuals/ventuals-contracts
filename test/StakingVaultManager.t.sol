@@ -39,6 +39,7 @@ contract StakingVaultManagerTest is Test {
 
     // Events
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
+    event EmergencyStakingDeposit(address indexed sender, uint256 amount, string purpose);
 
     function setUp() public {
         // Deploy RoleRegistry
@@ -1977,6 +1978,35 @@ contract StakingVaultManagerTest is Test {
         vm.expectEmit(true, true, true, true);
         emit EmergencyStakingWithdraw(owner, amount, "Emergency withdraw");
         stakingVaultManager.emergencyStakingWithdraw(amount, "Emergency withdraw");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*             Tests: Emergency Deposit (Only Owner)          */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_EmergencyStakingDeposit() public {
+        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE (in 18 decimals)
+        uint64 depositWeiAmount = depositAmount.to8Decimals();
+
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.validator(), depositWeiAmount, false);
+        _mockAndExpectStakingDepositCall(depositWeiAmount);
+
+        vm.prank(owner);
+        vm.expectEmit(true, true, true, true);
+        emit EmergencyStakingDeposit(owner, depositAmount, "Emergency staking deposit");
+        stakingVaultManager.emergencyStakingDeposit(depositAmount, "Emergency staking deposit");
+    }
+
+    function test_EmergencyStakingDeposit_NotOwner() public {
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.emergencyStakingDeposit(1_000_000 * 1e18, "Emergency staking deposit");
+    }
+
+    function test_EmergencyStakingDeposit_ZeroAmount() public {
+        vm.startPrank(owner);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVaultManager.emergencyStakingDeposit(0, "Emergency staking deposit");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

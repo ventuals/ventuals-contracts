@@ -62,6 +62,12 @@ contract StakingVaultManager is Base {
     /// @param purpose The purpose of the withdrawal
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
 
+    /// @notice Emitted when an emergency staking deposit is executed
+    /// @param sender The address that executed the emergency deposit
+    /// @param amount The amount of HYPE deposited
+    /// @param purpose The purpose of the deposit
+    event EmergencyStakingDeposit(address indexed sender, uint256 amount, string purpose);
+
     /// @dev A batch of withdraws that are processed together
     struct Batch {
         /// @dev The total amount of withdraws processed in this batch (vHYPE; in 18 decimals)
@@ -490,6 +496,21 @@ contract StakingVaultManager is Base {
         // the StakingVault's spot account balance after 7 days.
         stakingVault.stakingWithdraw(amount.to8Decimals());
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
+    }
+
+    /// @notice Execute an emergency staking deposit (from HyperCore Spot)
+    /// @dev Immediately delegates HYPE to the validator
+    /// @param amount Amount to deposit (in 18 decimals)
+    /// @param purpose Description of deposit purpose
+    function emergencyStakingDeposit(uint256 amount, string calldata purpose) external onlyOwner {
+        // NOTE: We don't check the spot balance here for simplicity. In practice, we'll only call this
+        // to rectify the HyperCore Spot balance after a slash, which would generally happen when the
+        // contract is paused and only owner functions are available. In the worst case, we don't have
+        // enough HYPE in HyperCore Spot to perform a staking deposit, and these two CoreWriter calls
+        // will just fail silently, and no HYPE will be lost.
+        stakingVault.tokenDelegate(validator, amount.to8Decimals());
+        stakingVault.stakingDeposit(amount.to8Decimals());
+        emit EmergencyStakingDeposit(msg.sender, amount, purpose);
     }
 
     modifier canDeposit() {
