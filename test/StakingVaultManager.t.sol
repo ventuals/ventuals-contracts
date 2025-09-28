@@ -31,7 +31,7 @@ contract StakingVaultManagerTest is Test {
     address public operator = makeAddr("operator");
     address public user = makeAddr("user");
 
-    address public defaultValidator = makeAddr("defaultValidator");
+    address public validator = makeAddr("validator");
     address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant MINIMUM_STAKE_BALANCE = 500_000 * 1e18; // 500k HYPE
@@ -67,7 +67,7 @@ contract StakingVaultManagerTest is Test {
             address(roleRegistry),
             address(vHYPE),
             address(stakingVault),
-            defaultValidator,
+            validator,
             MINIMUM_STAKE_BALANCE,
             MINIMUM_DEPOSIT_AMOUNT
         );
@@ -104,7 +104,7 @@ contract StakingVaultManagerTest is Test {
         assertEq(address(stakingVaultManager.roleRegistry()), address(roleRegistry));
         assertEq(address(stakingVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(stakingVaultManager.stakingVault()), address(stakingVault));
-        assertEq(stakingVaultManager.validator(), defaultValidator);
+        assertEq(stakingVaultManager.validator(), validator);
         assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
         assertEq(stakingVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
         assertEq(stakingVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
@@ -116,7 +116,7 @@ contract StakingVaultManagerTest is Test {
             address(roleRegistry),
             address(vHYPE),
             address(stakingVault),
-            defaultValidator,
+            validator,
             MINIMUM_STAKE_BALANCE,
             MINIMUM_DEPOSIT_AMOUNT
         );
@@ -1162,7 +1162,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
+        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1195,7 +1195,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
+        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1215,7 +1215,7 @@ contract StakingVaultManagerTest is Test {
 
         // Third call: delegate excess 20k HYPE to validator
         _mockAndExpectTokenDelegateCall(
-            defaultValidator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */
+            validator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */
         );
 
         // No undelegate call or staking withdraw call expected
@@ -1234,7 +1234,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
+        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1250,9 +1250,7 @@ contract StakingVaultManagerTest is Test {
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
 
         // Second call: undelegate shortfall amount (use CoreWriter helper)
-        _mockAndExpectTokenDelegateCall(
-            defaultValidator, (vhypeAmount - hypeDeposits).to8Decimals(), true /* isUndelegate */
-        );
+        _mockAndExpectTokenDelegateCall(validator, (vhypeAmount - hypeDeposits).to8Decimals(), true /* isUndelegate */ );
 
         // Third call: withdraw shortfall from staking (use CoreWriter helper)
         _mockAndExpectStakingWithdrawCall((vhypeAmount - hypeDeposits).to8Decimals());
@@ -1271,7 +1269,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
+        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1279,7 +1277,7 @@ contract StakingVaultManagerTest is Test {
         // Mock and expect calls for zero deposits scenario
 
         // Should undelegate the full withdraw amount
-        _mockAndExpectTokenDelegateCall(defaultValidator, vhypeAmount.to8Decimals(), true /* isUndelegate */ );
+        _mockAndExpectTokenDelegateCall(validator, vhypeAmount.to8Decimals(), true /* isUndelegate */ );
 
         // Should withdraw the full amount from staking
         _mockAndExpectStakingWithdrawCall(vhypeAmount.to8Decimals());
@@ -1298,7 +1296,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
+        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: Mock vault balance with deposits but no withdraws
         vm.deal(address(stakingVault), hypeDeposits);
@@ -1312,7 +1310,7 @@ contract StakingVaultManagerTest is Test {
         _mockAndExpectStakingDepositCall(hypeDeposits.to8Decimals());
 
         // Third call: delegate all deposits
-        _mockAndExpectTokenDelegateCall(defaultValidator, hypeDeposits.to8Decimals(), false /* isUndelegate */ );
+        _mockAndExpectTokenDelegateCall(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ );
 
         // No undelegate call or staking withdraw call expected
         _expectNoTokenUndelegateCall();
@@ -1326,7 +1324,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
+        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // No HyperCore deposit expected
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
@@ -1771,13 +1769,13 @@ contract StakingVaultManagerTest is Test {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
         // Current validator should be defaultValidator
-        assertEq(stakingVaultManager.validator(), defaultValidator);
+        assertEq(stakingVaultManager.validator(), validator);
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegations(defaultValidator, amount.to8Decimals());
+        _mockDelegations(validator, amount.to8Decimals());
 
         // Mock the undelegate call (from current validator)
-        _mockAndExpectTokenDelegateCall(defaultValidator, amount.to8Decimals(), true);
+        _mockAndExpectTokenDelegateCall(validator, amount.to8Decimals(), true);
 
         // Mock the delegate call (to new validator)
         _mockAndExpectTokenDelegateCall(newValidator, amount.to8Decimals(), false);
@@ -1794,7 +1792,7 @@ contract StakingVaultManagerTest is Test {
         uint256 amount = 100_000 * 1e18;
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegations(defaultValidator, amount.to8Decimals());
+        _mockDelegations(validator, amount.to8Decimals());
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
@@ -1805,11 +1803,11 @@ contract StakingVaultManagerTest is Test {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegations(defaultValidator, amount.to8Decimals());
+        _mockDelegations(validator, amount.to8Decimals());
 
         vm.startPrank(owner);
         vm.expectRevert(IStakingVault.RedelegateToSameValidator.selector);
-        stakingVaultManager.switchValidator(defaultValidator);
+        stakingVaultManager.switchValidator(validator);
     }
 
     function test_SwitchValidator_StakeLockedUntilFuture() public {
@@ -1818,11 +1816,11 @@ contract StakingVaultManagerTest is Test {
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), futureTimestamp);
+        _mockDelegationsWithLock(validator, amount.to8Decimals(), futureTimestamp);
 
         vm.startPrank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp)
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, validator, futureTimestamp)
         );
         stakingVaultManager.switchValidator(newValidator);
     }
@@ -1833,10 +1831,10 @@ contract StakingVaultManagerTest is Test {
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), currentTimestamp);
+        _mockDelegationsWithLock(validator, amount.to8Decimals(), currentTimestamp);
 
         // Mock the undelegate call (from current validator)
-        _mockAndExpectTokenDelegateCall(defaultValidator, amount.to8Decimals(), true);
+        _mockAndExpectTokenDelegateCall(validator, amount.to8Decimals(), true);
         // Mock the delegate call (to new validator)
         _mockAndExpectTokenDelegateCall(newValidator, amount.to8Decimals(), false);
 
@@ -1897,7 +1895,7 @@ contract StakingVaultManagerTest is Test {
         uint256 delegatedAmount = 50_000 * 1e18; // Only 50k HYPE delegated
 
         _mockDelegatorSummary(delegatedAmount.to8Decimals());
-        _mockDelegations(defaultValidator, delegatedAmount.to8Decimals());
+        _mockDelegations(validator, delegatedAmount.to8Decimals());
 
         vm.startPrank(owner);
         vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
@@ -1909,11 +1907,11 @@ contract StakingVaultManagerTest is Test {
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), futureTimestamp);
+        _mockDelegationsWithLock(validator, amount.to8Decimals(), futureTimestamp);
 
         vm.startPrank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp)
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, validator, futureTimestamp)
         );
         stakingVaultManager.emergencyStakingWithdraw(amount, "Emergency withdraw");
     }
@@ -1923,9 +1921,9 @@ contract StakingVaultManagerTest is Test {
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
         _mockDelegatorSummary(amount.to8Decimals());
-        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), currentTimestamp);
+        _mockDelegationsWithLock(validator, amount.to8Decimals(), currentTimestamp);
 
-        _mockAndExpectTokenDelegateCall(defaultValidator, amount.to8Decimals(), true);
+        _mockAndExpectTokenDelegateCall(validator, amount.to8Decimals(), true);
         _mockAndExpectStakingWithdrawCall(amount.to8Decimals());
 
         vm.prank(owner);
@@ -2228,7 +2226,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function _mockDelegations(uint64 weiAmount) internal {
-        _mockDelegations(defaultValidator, weiAmount);
+        _mockDelegations(validator, weiAmount);
     }
 
     function _mockDelegations(address validator, uint64 weiAmount) internal {
