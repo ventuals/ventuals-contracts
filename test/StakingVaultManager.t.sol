@@ -19,8 +19,6 @@ import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol"
 import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 contract StakingVaultManagerTest is Test {
     using Converters for *;
 
@@ -2276,14 +2274,9 @@ contract StakingVaultManagerTest is Test {
     /// @param totalBalance The total balance of HYPE to mock (in 18 decimals)
     /// @param totalSupply The total supply of vHYPE to mint to owner (in 18 decimals)
     function _mockBalancesForExchangeRate(uint256 totalBalance, uint256 totalSupply) internal {
-        console2.log("total balance mock before conversion");
-        console2.log(totalBalance);
         vm.assume(totalBalance.to8Decimals() <= type(uint64).max);
 
         uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
-
-        console2.log("total balance mock after conversion");
-        console2.log(delegatedBalance);
 
         // Mock delegator summary and spot balance
         _mockDelegatorSummary(delegatedBalance);
@@ -2299,8 +2292,6 @@ contract StakingVaultManagerTest is Test {
     /// @dev Helper function to mock delegator summary for testing staking deposit calls
     /// @param delegated The delegated balance to mock (in 8 decimals)
     function _mockDelegatorSummary(uint64 delegated) internal {
-        console2.log("Delegated balance");
-        console2.log(delegated);
         vm.mockCall(
             L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
             abi.encode(address(stakingVault)),

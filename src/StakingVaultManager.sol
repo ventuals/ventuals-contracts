@@ -8,8 +8,6 @@ import {Base} from "./Base.sol";
 import {VHYPE} from "./VHYPE.sol";
 import {Converters} from "./libraries/Converters.sol";
 
-import {console2} from "forge-std/console2.sol";
-
 contract StakingVaultManager is Base {
     using Converters for *;
 
@@ -397,11 +395,7 @@ contract StakingVaultManager is Base {
     /// @dev Ratio of total HYPE in the staking vault to vHYPE
     function exchangeRate() public view returns (uint256) {
         uint256 balance = totalBalance();
-        console2.log("totalBalance");
-        console2.log(balance);
         uint256 totalSupply = vHYPE.totalSupply();
-        console2.log("total Supply");
-        console2.log(totalSupply);
 
         // If we have no vHYPE in circulation, the exchange rate is 1
         if (totalSupply == 0) {
