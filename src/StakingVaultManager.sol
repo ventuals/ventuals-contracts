@@ -8,6 +8,8 @@ import {Base} from "./Base.sol";
 import {VHYPE} from "./VHYPE.sol";
 import {Converters} from "./libraries/Converters.sol";
 
+import {console2} from "forge-std/console2.sol";
+
 contract StakingVaultManager is Base {
     using Converters for *;
 
@@ -319,13 +321,13 @@ contract StakingVaultManager is Base {
 
             // Stake the excess HYPE
             uint256 amountToStake = depositsInBatch - withdrawsInBatch;
-            _delegateAndStake(amountToStake.to8Decimals());
+            stakingVault.stake(validator, amountToStake.to8Decimals());
         } else if (depositsInBatch < withdrawsInBatch) {
             // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
 
             // Withdraw the amount not covered by deposits from the staking vault
             uint256 amountToWithdraw = withdrawsInBatch - depositsInBatch;
-            _undelegateAndWithdraw(amountToWithdraw.to8Decimals());
+            stakingVault.unstake(validator, amountToWithdraw.to8Decimals());
         }
     }
 
@@ -395,7 +397,11 @@ contract StakingVaultManager is Base {
     /// @dev Ratio of total HYPE in the staking vault to vHYPE
     function exchangeRate() public view returns (uint256) {
         uint256 balance = totalBalance();
+        console2.log("totalBalance");
+        console2.log(balance);
         uint256 totalSupply = vHYPE.totalSupply();
+        console2.log("total Supply");
+        console2.log(totalSupply);
 
         // If we have no vHYPE in circulation, the exchange rate is 1
         if (totalSupply == 0) {
@@ -490,7 +496,7 @@ contract StakingVaultManager is Base {
         // Immediately undelegate HYPE
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
-        _undelegateAndWithdraw(amount.to8Decimals());
+        stakingVault.unstake(validator, amount.to8Decimals());
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
@@ -504,7 +510,7 @@ contract StakingVaultManager is Base {
         // contract is paused and only owner functions are available. In the worst case, we don't have
         // enough HYPE in HyperCore Spot to perform a staking deposit, and these two CoreWriter calls
         // will just fail silently, and no HYPE will be lost.
-        _delegateAndStake(amount.to8Decimals());
+        stakingVault.stake(validator, amount.to8Decimals());
         emit EmergencyStakingDeposit(msg.sender, amount, purpose);
     }
 
@@ -524,17 +530,5 @@ contract StakingVaultManager is Base {
 
     function _whenBatchProcessingNotPaused() internal view {
         require(!isBatchProcessingPaused, BatchProcessingPaused());
-    }
-
-    /// @param amount The amount to delegate and stake. It should already be expressed in 8 decimals.
-    function _delegateAndStake(uint64 amount) internal {
-        stakingVault.tokenDelegate(validator, amount);
-        stakingVault.stakingDeposit(amount);
-    }
-
-    /// @param amount The amount to undelegate and withdraw to staking spot. It should already be expressed in 8 decimals.
-    function _undelegateAndWithdraw(uint64 amount) internal {
-        stakingVault.tokenUndelegate(validator, amount);
-        stakingVault.stakingWithdraw(amount);
     }
 }

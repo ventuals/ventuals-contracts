@@ -39,43 +39,17 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function stakingDeposit(uint64 weiAmount) external onlyManager whenNotPaused {
+    function stake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
         require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.stakingDeposit(weiAmount);
+        _delegate(validator, weiAmount);
     }
 
     /// @inheritdoc IStakingVault
-    function stakingWithdraw(uint64 weiAmount) external onlyManager whenNotPaused {
+    function unstake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
         require(weiAmount > 0, ZeroAmount());
+        _undelegate(validator, weiAmount);
         CoreWriterLibrary.stakingWithdraw(weiAmount);
-    }
-
-    /// @inheritdoc IStakingVault
-    function tokenDelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
-        require(weiAmount > 0, ZeroAmount());
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
-        lastDelegationChangeBlockNumber[validator] = block.number;
-    }
-
-    /// @inheritdoc IStakingVault
-    function tokenUndelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
-        require(weiAmount > 0, ZeroAmount());
-
-        // Check if we have enough HYPE to undelegate
-        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
-        require(exists && delegation.amount >= weiAmount, InsufficientHYPEBalance());
-
-        // Check if the stake is unlocked. This value will only be correct in the block after
-        // a delegate action is processed.
-        require(
-            delegation.lockedUntilTimestamp <= block.timestamp,
-            StakeLockedUntilTimestamp(validator, delegation.lockedUntilTimestamp)
-        );
-
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true);
-
-        // Update the last delegation change block number
-        lastDelegationChangeBlockNumber[validator] = block.number;
     }
 
     /// @inheritdoc IStakingVault
@@ -86,9 +60,8 @@ contract StakingVault is IStakingVault, Base {
     {
         require(weiAmount > 0, ZeroAmount());
         require(fromValidator != toValidator, RedelegateToSameValidator());
-
-        tokenUndelegate(fromValidator, weiAmount); // Will revert if the stake is locked, or if the validator does not have enough HYPE to undelegate
-        tokenDelegate(toValidator, weiAmount);
+        _undelegate(fromValidator, weiAmount); // Will revert if the stake is locked, or if the validator does not have enough HYPE to undelegate
+        _delegate(toValidator, weiAmount);
     }
 
     /// @inheritdoc IStakingVault
@@ -127,6 +100,34 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
         return L1ReadLibrary.spotBalance(address(this), tokenId);
+    }
+
+    /// @notice Delegates to the validator, and checkpoints this block number as the last delegation change
+    function _delegate(address validator, uint64 weiAmount) internal {
+        /// Set isUndelegate to false
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
+        // Update the last delegation change block number
+        lastDelegationChangeBlockNumber[validator] = block.number;
+    }
+
+    /// @notice Undelegates to the validator, and checkpoints this block number as the last delegation change
+    function _undelegate(address validator, uint64 weiAmount) internal {
+        // Check if we have enough HYPE to undelegate
+        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
+        require(exists && delegation.amount >= weiAmount, InsufficientHYPEBalance());
+
+        // Check if the stake is unlocked. This value will only be correct in the block after
+        // a delegate action is processed.
+        require(
+            delegation.lockedUntilTimestamp <= block.timestamp,
+            StakeLockedUntilTimestamp(validator, delegation.lockedUntilTimestamp)
+        );
+
+        /// set isUndelegate to true.
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true);
+
+        // Update the last delegation change block number
+        lastDelegationChangeBlockNumber[validator] = block.number;
     }
 
     /// @notice Internal function to handle HYPE transfers from the vault.
