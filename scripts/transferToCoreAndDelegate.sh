@@ -18,8 +18,8 @@ if [ -z "$OWNER_PRIVATE_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$GENESIS_VAULT_MANAGER" ]; then
-    echo "Error: GENESIS_VAULT_MANAGER is not set. Please add it to your .env file."
+if [ -z "$STAKING_VAULT_MANAGER" ]; then
+    echo "Error: STAKING_VAULT_MANAGER is not set. Please add it to your .env file."
     exit 1
 fi
 
@@ -29,10 +29,10 @@ if [ -z "$WEI_AMOUNT" ]; then
 fi
 
 echo "Calling transferToCoreAndDelegate function..."
-echo "Contract: $GENESIS_VAULT_MANAGER"
+echo "Contract: $STAKING_VAULT_MANAGER"
 echo "Amount: $WEI_AMOUNT"
 echo ""
-cast send $GENESIS_VAULT_MANAGER \
+cast send $STAKING_VAULT_MANAGER \
     "transferToCoreAndDelegate(uint256)" \
     $WEI_AMOUNT \
     --rpc-url $RPC_URL \

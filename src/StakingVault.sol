@@ -13,6 +13,11 @@ contract StakingVault is IStakingVault, Base {
     /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
     uint256 public lastEvmToCoreTransferBlockNumber;
 
+    /// @dev The last block number when HYPE was delegated or undelegated to a validator
+    /// @dev This is used to enforce a minimum one-block delay between delegating/undelegating to a
+    ///      validator, and reading the delegation state for the validator from the L1Read precompiles
+    mapping(address => uint256) public lastDelegationChangeBlockNumber;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -29,31 +34,72 @@ contract StakingVault is IStakingVault, Base {
         // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
         // would be made against an incorrect balance (and thus an incorrect exchange rate).
         require(block.number > lastEvmToCoreTransferBlockNumber, CannotDepositUntilNextBlock());
+        require(msg.value > 0, ZeroAmount());
         emit Deposit(msg.sender, msg.value);
     }
 
     /// @inheritdoc IStakingVault
     function stakingDeposit(uint64 weiAmount) external onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.stakingDeposit(weiAmount);
     }
 
     /// @inheritdoc IStakingVault
     function stakingWithdraw(uint64 weiAmount) external onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.stakingWithdraw(weiAmount);
     }
 
     /// @inheritdoc IStakingVault
-    function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external onlyManager whenNotPaused {
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, isUndelegate);
+    function tokenDelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
+        lastDelegationChangeBlockNumber[validator] = block.number;
+    }
+
+    /// @inheritdoc IStakingVault
+    function tokenUndelegate(address validator, uint64 weiAmount) public onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
+
+        // Check if we have enough HYPE to undelegate
+        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
+        require(exists && delegation.amount >= weiAmount, InsufficientHYPEBalance());
+
+        // Check if the stake is unlocked. This value will only be correct in the block after
+        // a delegate action is processed.
+        require(
+            delegation.lockedUntilTimestamp <= block.timestamp,
+            StakeLockedUntilTimestamp(validator, delegation.lockedUntilTimestamp)
+        );
+
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true);
+
+        // Update the last delegation change block number
+        lastDelegationChangeBlockNumber[validator] = block.number;
+    }
+
+    /// @inheritdoc IStakingVault
+    function tokenRedelegate(address fromValidator, address toValidator, uint64 weiAmount)
+        external
+        onlyManager
+        whenNotPaused
+    {
+        require(weiAmount > 0, ZeroAmount());
+        require(fromValidator != toValidator, RedelegateToSameValidator());
+
+        tokenUndelegate(fromValidator, weiAmount); // Will revert if the stake is locked, or if the validator does not have enough HYPE to undelegate
+        tokenDelegate(toValidator, weiAmount);
     }
 
     /// @inheritdoc IStakingVault
     function spotSend(address destination, uint64 token, uint64 weiAmount) external onlyManager whenNotPaused {
+        require(weiAmount > 0, ZeroAmount());
         CoreWriterLibrary.spotSend(destination, token, weiAmount);
     }
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
+        require(amount > 0, ZeroAmount());
         require(block.number > lastEvmToCoreTransferBlockNumber, CannotTransferToCoreUntilNextBlock());
 
         // This is an important safety check - ensures that the StakingVault account is activated on HyperCore.
@@ -79,11 +125,6 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function delegations() external view returns (L1ReadLibrary.Delegation[] memory) {
-        return L1ReadLibrary.delegations(address(this));
-    }
-
-    /// @inheritdoc IStakingVault
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
         return L1ReadLibrary.spotBalance(address(this), tokenId);
     }
@@ -95,5 +136,27 @@ contract StakingVault is IStakingVault, Base {
 
         (bool success,) = recipient.call{value: amount}("");
         if (!success) revert TransferFailed(recipient, amount);
+    }
+
+    /// @notice Returns the delegation for a given validator
+    /// @param _validator The validator to get the delegation for
+    /// @return The delegation for the given validator
+    function _getDelegation(address _validator) internal view returns (bool, L1ReadLibrary.Delegation memory) {
+        // IMPORTANT: We enforce a one-block delay between delegating/undelegating to a validator and reading the
+        // delegation state for the validator from the L1Read precompiles. This is to ensure that the delegation
+        // state is updated in the L1Read precompiles before reading it.
+        require(
+            lastDelegationChangeBlockNumber[_validator] == 0
+                || block.number > lastDelegationChangeBlockNumber[_validator] + 1,
+            CannotReadDelegationUntilNextBlock()
+        );
+
+        L1ReadLibrary.Delegation[] memory delegations = L1ReadLibrary.delegations(address(this));
+        for (uint256 i = 0; i < delegations.length; i++) {
+            if (delegations[i].validator == _validator) {
+                return (true, delegations[i]);
+            }
+        }
+        return (false, L1ReadLibrary.Delegation({validator: address(0), amount: 0, lockedUntilTimestamp: 0}));
     }
 }
