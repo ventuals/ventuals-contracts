@@ -1150,6 +1150,53 @@ contract StakingVaultManagerTest is Test {
         );
     }
 
+    function test_ProcessCurrentBatch_CannotProcessAfterSwitchValidatorInSameBlock() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        address newValidator = makeAddr("newValidator");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+
+        // Setup: Mock the token delegate and undelegate calls
+        _mockAndExpectTokenDelegateCall(validator, totalBalance.to8Decimals(), true);
+        _mockAndExpectTokenDelegateCall(newValidator, totalBalance.to8Decimals(), false);
+
+        // Switch validator
+        vm.prank(owner);
+        stakingVaultManager.switchValidator(newValidator);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process batch should fail
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVaultManager.processCurrentBatch();
+    }
+
+    function test_ProcessCurrentBatch_CannotProcessAfterEmergencyStakingWithdrawInSameBlock() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: Mock balances
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(totalBalance.to8Decimals());
+        _mockAndExpectStakingWithdrawCall(totalBalance.to8Decimals());
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.validator(), totalBalance.to8Decimals(), true);
+
+        // Emergency withdraw
+        vm.prank(owner);
+        stakingVaultManager.emergencyStakingWithdraw(totalBalance, "Emergency withdraw");
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process batch should fail
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVaultManager.processCurrentBatch();
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                Tests: _finalizeBatch Logic                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -2299,8 +2346,8 @@ contract StakingVaultManagerTest is Test {
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stakingWithdraw.selector), 0);
     }
 
-    function _mockAndExpectTokenDelegateCall(address validator, uint64 weiAmount, bool isUndelegate) internal {
-        bytes memory encodedAction = abi.encode(validator, weiAmount, isUndelegate);
+    function _mockAndExpectTokenDelegateCall(address _validator, uint64 weiAmount, bool isUndelegate) internal {
+        bytes memory encodedAction = abi.encode(_validator, weiAmount, isUndelegate);
         bytes memory data = new bytes(4 + encodedAction.length);
         data[0] = 0x01;
         data[1] = 0x00;
