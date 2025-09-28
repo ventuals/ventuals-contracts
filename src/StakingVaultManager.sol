@@ -50,23 +50,11 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if batch processing is paused.
     error BatchProcessingPaused();
 
-    /// @notice Thrown if the from and to validators are the same.
-    error RedelegateToSameValidator();
-
-    /// @notice Thrown if the validator is locked until a timestamp in the future.
-    error StakeLockedUntilTimestamp(address validator, uint64 lockedUntilTimestamp);
-
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
     /// @param deposited The amount of HYPE deposited (in 18 decimals)
     event Deposit(address indexed depositor, uint256 minted, uint256 deposited);
-
-    /// @notice Emitted when an HYPE stake is moved from one validator to another
-    /// @param fromValidator The validator from which the HYPE stake is being moved
-    /// @param toValidator The validator to which the HYPE stake is being moved
-    /// @param amount The amount of HYPE being moved (in 18 decimals)
-    event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
 
     /// @notice Emitted when an emergency staking withdraw is executed
     /// @param sender The address that executed the emergency withdraw
@@ -454,14 +442,10 @@ contract StakingVaultManager is Base {
 
     /// @notice Switches the validator to delegate HYPE to
     /// @param newValidator The new validator
-    function switchValidator(address newValidator) public onlyOwner isStakeUnlocked {
-        require(newValidator != validator, RedelegateToSameValidator());
+    function switchValidator(address newValidator) public onlyOwner {
+        L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
+        stakingVault.tokenRedelegate(validator, newValidator, delegatorSummary.delegated);
 
-        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
-        if (exists) {
-            stakingVault.tokenUndelegate(validator, delegation.amount);
-            stakingVault.tokenDelegate(newValidator, delegation.amount);
-        }
         validator = newValidator;
     }
 
@@ -498,12 +482,7 @@ contract StakingVaultManager is Base {
     /// @dev Amount will be available in the StakingVault's spot account balance after 7 days.
     /// @param amount Amount to withdraw (in 18 decimals)
     /// @param purpose Description of withdrawal purpose
-    function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner isStakeUnlocked {
-        require(amount > 0, ZeroAmount());
-
-        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
-        require(exists && delegation.amount >= amount.to8Decimals(), InsufficientBalance());
-
+    function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
         // Immediately undelegate HYPE
         stakingVault.tokenUndelegate(validator, amount.to8Decimals());
 
@@ -511,19 +490,6 @@ contract StakingVaultManager is Base {
         // the StakingVault's spot account balance after 7 days.
         stakingVault.stakingWithdraw(amount.to8Decimals());
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
-    }
-
-    /// @notice Returns the delegation for a given validator
-    /// @param _validator The validator to get the delegation for
-    /// @return The delegation for the given validator
-    function _getDelegation(address _validator) internal view returns (bool, L1ReadLibrary.Delegation memory) {
-        L1ReadLibrary.Delegation[] memory delegations = stakingVault.delegations();
-        for (uint256 i = 0; i < delegations.length; i++) {
-            if (delegations[i].validator == _validator) {
-                return (true, delegations[i]);
-            }
-        }
-        return (false, L1ReadLibrary.Delegation({validator: address(0), amount: 0, lockedUntilTimestamp: 0}));
     }
 
     modifier canDeposit() {
@@ -542,22 +508,5 @@ contract StakingVaultManager is Base {
 
     function _whenBatchProcessingNotPaused() internal view {
         require(!isBatchProcessingPaused, BatchProcessingPaused());
-    }
-
-    modifier isStakeUnlocked() {
-        _isStakeUnlocked();
-        _;
-    }
-
-    function _isStakeUnlocked() internal view {
-        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
-        if (!exists) {
-            return; // If there is no delegation, then the stake is unlocked
-        }
-
-        require(
-            delegation.lockedUntilTimestamp <= block.timestamp,
-            StakeLockedUntilTimestamp(validator, delegation.lockedUntilTimestamp)
-        );
     }
 }

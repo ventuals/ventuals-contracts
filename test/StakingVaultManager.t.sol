@@ -104,7 +104,7 @@ contract StakingVaultManagerTest is Test {
         assertEq(address(stakingVaultManager.roleRegistry()), address(roleRegistry));
         assertEq(address(stakingVaultManager.vHYPE()), address(vHYPE));
         assertEq(address(stakingVaultManager.stakingVault()), address(stakingVault));
-        assertEq(stakingVaultManager.defaultValidator(), defaultValidator);
+        assertEq(stakingVaultManager.validator(), defaultValidator);
         assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
         assertEq(stakingVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
         assertEq(stakingVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
@@ -1162,6 +1162,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1194,6 +1195,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1232,6 +1234,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1268,6 +1271,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1294,6 +1298,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
 
         // Setup: Mock vault balance with deposits but no withdraws
         vm.deal(address(stakingVault), hypeDeposits);
@@ -1321,6 +1326,7 @@ contract StakingVaultManagerTest is Test {
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(defaultValidator, totalBalance.to8Decimals());
 
         // No HyperCore deposit expected
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
@@ -1686,27 +1692,6 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*            Tests: Set Default Validator (Only Owner)       */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function test_SetDefaultValidator_OnlyOwner() public {
-        address newValidator = makeAddr("newValidator");
-
-        vm.prank(owner);
-        stakingVaultManager.setDefaultValidator(newValidator);
-
-        assertEq(stakingVaultManager.defaultValidator(), newValidator);
-    }
-
-    function test_SetDefaultValidator_NotOwner() public {
-        address newValidator = makeAddr("newValidator");
-
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        stakingVaultManager.setDefaultValidator(newValidator);
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*       Tests: Set Minimum Deposit Amount (Only Owner)       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -1778,130 +1763,88 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*              Tests: Apply Slash (Only Owner)               */
+    /*            Tests: Switch Validator (Only Owner)              */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    // TODO
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*          Tests: Redelegate Stake (Only Owner)             */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    event RedelegateStake(address indexed fromValidator, address indexed toValidator, uint256 amount);
-
-    function test_RedelegateStake_OnlyOwner() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
+    function test_SwitchValidator_OnlyOwner() public {
+        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
-        _mockDelegations(fromValidator, amount.to8Decimals());
+        // Current validator should be defaultValidator
+        assertEq(stakingVaultManager.validator(), defaultValidator);
 
-        // Mock the undelegate call (from validator)
-        _mockAndExpectTokenDelegateCall(fromValidator, amount.to8Decimals(), true);
-        // Mock the delegate call (to validator)
-        _mockAndExpectTokenDelegateCall(toValidator, amount.to8Decimals(), false);
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegations(defaultValidator, amount.to8Decimals());
+
+        // Mock the undelegate call (from current validator)
+        _mockAndExpectTokenDelegateCall(defaultValidator, amount.to8Decimals(), true);
+
+        // Mock the delegate call (to new validator)
+        _mockAndExpectTokenDelegateCall(newValidator, amount.to8Decimals(), false);
 
         vm.prank(owner);
-        vm.expectEmit(true, true, true, true);
-        emit RedelegateStake(fromValidator, toValidator, amount);
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.switchValidator(newValidator);
+
+        // Verify validator was updated
+        assertEq(stakingVaultManager.validator(), newValidator);
     }
 
-    function test_RedelegateStake_NotOwner() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
+    function test_SwitchValidator_NotOwner() public {
+        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18;
 
-        _mockDelegations(fromValidator, amount.to8Decimals());
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegations(defaultValidator, amount.to8Decimals());
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.switchValidator(newValidator);
     }
 
-    function test_RedelegateStake_ZeroAmount() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
-
-        _mockDelegations(fromValidator, 100_000 * 1e8);
-
-        vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, 0);
-    }
-
-    function test_RedelegateStake_SameValidator() public {
-        address validator = makeAddr("validator");
+    function test_SwitchValidator_SameValidator() public {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
-        _mockDelegations(validator, amount.to8Decimals());
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegations(defaultValidator, amount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.RedelegateToSameValidator.selector);
-        stakingVaultManager.redelegateStake(validator, validator, amount);
+        vm.expectRevert(IStakingVault.RedelegateToSameValidator.selector);
+        stakingVaultManager.switchValidator(defaultValidator);
     }
 
-    function test_RedelegateStake_InsufficientDelegatedBalance() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
-        uint256 requestedAmount = 100_000 * 1e18; // 100k HYPE
-        uint256 delegatedAmount = 50_000 * 1e18; // Only 50k HYPE delegated
-
-        _mockDelegations(fromValidator, delegatedAmount.to8Decimals());
-
-        vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, requestedAmount);
-    }
-
-    function test_RedelegateStake_StakeLockedUntilFuture() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
+    function test_SwitchValidator_StakeLockedUntilFuture() public {
+        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
-        _mockDelegationsWithLock(fromValidator, amount.to8Decimals(), futureTimestamp);
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), futureTimestamp);
 
         vm.startPrank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                StakingVaultManager.StakeLockedUntilTimestamp.selector, fromValidator, futureTimestamp
-            )
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp)
         );
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        stakingVaultManager.switchValidator(newValidator);
     }
 
-    function test_RedelegateStake_StakeUnlockedAtExactTimestamp() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
+    function test_SwitchValidator_StakeUnlockedAtExactTimestamp() public {
+        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
-        _mockDelegationsWithLock(fromValidator, amount.to8Decimals(), currentTimestamp);
+        _mockDelegatorSummary(amount.to8Decimals());
+        _mockDelegationsWithLock(defaultValidator, amount.to8Decimals(), currentTimestamp);
 
-        // Mock the undelegate call (from validator)
-        _mockAndExpectTokenDelegateCall(fromValidator, amount.to8Decimals(), true);
-        // Mock the delegate call (to validator)
-        _mockAndExpectTokenDelegateCall(toValidator, amount.to8Decimals(), false);
+        // Mock the undelegate call (from current validator)
+        _mockAndExpectTokenDelegateCall(defaultValidator, amount.to8Decimals(), true);
+        // Mock the delegate call (to new validator)
+        _mockAndExpectTokenDelegateCall(newValidator, amount.to8Decimals(), false);
 
         vm.prank(owner);
-        vm.expectEmit(true, true, true, true);
-        emit RedelegateStake(fromValidator, toValidator, amount);
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
-    }
+        stakingVaultManager.switchValidator(newValidator);
 
-    function test_RedelegateStake_ValidatorNotFound() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
-        address differentValidator = makeAddr("differentValidator");
-        uint256 amount = 100_000 * 1e18; // 100k HYPE
-
-        // Mock delegations for a different validator
-        _mockDelegations(differentValidator, amount.to8Decimals());
-
-        vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
-        stakingVaultManager.redelegateStake(fromValidator, toValidator, amount);
+        // Verify validator was updated
+        assertEq(stakingVaultManager.validator(), newValidator);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1915,18 +1858,18 @@ contract StakingVaultManagerTest is Test {
         _mockDelegatorSummary(withdrawWeiAmount);
         _mockDelegations(withdrawWeiAmount);
         _mockAndExpectStakingWithdrawCall(withdrawWeiAmount);
-        _mockAndExpectTokenDelegateCall(stakingVaultManager.defaultValidator(), withdrawWeiAmount, true);
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.validator(), withdrawWeiAmount, true);
 
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit EmergencyStakingWithdraw(owner, withdrawAmount, "Emergency staking withdraw");
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(withdrawAmount, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_NotOwner() public {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, 1_000_000 * 1e18, "Emergency staking withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(1_000_000 * 1e18, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_InsufficientBalance() public {
@@ -1936,8 +1879,8 @@ contract StakingVaultManagerTest is Test {
         _mockDelegations(50_000 * 1e8);
 
         vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, withdrawAmount, "Emergency staking withdraw");
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVaultManager.emergencyStakingWithdraw(withdrawAmount, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_ZeroAmount() public {
@@ -1945,8 +1888,8 @@ contract StakingVaultManagerTest is Test {
         _mockDelegations(uint64(1_000_000 * 1e8));
 
         vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, 0, "Emergency staking withdraw");
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVaultManager.emergencyStakingWithdraw(0, "Emergency staking withdraw");
     }
 
     function test_EmergencyStakingWithdraw_InsufficientDelegatedBalance() public {
@@ -1957,8 +1900,8 @@ contract StakingVaultManagerTest is Test {
         _mockDelegations(defaultValidator, delegatedAmount.to8Decimals());
 
         vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, requestedAmount, "Emergency withdraw");
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVaultManager.emergencyStakingWithdraw(requestedAmount, "Emergency withdraw");
     }
 
     function test_EmergencyStakingWithdraw_StakeLockedUntilFuture() public {
@@ -1970,11 +1913,9 @@ contract StakingVaultManagerTest is Test {
 
         vm.startPrank(owner);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                StakingVaultManager.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp
-            )
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, defaultValidator, futureTimestamp)
         );
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(amount, "Emergency withdraw");
     }
 
     function test_EmergencyStakingWithdraw_StakeUnlockedAtExactTimestamp() public {
@@ -1990,20 +1931,7 @@ contract StakingVaultManagerTest is Test {
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
         emit EmergencyStakingWithdraw(owner, amount, "Emergency withdraw");
-        stakingVaultManager.emergencyStakingWithdraw(defaultValidator, amount, "Emergency withdraw");
-    }
-
-    function test_EmergencyStakingWithdraw_ValidatorNotFound() public {
-        address nonExistentValidator = makeAddr("nonExistentValidator");
-        uint256 amount = 100_000 * 1e18; // 100k HYPE
-
-        _mockDelegatorSummary(amount.to8Decimals());
-        // Mock delegations for a different validator
-        _mockDelegations(defaultValidator, amount.to8Decimals());
-
-        vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
-        stakingVaultManager.emergencyStakingWithdraw(nonExistentValidator, amount, "Emergency withdraw");
+        stakingVaultManager.emergencyStakingWithdraw(amount, "Emergency withdraw");
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -2076,7 +2004,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                    Apply Slash Tests                       */
+    /*              Tests: Apply Slash (Only Owner)               */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_ApplySlash_ValidBatch() public {
