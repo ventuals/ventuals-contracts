@@ -1613,6 +1613,19 @@ contract StakingVaultManagerTest is Test {
         assertEq(exchangeRate, 1e18);
     }
 
+    function test_ExchangeRate_BalanceMoreThanSupply_broken() public {
+        uint256 totalBalance = 19405474291;
+        uint256 vHYPESupply = 10722630114;
+        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
+        vm.assume(totalBalance >= 1e10);
+        vm.assume(vHYPESupply > 0);
+        vm.assume(totalBalance > vHYPESupply);
+        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
+
+        uint256 exchangeRate = stakingVaultManager.exchangeRate();
+        assertGt(exchangeRate, 1e18); // exchange rate >= 1
+    }
+
     function test_ExchangeRate_BalanceMoreThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
         vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
         vm.assume(totalBalance >= 1e10);
