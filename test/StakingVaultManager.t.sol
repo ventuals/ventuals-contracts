@@ -2280,7 +2280,6 @@ contract StakingVaultManagerTest is Test {
         console2.log(totalBalance);
         vm.assume(totalBalance.to8Decimals() <= type(uint64).max);
 
-
         uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
 
         console2.log("total balance mock after conversion");
