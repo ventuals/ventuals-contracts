@@ -531,7 +531,7 @@ contract StakingVaultManager is Base {
         stakingVault.tokenDelegate(validator, amount);
         stakingVault.stakingDeposit(amount);
     }
-    
+
     /// @param amount The amount to undelegate and withdraw to staking spot. It should already be expressed in 8 decimals.
     function _undelegateAndWithdraw(uint64 amount) internal {
         stakingVault.tokenUndelegate(validator, amount);
