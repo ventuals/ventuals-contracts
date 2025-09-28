@@ -22,7 +22,7 @@ contract VHYPE is Base, ERC20Upgradeable, ERC20BurnableUpgradeable {
         _mint(to, amount);
     }
 
-    function burn(uint256 amount) public override {
+    function burn(uint256 amount) public override whenNotPaused {
         _burn(msg.sender, amount);
     }
 }
