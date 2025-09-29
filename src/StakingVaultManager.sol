@@ -400,7 +400,9 @@ contract StakingVaultManager is Base {
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
         // Safety check to ensure we are still above the minimum stake amount
-        uint256 withdrawCapacity = totalBalance() - minimumStakeBalance;
+        uint256 balance = totalBalance();
+        require(balance >= minimumStakeBalance, NotEnoughBalance());
+        uint256 withdrawCapacity = balance - minimumStakeBalance;
         require(withdrawCapacity >= hypeProcessed, NotEnoughBalance());
 
         // We can finalize the batch if we've processed all withdraws
@@ -608,11 +610,11 @@ contract StakingVaultManager is Base {
         require(currentBatchIndex < batches.length, NothingToFinalize());
         Batch storage batch = batches[currentBatchIndex];
 
-        // Can only finalize a batch that hasn't been finalized
+        // Can only finalize a batch that hasn't been finalized, and has been reset to 0 vHYPE
         require(batch.finalizedAt == 0, InvalidBatch(currentBatchIndex));
         require(batch.vhypeProcessed == 0, InvalidBatch(currentBatchIndex));
 
-        // Remove the batch from the array by popping it
+        // Remove the batch entirely
         batches.pop();
     }
 
@@ -625,8 +627,11 @@ contract StakingVaultManager is Base {
 
         uint256 oldExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
 
-        totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, oldExchangeRate);
-        totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, slashedExchangeRate);
+        // Only adjust totalHypeProcessed if the batch has been finalized
+        if (batch.finalizedAt > 0) {
+            totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, oldExchangeRate);
+            totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, slashedExchangeRate);
+        }
 
         batch.slashedExchangeRate = slashedExchangeRate;
         batch.slashed = true;

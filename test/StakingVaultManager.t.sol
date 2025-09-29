@@ -1148,218 +1148,8 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                      Tests: Reset Batch                    */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function test_ResetBatch_Success() public {
-        uint256 vhypeAmount1 = 50_000 * 1e18; // 50k vHYPE
-        uint256 vhypeAmount2 = 30_000 * 1e18; // 30k vHYPE
-        uint256 vhypeAmount3 = 20_000 * 1e18; // 20k vHYPE
-        address user2 = makeAddr("user2");
-        address user3 = makeAddr("user3");
-
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Setup: Three users queue withdraws
-        _setupWithdraw(user, vhypeAmount1);
-        _setupWithdraw(user2, vhypeAmount2);
-        _setupWithdraw(user3, vhypeAmount3);
-
-        // Process first two withdrawals
-        stakingVaultManager.processBatch(2);
-
-        // Verify batch state before reset
-        assertEq(stakingVaultManager.getBatchesLength(), 1, "Should have 1 batch");
-        assertEq(
-            stakingVaultManager.getBatch(0).vhypeProcessed,
-            vhypeAmount1 + vhypeAmount2,
-            "Batch should have 80k vHYPE processed"
-        );
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 2, "Next withdraw index should be 2");
-        assertEq(stakingVaultManager.getWithdraw(0).batchIndex, 0, "First withdraw should be in batch 0");
-        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "Second withdraw should be in batch 0");
-        assertEq(
-            stakingVaultManager.getWithdraw(2).batchIndex,
-            type(uint256).max,
-            "Third withdraw should not be assigned yet"
-        );
-
-        // Reset the batch
-        vm.prank(owner);
-        stakingVaultManager.resetBatch(type(uint256).max);
-
-        // Verify withdrawals were reset
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be reset to 0");
-        assertEq(
-            stakingVaultManager.getWithdraw(0).batchIndex, type(uint256).max, "First withdraw should be unassigned"
-        );
-        assertEq(
-            stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "Second withdraw should be unassigned"
-        );
-        assertEq(
-            stakingVaultManager.getWithdraw(2).batchIndex,
-            type(uint256).max,
-            "Third withdraw should still be unassigned"
-        );
-
-        // Verify vHYPE is still escrowed
-        assertEq(
-            vHYPE.balanceOf(address(stakingVaultManager)),
-            vhypeAmount1 + vhypeAmount2 + vhypeAmount3,
-            "All vHYPE should still be escrowed"
-        );
-
-        // Verify batch has not been removed
-        assertEq(stakingVaultManager.getBatchesLength(), 1, "Batch should not be removed until finalized");
-    }
-
-    function test_ResetBatch_WithCancelledWithdrawals() public {
-        uint256 vhypeAmount1 = 50_000 * 1e18; // 50k vHYPE
-        uint256 vhypeAmount2 = 30_000 * 1e18; // 30k vHYPE (will be cancelled)
-        uint256 vhypeAmount3 = 20_000 * 1e18; // 20k vHYPE
-        address user2 = makeAddr("user2");
-        address user3 = makeAddr("user3");
-
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Setup: Three users queue withdraws
-        _setupWithdraw(user, vhypeAmount1);
-        uint256 withdrawId2 = _setupWithdraw(user2, vhypeAmount2);
-        _setupWithdraw(user3, vhypeAmount3);
-
-        // Cancel the second withdrawal
-        vm.prank(user2);
-        stakingVaultManager.cancelWithdraw(withdrawId2);
-
-        // Process withdrawals
-        stakingVaultManager.processBatch(type(uint256).max);
-
-        // Verify state before reset
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 3, "Should have processed all 3 withdraw slots");
-        assertEq(
-            stakingVaultManager.getBatch(0).vhypeProcessed,
-            vhypeAmount1 + vhypeAmount3,
-            "Only non-cancelled withdrawals processed"
-        );
-
-        // Reset the batch
-        vm.prank(owner);
-        stakingVaultManager.resetBatch(type(uint256).max);
-
-        // Verify withdrawals were reset (except cancelled one)
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be reset");
-        assertEq(
-            stakingVaultManager.getWithdraw(0).batchIndex, type(uint256).max, "First withdraw should be unassigned"
-        );
-        assertEq(
-            stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "First withdraw should be unassigned"
-        );
-        assertEq(
-            stakingVaultManager.getWithdraw(2).batchIndex, type(uint256).max, "Third withdraw should be unassigned"
-        );
-    }
-
-    function test_ResetBatch_NothingToReset() public {
-        // Try to reset when no batch exists
-        vm.prank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
-        stakingVaultManager.resetBatch(type(uint256).max);
-    }
-
-    function test_ResetBatch_CannotResetFinalizedBatch() public {
-        uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockBatchProcessingCalls();
-
-        // Queue and process withdrawal
-        _setupWithdraw(user, vhypeAmount);
-        stakingVaultManager.processBatch(type(uint256).max);
-        stakingVaultManager.finalizeBatch();
-
-        // Try to reset - should fail
-        vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
-        stakingVaultManager.resetBatch(type(uint256).max);
-    }
-
-    function test_ResetBatch_NotOwner() public {
-        uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Queue and process withdrawal
-        _setupWithdraw(user, vhypeAmount);
-        stakingVaultManager.processBatch(type(uint256).max);
-
-        // Try to reset as non-owner
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        stakingVaultManager.resetBatch(type(uint256).max);
-    }
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Finalize Batch                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    function test_FinalizeBatch_CannotFinalizeAfterSwitchValidatorInSameBlock() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-        address newValidator = makeAddr("newValidator");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
-        _mockAndExpectTokenDelegateCall(validator, totalBalance.to8Decimals(), true);
-        _mockAndExpectTokenDelegateCall(newValidator, totalBalance.to8Decimals(), false);
-
-        // User queues a withdraw
-        _setupWithdraw(user, vhypeAmount);
-
-        // Process the batch
-        stakingVaultManager.processBatch(type(uint256).max);
-
-        // Switch validator
-        vm.prank(owner);
-        stakingVaultManager.switchValidator(newValidator);
-
-        // Finalize the batch
-        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
-        stakingVaultManager.finalizeBatch();
-    }
-
-    function test_FinalizeBatch_CannotFinalizeAfterEmergencyStakingWithdrawInSameBlock() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-
-        // Setup: Mock balances
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(totalBalance.to8Decimals());
-        _mockAndExpectStakingWithdrawCall(totalBalance.to8Decimals());
-        _mockAndExpectTokenDelegateCall(stakingVaultManager.validator(), totalBalance.to8Decimals(), true);
-
-        // User queues a withdraw
-        _setupWithdraw(user, vhypeAmount);
-
-        // Process the batch
-        stakingVaultManager.processBatch(type(uint256).max);
-
-        // Emergency withdraw
-        vm.prank(owner);
-        stakingVaultManager.emergencyStakingWithdraw(totalBalance, "Emergency withdraw");
-
-        // Finalize the batch
-        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
-        stakingVaultManager.finalizeBatch();
-    }
 
     function test_FinalizeBatch_DepositsEqualWithdraws() public {
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
@@ -1462,6 +1252,79 @@ contract StakingVaultManagerTest is Test {
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+    }
+
+    function test_FinalizeBatch_CannotFinalizeAfterSlash() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE withdraw
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        // Initial balance: minimumStakeBalance (500k) + 100k (for withdraw) = 600k
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch (but don't finalize yet)
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Mock a 50% slash
+        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+
+        // Finalization should fail
+        vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
+        stakingVaultManager.finalizeBatch();
+    }
+
+    function test_FinalizeBatch_CannotFinalizeAfterSwitchValidatorInSameBlock() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        address newValidator = makeAddr("newValidator");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+        _mockAndExpectTokenDelegateCall(validator, totalBalance.to8Decimals(), true);
+        _mockAndExpectTokenDelegateCall(newValidator, totalBalance.to8Decimals(), false);
+
+        // User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Switch validator
+        vm.prank(owner);
+        stakingVaultManager.switchValidator(newValidator);
+
+        // Finalize the batch
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVaultManager.finalizeBatch();
+    }
+
+    function test_FinalizeBatch_CannotFinalizeAfterEmergencyStakingWithdrawInSameBlock() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: Mock balances
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(totalBalance.to8Decimals());
+        _mockAndExpectStakingWithdrawCall(totalBalance.to8Decimals());
+        _mockAndExpectTokenDelegateCall(stakingVaultManager.validator(), totalBalance.to8Decimals(), true);
+
+        // User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Emergency withdraw
+        vm.prank(owner);
+        stakingVaultManager.emergencyStakingWithdraw(totalBalance, "Emergency withdraw");
+
+        // Finalize the batch
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
         stakingVaultManager.finalizeBatch();
     }
 
@@ -1999,6 +1862,165 @@ contract StakingVaultManagerTest is Test {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
         stakingVaultManager.setBatchProcessingPaused(false);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*              Tests: Reset Batch (Only Owner)               */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_ResetBatch_Success() public {
+        uint256 vhypeAmount1 = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount2 = 30_000 * 1e18; // 30k vHYPE
+        uint256 vhypeAmount3 = 20_000 * 1e18; // 20k vHYPE
+        address user2 = makeAddr("user2");
+        address user3 = makeAddr("user3");
+
+        // Setup: Mock sufficient balance
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Three users queue withdraws
+        _setupWithdraw(user, vhypeAmount1);
+        _setupWithdraw(user2, vhypeAmount2);
+        _setupWithdraw(user3, vhypeAmount3);
+
+        // Process first two withdrawals
+        stakingVaultManager.processBatch(2);
+
+        // Verify batch state before reset
+        assertEq(stakingVaultManager.getBatchesLength(), 1, "Should have 1 batch");
+        assertEq(
+            stakingVaultManager.getBatch(0).vhypeProcessed,
+            vhypeAmount1 + vhypeAmount2,
+            "Batch should have 80k vHYPE processed"
+        );
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 2, "Next withdraw index should be 2");
+        assertEq(stakingVaultManager.getWithdraw(0).batchIndex, 0, "First withdraw should be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "Second withdraw should be in batch 0");
+        assertEq(
+            stakingVaultManager.getWithdraw(2).batchIndex,
+            type(uint256).max,
+            "Third withdraw should not be assigned yet"
+        );
+
+        // Reset the batch
+        vm.prank(owner);
+        stakingVaultManager.resetBatch(type(uint256).max);
+
+        // Verify withdrawals were reset
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be reset to 0");
+        assertEq(
+            stakingVaultManager.getWithdraw(0).batchIndex, type(uint256).max, "First withdraw should be unassigned"
+        );
+        assertEq(
+            stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "Second withdraw should be unassigned"
+        );
+        assertEq(
+            stakingVaultManager.getWithdraw(2).batchIndex,
+            type(uint256).max,
+            "Third withdraw should still be unassigned"
+        );
+
+        // Verify vHYPE is still escrowed
+        assertEq(
+            vHYPE.balanceOf(address(stakingVaultManager)),
+            vhypeAmount1 + vhypeAmount2 + vhypeAmount3,
+            "All vHYPE should still be escrowed"
+        );
+
+        // Verify batch has not been removed
+        assertEq(stakingVaultManager.getBatchesLength(), 1, "Batch should not be removed until finalized");
+    }
+
+    function test_ResetBatch_WithCancelledWithdrawals() public {
+        uint256 vhypeAmount1 = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount2 = 30_000 * 1e18; // 30k vHYPE (will be cancelled)
+        uint256 vhypeAmount3 = 20_000 * 1e18; // 20k vHYPE
+        address user2 = makeAddr("user2");
+        address user3 = makeAddr("user3");
+
+        // Setup: Mock sufficient balance
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Three users queue withdraws
+        _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user2, vhypeAmount2);
+        _setupWithdraw(user3, vhypeAmount3);
+
+        // Cancel the second withdrawal
+        vm.prank(user2);
+        stakingVaultManager.cancelWithdraw(withdrawId2);
+
+        // Process withdrawals
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Verify state before reset
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 3, "Should have processed all 3 withdraw slots");
+        assertEq(
+            stakingVaultManager.getBatch(0).vhypeProcessed,
+            vhypeAmount1 + vhypeAmount3,
+            "Only non-cancelled withdrawals processed"
+        );
+
+        // Reset the batch
+        vm.prank(owner);
+        stakingVaultManager.resetBatch(type(uint256).max);
+
+        // Verify withdrawals were reset (except cancelled one)
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be reset");
+        assertEq(
+            stakingVaultManager.getWithdraw(0).batchIndex, type(uint256).max, "First withdraw should be unassigned"
+        );
+        assertEq(
+            stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "First withdraw should be unassigned"
+        );
+        assertEq(
+            stakingVaultManager.getWithdraw(2).batchIndex, type(uint256).max, "Third withdraw should be unassigned"
+        );
+    }
+
+    function test_ResetBatch_NothingToReset() public {
+        // Try to reset when no batch exists
+        vm.prank(owner);
+        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
+        stakingVaultManager.resetBatch(type(uint256).max);
+    }
+
+    function test_ResetBatch_CannotResetFinalizedBatch() public {
+        uint256 vhypeAmount = 50_000 * 1e18;
+
+        // Setup
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockBatchProcessingCalls();
+
+        // Queue and process withdrawal
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Try to reset - should fail
+        vm.startPrank(owner);
+        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
+        stakingVaultManager.resetBatch(type(uint256).max);
+    }
+
+    function test_ResetBatch_NotOwner() public {
+        uint256 vhypeAmount = 50_000 * 1e18;
+
+        // Setup
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Queue and process withdrawal
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Try to reset as non-owner
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.resetBatch(type(uint256).max);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
