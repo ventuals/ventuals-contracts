@@ -50,6 +50,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if batch processing is paused.
     error BatchProcessingPaused();
 
+    /// @notice Thrown if the account balance is less than the reserved HYPE for withdraws.
+    error AccountBalanceLessThanReservedHypeForWithdraws();
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -412,11 +415,20 @@ contract StakingVaultManager is Base {
 
     /// @notice Returns the total HYPE balance that belongs to the vault (in 18 decimals)
     function totalBalance() public view returns (uint256) {
+        // EVM + Spot + Staking account balances
+        uint256 accountBalances = stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance;
+
         // The total amount of HYPE that is reserved to be returned to users for withdraws, but is still in
         // under the StakingVault accounts because they have not finished processing or been claimed
         uint256 reservedHypeForWithdraws = totalHypeProcessed - totalHypeClaimed;
 
-        return stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance - reservedHypeForWithdraws;
+        // This might happen right after a slash, before we're able to adjust the slashed exchange rate for the
+        // processed withdraws that are waiting for the 7-day withdraw period to pass. In practice, we would
+        // pause the contract in the case of a slash, but there could be a small window of time right after a
+        // slash where this could happen. So we throw an explicit error in this case.
+        require(accountBalances >= reservedHypeForWithdraws, AccountBalanceLessThanReservedHypeForWithdraws());
+
+        return accountBalances - reservedHypeForWithdraws;
     }
 
     /// @notice Total HYPE balance in the staking vault's staking account balance (in 18 decimals)
