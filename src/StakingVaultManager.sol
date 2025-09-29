@@ -59,6 +59,7 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if we don't have enough balance to finalize the batch.
     error NotEnoughBalance();
 
+    /// @notice Thrown if we have more withdraw capacity when a batch is finalized.
     error HasMoreWithdrawCapacity();
 
     /// @notice Thrown if trying to finalize before a batch has been processed.
