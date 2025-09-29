@@ -59,6 +59,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if trying to finalize before a batch has been processed.
     error NothingToFinalize();
 
+    /// @notice Thrown if the number of withdrawals requested is too large
+    error InvalidWithdrawRequest();
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -83,8 +86,6 @@ contract StakingVaultManager is Base {
         uint256 vhypeProcessed;
         /// @dev The total amount of hype processed in this batch.
         uint256 hypeProcessed;
-        /// @dev The timestamp when the exchange rate was snapshotted.
-        uint256 snapshotAt;
         /// @dev The exchange rate at the time the batch was processed (in 18 decimals)
         uint256 snapshotExchangeRate;
         /// @dev The exchange rate if a slash was applied to the batch (in 18 decimals)
@@ -277,13 +278,14 @@ contract StakingVaultManager is Base {
         whenBatchProcessingNotPaused
         returns (uint256 numProcessed)
     {
+        require(numWithdrawals <= withdrawQueue.length - nextWithdrawIndex, InvalidWithdrawRequest());
         Batch memory batch = _fetchBatch();
 
         uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance - batch.hypeProcessed;
         require(withdrawCapacityAvailable > 0, WithdrawNotAvailable());
 
         // Iterate until we hit the withdraw capacity or until we process everything requested.
-        while (withdrawCapacityAvailable > 0 && numWithdrawals >= 0) {
+        while (withdrawCapacityAvailable > 0 && numProcessed <= numWithdrawals) {
             Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
             uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
             if (expectedHypeAmount > withdrawCapacityAvailable) {
