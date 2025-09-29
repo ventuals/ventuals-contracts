@@ -355,7 +355,9 @@ contract StakingVaultManager is Base {
         require(currentBatchIndex + 1 == batches.length, NothingToFinalize());
         Batch memory batch = batches[currentBatchIndex];
 
-        /// TODO: Check requirements for finalization.
+        /// TODO: May need to adjust the finalize requirements. 
+        uint256 withdrawCapacity = totalBalance() - minimumStakeBalance - batch.hypeProcessed;
+        require(withdrawCapacity == 0 || nextWithdrawIndex == withdrawQueue.length);
 
         /// TODO: Make sure the deposit flow still makes sense across different blocks.
         uint256 depositsInBatch = address(stakingVault).balance;
