@@ -53,6 +53,12 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the account balance is less than the reserved HYPE for withdraws.
     error AccountBalanceLessThanReservedHypeForWithdraws();
 
+    /// @notice Thrown if trying to process more withdrawals than allowed.
+    error WithdrawNotAvailable();
+
+    /// @notice Thrown if trying to finalize before a batch has been processed.
+    error NothingToFinalize();
+
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
     /// @param minted The amount of vHYPE minted (in 18 decimals)
@@ -75,14 +81,18 @@ contract StakingVaultManager is Base {
     struct Batch {
         /// @dev The total amount of withdraws processed in this batch (vHYPE; in 18 decimals)
         uint256 vhypeProcessed;
-        /// @dev The timestamp when the batch was processed
-        uint256 processedAt;
+        /// @dev The total amount of hype processed in this batch.
+        uint256 hypeProcessed;
+        /// @dev The timestamp when the exchange rate was snapshotted.
+        uint256 snapshotAt;
         /// @dev The exchange rate at the time the batch was processed (in 18 decimals)
         uint256 snapshotExchangeRate;
         /// @dev The exchange rate if a slash was applied to the batch (in 18 decimals)
         uint256 slashedExchangeRate;
         /// @dev Whether the batch was slashed
         bool slashed;
+        /// @dev The timestamp at which the batch was finalized.
+        uint256 finalizedAt;
     }
 
     /// @dev A withdraw from the vault
@@ -118,6 +128,9 @@ contract StakingVaultManager is Base {
 
     /// @dev Whether batch processing is paused
     bool public isBatchProcessingPaused;
+
+    /// The timestamp at which the last batch was finalized.
+    uint256 lastFinalizedBatchTime;
 
     /// @dev Batches of deposits and withdraws
     Batch[] private batches;
@@ -218,7 +231,7 @@ contract StakingVaultManager is Base {
         require(withdraw.claimed == false, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
-        require(block.timestamp > batch.processedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
+        require(block.timestamp > batch.finalizedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
 
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
@@ -258,61 +271,106 @@ contract StakingVaultManager is Base {
         withdraw.vhypeAmount = 0;
     }
 
-    /// @notice Processes the current batch of withdraws
-    /// @dev Safe to be called by anyone, as it will only process the batch if it's ready to be processed
-    function processCurrentBatch() public whenNotPaused whenBatchProcessingNotPaused {
-        // Check if it's been at least one day since the last batch was processed
-        if (currentBatchIndex > 0) {
-            uint256 previousBatchIndex = currentBatchIndex - 1;
-            require(
-                block.timestamp > batches[previousBatchIndex].processedAt + 1 days, // TODO: Should we add a buffer?
-                BatchNotReady(batches[previousBatchIndex].processedAt + 1 days)
-            );
-        }
+    function process(uint256 numWithdrawals)
+        public
+        whenNotPaused
+        whenBatchProcessingNotPaused
+        returns (uint256 numProcessed)
+    {
+        Batch memory batch = _fetchBatch();
 
-        uint256 snapshotExchangeRate = exchangeRate();
-        uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance;
+        uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance - batch.hypeProcessed;
+        require(withdrawCapacityAvailable > 0, WithdrawNotAvailable());
 
-        Batch memory batch = Batch({
-            vhypeProcessed: 0,
-            processedAt: block.timestamp,
-            snapshotExchangeRate: snapshotExchangeRate,
-            slashedExchangeRate: 0,
-            slashed: false
-        });
-
-        // Process withdraws from the queue until we run out of capacity, or until we run out of withdraws
-        if (withdrawQueue.length > 0) {
-            while (withdrawCapacityAvailable > 0 && nextWithdrawIndex < withdrawQueue.length) {
-                Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
-                uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, snapshotExchangeRate);
-                if (expectedHypeAmount > withdrawCapacityAvailable) {
-                    break;
-                }
-
-                // Burn the escrowed vHYPE
-                vHYPE.burn(withdraw.vhypeAmount);
-
-                batch.vhypeProcessed += withdraw.vhypeAmount;
-                withdraw.batchIndex = currentBatchIndex;
-                totalHypeProcessed += expectedHypeAmount;
-                withdrawCapacityAvailable -= expectedHypeAmount;
-                nextWithdrawIndex++;
+        // Iterate until we hit the withdraw capacity or until we process everything requested.
+        while (withdrawCapacityAvailable > 0 && numWithdrawals >= 0) {
+            Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
+            uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
+            if (expectedHypeAmount > withdrawCapacityAvailable) {
+                break;
             }
+
+            /// Update capacity.
+            withdrawCapacityAvailable -= expectedHypeAmount;
+
+            /// Count towards the number processed in this call.
+            numProcessed++;
+
+            /// Update batch metrics.
+            batch.vhypeProcessed += withdraw.vhypeAmount;
+            batch.hypeProcessed += expectedHypeAmount;
+
+            /// Update withdrawal information.
+            withdraw.batchIndex = currentBatchIndex;
+
+            /// Update global vars.
+            totalHypeProcessed += expectedHypeAmount;
+            nextWithdrawIndex++;
         }
 
-        batches.push(batch);
-        currentBatchIndex++;
+        /// Save the batch info to storage.
+        _flushBatch(batch);
 
-        _finalizeBatch(batch);
+        return numProcessed;
     }
 
-    function _finalizeBatch(Batch memory batch) internal {
-        uint256 depositsInBatch = address(stakingVault).balance;
-        uint256 withdrawsInBatch = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
+    /// note: currentBatchIndex should never be greater than the length of the batches.
+    /// The index will be 1 less than the length if we have not finalized the batch, otherwise it will be equal.
+    function _fetchBatch() internal returns (Batch memory batch) {
+        if (currentBatchIndex == batches.length) {
+            /// Begin a new batch. We do not update the batch index, as that is moved forward on finalize.
+            require(block.timestamp > lastFinalizedBatchTime + 1 days);
+            /// TODO: Should we add a buffer?
+            uint256 snapshotExchangeRate = exchangeRate();
 
+            batch = Batch({
+                vhypeProcessed: 0,
+                hypeProcessed: 0, // Used to check capacity requirements.
+                snapshotAt: block.timestamp,
+                /// Do we need this anymore?
+                snapshotExchangeRate: snapshotExchangeRate,
+                slashedExchangeRate: 0,
+                slashed: false,
+                finalizedAt: 0
+            });
+        } else {
+            /// Use the current batch.
+            batch = batches[currentBatchIndex];
+        }
+        return batch;
+    }
+
+    /// @dev stores the batch, either by appending a new one or by overwriting the current batch.
+    function _flushBatch(Batch memory batch) internal {
+        if (currentBatchIndex == batches.length) {
+            batches.push(batch);
+        } else {
+            batches[currentBatchIndex] = batch;
+        }
+    }
+
+    function finalize() internal {
+        require(currentBatchIndex + 1 == batches.length, NothingToFinalize());
+        Batch memory batch = batches[currentBatchIndex];
+
+        /// TODO: Check requirements for finalization.
+
+        /// TODO: Make sure the deposit flow still makes sense across different blocks.
+        uint256 depositsInBatch = address(stakingVault).balance;
+        uint256 withdrawsInBatch = batch.hypeProcessed;
+
+        /// Save the final timestamp to the current batch
+        batches[currentBatchIndex].finalizedAt = block.timestamp;
+        lastFinalizedBatchTime = block.timestamp;
+
+        /// Increment the batch index.
+        currentBatchIndex++;
+
+        /// Burn the vHype.
+        vHYPE.burnFrom(address(this), batch.vhypeProcessed);
+
+        /// always flush the full deposit amount to core spot
         if (depositsInBatch > 0) {
-            // Transfer all deposited HYPE to HyperCore spot account
             stakingVault.transferHypeToCore(depositsInBatch);
         }
 
