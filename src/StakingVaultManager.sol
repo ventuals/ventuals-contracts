@@ -574,6 +574,48 @@ contract StakingVaultManager is Base {
         isBatchProcessingPaused = _isBatchProcessingPaused;
     }
 
+    /// @notice Resets the current batch, undoing all withdrawals that have been processed
+    /// @dev This can only be called on a batch that has not been finalized yet
+    function resetBatch(uint256 numWithdrawals) external onlyOwner {
+        // Can only reset if there's a batch to reset
+        require(currentBatchIndex < batches.length, NothingToFinalize());
+
+        Batch storage batch = batches[currentBatchIndex];
+
+        // Can only reset a batch that hasn't been finalized
+        require(batch.finalizedAt == 0, InvalidBatch(currentBatchIndex));
+
+        while (nextWithdrawIndex > 0 && numWithdrawals > 0) {
+            uint256 index = nextWithdrawIndex - 1;
+            if (withdrawQueue[index].batchIndex == currentBatchIndex) {
+                withdrawQueue[index].batchIndex = type(uint256).max; // Update the withdraw to unassign from batch
+
+                batch.vhypeProcessed -= withdrawQueue[index].vhypeAmount;
+
+                nextWithdrawIndex--;
+                numWithdrawals--;
+            } else if (withdrawQueue[index].batchIndex != type(uint256).max) {
+                // We've reached a withdrawal that's part of a different batch (earlier batch)
+                // No need to continue since we've reset all withdrawals in the current batch
+                break;
+            }
+        }
+    }
+
+    /// @notice Finalizes the reset batch, removing it from the array
+    /// @dev This can only be called on a batch that has been reset to 0 vHYPE
+    function finalizeResetBatch() external onlyOwner {
+        require(currentBatchIndex < batches.length, NothingToFinalize());
+        Batch storage batch = batches[currentBatchIndex];
+
+        // Can only finalize a batch that hasn't been finalized
+        require(batch.finalizedAt == 0, InvalidBatch(currentBatchIndex));
+        require(batch.vhypeProcessed == 0, InvalidBatch(currentBatchIndex));
+
+        // Remove the batch from the array by popping it
+        batches.pop();
+    }
+
     /// @notice Applies a slash to a batch
     /// @param batchIndex The index of the batch to apply the slash to
     /// @param slashedExchangeRate The new exchange rate that should be applied to the batch (in 18 decimals)
