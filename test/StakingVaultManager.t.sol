@@ -1222,8 +1222,8 @@ contract StakingVaultManagerTest is Test {
 
         // Only expect a transfer to HyperCore call
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
-        _expectNoStakingDepositCall();
-        _expectNoStakingWithdrawCall();
+        _expectNoStakeCall();
+        _expectNoUnstakeCall();
 
         // Process the batch
         stakingVaultManager.processCurrentBatch();
@@ -1265,7 +1265,7 @@ contract StakingVaultManagerTest is Test {
         );
 
         // No undelegate call or staking withdraw call expected
-        _expectNoStakingWithdrawCall();
+        _expectNoUnstakeCall();
 
         // Process the batch
         stakingVaultManager.processCurrentBatch();
@@ -1301,7 +1301,7 @@ contract StakingVaultManagerTest is Test {
         _mockAndExpectStakingWithdrawCall((vhypeAmount - hypeDeposits).to8Decimals());
 
         // No staking deposit or delegate call expected
-        _expectNoStakingDepositCall();
+        _expectNoStakeCall();
 
         // Process the batch
         stakingVaultManager.processCurrentBatch();
@@ -1327,7 +1327,7 @@ contract StakingVaultManagerTest is Test {
         _mockAndExpectStakingWithdrawCall(vhypeAmount.to8Decimals());
 
         // No staking deposit or delegate call expected
-        _expectNoStakingDepositCall();
+        _expectNoStakeCall();
 
         // Process the batch
         stakingVaultManager.processCurrentBatch();
@@ -1356,7 +1356,7 @@ contract StakingVaultManagerTest is Test {
         _mockAndExpectTokenDelegateCall(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ );
 
         // No undelegate call or staking withdraw call expected
-        _expectNoStakingWithdrawCall();
+        _expectNoUnstakeCall();
 
         // Process the batch
         stakingVaultManager.processCurrentBatch();
@@ -1371,8 +1371,8 @@ contract StakingVaultManagerTest is Test {
         // No HyperCore deposit expected
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
 
-        _expectNoStakingDepositCall();
-        _expectNoStakingWithdrawCall();
+        _expectNoStakeCall();
+        _expectNoUnstakeCall();
 
         // Process the batch - should not make any external calls
         stakingVaultManager.processCurrentBatch();
@@ -2341,10 +2341,6 @@ contract StakingVaultManagerTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 
-    function _expectNoStakingDepositCall() internal {
-        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
-    }
-
     function _mockAndExpectStakingWithdrawCall(uint64 weiAmount) internal {
         bytes memory encodedAction = abi.encode(weiAmount);
         bytes memory data = new bytes(4 + encodedAction.length);
@@ -2361,10 +2357,6 @@ contract StakingVaultManagerTest is Test {
             abi.encode()
         );
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
-    }
-
-    function _expectNoStakingWithdrawCall() internal {
-        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
     }
 
     function _mockAndExpectTokenDelegateCall(address _validator, uint64 weiAmount, bool isUndelegate) internal {
@@ -2385,13 +2377,13 @@ contract StakingVaultManagerTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 
-    // function _expectNoTokenDelegateCall() internal {
-    //     vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
-    // }
+    function _expectNoStakeCall() internal {
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
+    }
 
-    // function _expectNoTokenUndelegateCall() internal {
-    //     vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
-    // }
+    function _expectNoUnstakeCall() internal {
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
+    }
 
     function _mockAndExpectSpotSendCall(address destination, uint64 tokenId, uint64 weiAmount) internal {
         bytes memory encodedAction = abi.encode(destination, tokenId, weiAmount);
