@@ -287,7 +287,7 @@ contract StakingVaultManager is Base {
         // - Hit the withdraw capacity, or
         // - Process the requested number of withdraws, or
         // - Have no more withdraws to process
-        while (withdrawCapacityAvailable > 0 && numWithdrawals >= 0 && nextWithdrawIndex == withdrawQueue.length) {
+        while (withdrawCapacityAvailable > 0 && numWithdrawals > 0 && nextWithdrawIndex < withdrawQueue.length) {
             Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
             uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
             if (expectedHypeAmount > withdrawCapacityAvailable) {
@@ -384,7 +384,7 @@ contract StakingVaultManager is Base {
         }
     }
 
-    function _canFinalizeBatch(Batch memory batch) internal view {
+    function _canFinalizeBatch(Batch memory batch) internal {
         require(currentBatchIndex + 1 == batches.length, NothingToFinalize());
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
@@ -406,7 +406,7 @@ contract StakingVaultManager is Base {
         require(expectedHypeAmount <= withdrawCapacityRemaining, HasMoreWithdrawCapacity());
     }
 
-    function _getNextWithdrawInQueue() internal view returns (Withdraw memory) {
+    function _getNextWithdrawInQueue() internal returns (Withdraw memory) {
         // Get the next withdraw in the queue that is not cancelled
         while (nextWithdrawIndex < withdrawQueue.length) {
             Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
