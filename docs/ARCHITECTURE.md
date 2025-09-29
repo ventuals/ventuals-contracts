@@ -1,5 +1,7 @@
 # Architecture
 
+NOTE: This is currently out of date (09/29/2025). We will be updating these docs shortly.
+
 ## Background
 
 The Ventuals HYPE LST enables contributors to stake HYPE and receive vHYPE, a fully
