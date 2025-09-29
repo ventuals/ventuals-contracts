@@ -349,6 +349,7 @@ contract StakingVaultManager is Base {
         }
     }
 
+    /// @notice Finalizes the current batch.
     function finalizeBatch() external whenNotPaused whenBatchProcessingNotPaused {
         // Check if we have a batch to finalize
         require(currentBatchIndex < batches.length, NothingToFinalize());
