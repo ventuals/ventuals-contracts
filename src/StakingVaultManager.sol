@@ -319,15 +319,13 @@ contract StakingVaultManager is Base {
 
             // Stake the excess HYPE
             uint256 amountToStake = depositsInBatch - withdrawsInBatch;
-            stakingVault.stakingDeposit(amountToStake.to8Decimals());
-            stakingVault.tokenDelegate(validator, amountToStake.to8Decimals());
+            stakingVault.stake(validator, amountToStake.to8Decimals());
         } else if (depositsInBatch < withdrawsInBatch) {
             // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
 
             // Withdraw the amount not covered by deposits from the staking vault
             uint256 amountToWithdraw = withdrawsInBatch - depositsInBatch;
-            stakingVault.tokenUndelegate(validator, amountToWithdraw.to8Decimals());
-            stakingVault.stakingWithdraw(amountToWithdraw.to8Decimals());
+            stakingVault.unstake(validator, amountToWithdraw.to8Decimals());
         }
     }
 
@@ -490,11 +488,9 @@ contract StakingVaultManager is Base {
     /// @param purpose Description of withdrawal purpose
     function emergencyStakingWithdraw(uint256 amount, string calldata purpose) external onlyOwner {
         // Immediately undelegate HYPE
-        stakingVault.tokenUndelegate(validator, amount.to8Decimals());
-
         // Queue a staking withdrawal, subject to the 7-day withdrawal queue. Amount will be available in
         // the StakingVault's spot account balance after 7 days.
-        stakingVault.stakingWithdraw(amount.to8Decimals());
+        stakingVault.unstake(validator, amount.to8Decimals());
         emit EmergencyStakingWithdraw(msg.sender, amount, purpose);
     }
 
@@ -508,8 +504,7 @@ contract StakingVaultManager is Base {
         // contract is paused and only owner functions are available. In the worst case, we don't have
         // enough HYPE in HyperCore Spot to perform a staking deposit, and these two CoreWriter calls
         // will just fail silently, and no HYPE will be lost.
-        stakingVault.tokenDelegate(validator, amount.to8Decimals());
-        stakingVault.stakingDeposit(amount.to8Decimals());
+        stakingVault.stake(validator, amount.to8Decimals());
         emit EmergencyStakingDeposit(msg.sender, amount, purpose);
     }
 

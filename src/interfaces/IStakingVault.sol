@@ -38,23 +38,15 @@ interface IStakingVault {
     /// @dev msg.value is the amount of HYPE to deposit (18 decimals)
     function deposit() external payable;
 
-    /// @dev Deposit HYPE from spot to staking account on HyperCore
-    /// @param weiAmount The amount of wei to deposit (8 decimals)
-    function stakingDeposit(uint64 weiAmount) external;
+    /// @notice Deposits HYPE from spot on HyperCore to staking account, and delegates to the validator
+    /// @param validator The address to delegate the HYPE to
+    /// @param weiAmount The amount of wei to deposit&delegate (8 decimals) into the staking account
+    function stake(address validator, uint64 weiAmount) external;
 
-    /// @dev Withdraw HYPE from staking account to spot on HyperCore
-    /// @param weiAmount The amount of wei to withdraw (8 decimals)
-    function stakingWithdraw(uint64 weiAmount) external;
-
-    /// @dev Delegate HYPE to a validator
-    /// @param validator The validator address to delegate to
-    /// @param weiAmount The amount of wei to delegate (8 decimals)
-    function tokenDelegate(address validator, uint64 weiAmount) external;
-
-    /// @dev Undelegate HYPE from a validator
-    /// @param validator The validator address to undelegate from
-    /// @param weiAmount The amount of wei to undelegate (8 decimals)
-    function tokenUndelegate(address validator, uint64 weiAmount) external;
+    /// @notice Undelegates HYPE from the validator and withdraws from the staking account to spot on HyperCore
+    /// @param validator The address to undelegate the HYPE from
+    /// @param weiAmount The amount of wei to undelegate&withdraw (8 decimals) from the staking account
+    function unstake(address validator, uint64 weiAmount) external;
 
     /// @dev Redelegate HYPE from a validator to another validator
     /// @param fromValidator The validator address to undelegate from
