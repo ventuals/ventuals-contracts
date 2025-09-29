@@ -1485,6 +1485,39 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.totalBalance(), 250_000 * 1e18);
     }
 
+    function test_TotalBalance_ReservedHypeForWithdrawsGreaterThanAccountBalance() public {
+        uint256 vhypeWithdrawAmount = 100_000 * 1e18;
+
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeWithdrawAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeWithdrawAmount);
+
+        // Process the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processCurrentBatch();
+
+        // Test totalBalance after processing (should subtract reservedHypeForWithdraws)
+        assertEq(stakingVaultManager.totalBalance(), MINIMUM_STAKE_BALANCE);
+
+        // Verify the reserved amount calculation
+        assertEq(stakingVaultManager.totalHypeProcessed(), vhypeWithdrawAmount);
+        assertEq(stakingVaultManager.totalHypeClaimed(), 0);
+
+        // Mock a 100% slash
+        _mockDelegatorSummary(0);
+
+        // Test totalBalance after slash
+        // 600k HYPE slashed to 300k HYPE
+        // 100k HYPE withdraw reserve slashed to 50k HYPE
+        // So we expect 250k HYPE in total balance
+        vm.expectRevert(
+            abi.encodeWithSelector(StakingVaultManager.AccountBalanceLessThanReservedHypeForWithdraws.selector)
+        );
+        stakingVaultManager.totalBalance();
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Exchange Rate                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
