@@ -1,27 +1,19 @@
 # Architecture
 
-NOTE: This is currently out of date (09/29/2025). We will be updating these docs shortly.
-
 ## Background
 
-The Ventuals HYPE LST enables contributors to stake HYPE and receive vHYPE, a fully
-transferable ERC20 that represents their staked principal.
+Ventuals is creating a HYPE liquid staking token (vHYPE) to raise the minimum stake
+requirement for HIP-3 mainnet deployment (currently 500k HYPE). Contributors deposit HYPE
+into the vault and receive vHYPE, a fully transferable ERC20 that represents a claim on
+their underlying principal.
 
-The lifecycle of the system begins with a _genesis_ phase, which covers the initial HYPE
-stake raise required for HIP-3 mainnet deployment. During genesis, native HYPE staking
-rewards accrue automatically, reflected in the vHYPE/HYPE exchange rate. After genesis,
-the protocol will transition into epoch-based staking with scheduled deposit and withdraw
-windows. All HYPE deposited during genesis will automatically rollover to the first epoch,
-and remain locked until the end of the first epoch.
+Any additional HYPE deposited provides a **liquidity buffer**, enabling contributors to
+withdraw without reducing the validator stake below the 500k minimum. The vault has no
+deposit cap, and contributors can deposit any amount of HYPE at any time. Contributors
+may also withdraw at any time, provided the 500k minimum stake is maintained.
 
-After the Ventuals mainnet deployment, staking will be organized into discrete epochs,
-during which HYPE deposits remain locked. At the end of each epoch, contributors can
-choose to redeem their HYPE, roll over their HYPE into the next epoch, or deposit
-additional HYPE. The first epoch will be 1 year; subsequent epochs will last 6 months.
-This structure ensures predictable and guaranteed withdrawal windows for all contributors.
-
-_This repository currently includes the contracts required for the genesis phase. Contracts
-for epoch-based staking will be finalized in a future release._
+All native staking yield accrues automatically to vHYPE holders and is reflected in the
+vHYPE/HYPE exchange rate.
 
 ## Overview
 
@@ -29,9 +21,8 @@ for epoch-based staking will be finalized in a future release._
 
 - **vHYPE**: Fully transferable ERC20 which serves as a claim to the underlying principal HYPE.
 - **StakingVault**: Holds HYPE natively staked with validators.
-- **GenesisVaultManager**: Manages the StakingVault during the genesis raise before HIP-3 mainnet deployment.
-- **EpochVaultManager**: Manages the StakingVault once epochs begin. Handles deposits, withdrawals, and rollovers. Used for epochs only.
-- **StakingYieldDistributor**: Distributes Ventuals exchange revenue (in USDC) to vHYPE stakers once epochs begin. Used for epochs only.
+- **StakingVaultManager**: Manages the StakingVault. Handles deposits, withdrawals, minting
+  and burning of vHYPE, and enforces the minimum stake requirement (currently 500k HYPE).
 - **RoleRegistry**: Centralizes role-based access control across the protocol.
 
 ## Access Control
@@ -44,8 +35,7 @@ The Ventuals protocol uses a centralized role-based access control system (via t
   vault parameters, and execute emergency operations (e.g., withdrawing HYPE). This role is controlled by
   the Ventuals multisig.
 - `MANAGER` – Manages the vault. Can deposit, withdraw, delegate, and transfer HYPE on behalf of the vault.
-  During genesis, this role is assigned to the GenesisVaultManager; once epochs begin, it will be assigned
-  to the EpochVaultManager.
+  This role is assigned to the StakingVaultManager, but can be assigned to another contract in the future.
 - `OPERATOR` – Handles automated, day-to-day protocol operations (e.g. transferring HYPE from HyperEVM to
   HyperCore, rotating the StakingVault's API wallets).
 
@@ -58,49 +48,58 @@ proxies, and upgrades may only be performed by the `OWNER`.
 
 - Holds the HYPE that gets staked
 - Will be the address of the Ventuals HIP-3 subdex deployer
-- Provides a thin wrapper around CoreWriter staking and delegation functionality, restricted to the `MANAGER` role
-- Managed by the GenesisVaultManager during genesis, and by the EpochVaultManager once epochs begin
+- Provides a thin wrapper around CoreWriter staking and delegation functionality,
+  restricted to the `MANAGER` role, which is assigned to the StakingVaultManager.
 
 #### Key functions
 
 ```solidity
-function stakingDeposit(uint64 weiAmount) external onlyManager;
-function stakingWithdraw(uint64 weiAmount) external onlyManager;
-function tokenDelegate(address validator, uint64 weiAmount, bool isUndelegate) external onlyManager;
+function deposit() external payable onlyManager;
+function stake(address validator, uint64 weiAmount) external onlyManager;
+function unstake(address validator, uint64 weiAmount) external onlyManager;
+function tokenRedelegate(address fromValidator, address toValidator, uint64 weiAmount) external onlyManager;
 function spotSend(address destination, uint64 token, uint64 weiAmount) external onlyManager;
 function transferHypeToCore(uint256 amount) external onlyManager;
 function addApiWallet(address apiWalletAddress, string calldata name) external onlyOperator;
 ```
 
-### GenesisVaultManager
+### StakingVaultManager
 
-- Enforces the HYPE vault capacity and deposit limits
-- Mints vHYPE to HYPE according to the current exchange rate
-- Deposits are locked until the end of the first epoch; withdrawals are not allowed before then
-- All vHYPE holders automatically earn native staking yield — no need to stake vHYPE separately
-- As underlying HYPE in the vault grows from native yield, the GenesisVaultManager mints new vHYPE proportionally
+- Enforces the minimum stake balance (currently 500k HYPE)
+- Allows unlimited deposits
+- Allows withdraws, up until the minimum stake balance is reached
+- Mints and burns vHYPE to HYPE according to the current exchange rate
+- All vHYPE holders automatically earn compounding native staking yield
+- As underlying HYPE in the vault grows from native yield, the StakingVaultManager
+  mints and burns vHYPE proportionally
 
 #### Key functions
 
 ```solidity
-function deposit() public canDeposit;
+function deposit() external payable canDeposit;
+function queueWithdraw(uint256 vhypeAmount) external;
+function claimWithdraw(uint256 withdrawId, address destination) external;
+function batchClaimWithdraws(uint256[] calldata withdrawIds, address destination) external;
+function cancelWithdraw(uint256 withdrawId) external;
+function processBatch(uint256 numWithdrawals) external;
+function finalizeBatch() external;
 function exchangeRate() public view returns (uint256);
 function totalBalance() public view returns (uint256);
-function transferToCoreAndDelegate() public onlyOperator;
+function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) external onlyOwner;
 ```
 
 ### vHYPE
 
 - Standard ERC20 token
-- Only the `MANAGER` role can mint vHYPE - assigned to the GenesisVaultManager during genesis, and
-  will be assigned to the EpochVaultManager once epochs begin.
+- Only the `MANAGER` role can mint vHYPE
+- Anyone may burn their vHYPE, effectively donating HYPE to the StakingVault
 
 #### Key functions
 
 ```solidity
 function totalSupply() public view returns (uint256);
 function mint(address to, uint256 amount) external onlyManager;
-function burn(address from, uint256 amount) external;
+function burn(uint256 amount) external;
 ```
 
 ### RoleRegistry
@@ -123,21 +122,91 @@ function pause(address contractAddress) external onlyOwner;
 function unpause(address contractAddress) external onlyOwner
 ```
 
+## Deposits and Withdrawals
+
+### Lifecycle
+
+#### Deposit
+
+- Users call `deposit` to deposit HYPE into the vault.
+- vHYPE is minted proportionally based on the current exchange rate.
+- The deposited HYPE is transferred to the StakingVault contract on HyperEVM.
+
+#### Queue Withdraw
+
+- Users call `queueWithdraw` to request a withdrawal.
+- The requested vHYPE is transferred to the StakingVaultManager contract and
+  held in escrow.
+- The withdrawal is assigned a unique ID and added to the end of the global
+  withdrawal queue (implemented as a linked list).
+- Until processed, escrowed vHYPE continues to accrue native staking yield
+  through the vault's exchange rate appreciation.
+
+#### Batch Processing
+
+- A new batch can only be created once per day.
+- Each batch records:
+  - snapshotExchangeRate – the exchange rate when processing begins
+  - vhypeProcessed – total vHYPE included in the batch
+- Withdrawals are processed until the vault would drop below the minimum stake
+  balance (500k HYPE) or the queue is empty.
+- Anyone may call `processBatch` to process withdrawals, as long as it's been
+  at least one day since the last batch was finalized.
+
+#### Finalize Batch
+
+A batch is finalized via `finalizeBatch`, which:
+
+- Burns escrowed vHYPE.
+- Reserves the equivalent amount of HYPE for withdrawal (totalHypeProcessed).
+- Transfers deposits to HyperCore and nets them against withdrawals.
+- Stakes excess deposits or unstakes from the validator if withdrawals exceed deposits.
+- Anyone may call `finalizeBatch` to finalize a batch, as long as the batch is
+  ready to be finalized.
+
+#### Claim Withdraw
+
+- After 7 days from the time the withdraw was finalized, users call `claimWithdraw`
+  to claim their HYPE.
+- HYPE is calculated using the batch's snapshotted exchange rate (or the
+  slashed exchange rate if applicable).
+- HYPE is transferred from the vault's HyperCore spot account to the HyperCore
+  spot destination.
+
+#### Cancel Withdraw
+
+- A queued withdrawal may be cancelled before it has been processed using `cancelWithdraw`.
+- The escrowed vHYPE is immediately returned to the user.
+
+#### Slashing
+
+If a slash occurs while withdrawals are queued or processing:
+
+- The contract is paused to prevent deposits/withdrawals.
+- Admins set a `slashedExchangeRate` for affected batches using `applySlash()`,
+  which is the exchange rate at the time of the slash.
+- Withdrawals in those batches are settled at the slashed rate.
+
+Once reconciled, the contract is unpaused and withdrawals can resume.
+
 ## HyperEVM and HyperCore interaction timings
+
+NOTE: This section is slightly out of date (09/29/2025). We will be updating these docs shortly.
 
 The L1Read precompiles will reflect the HyperCore state **at the beginning of the HyperEVM
 block** ([Hyperliquid docs](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interaction-timings)).
-This introduces a subtle timing issue when performing transfers from HyperEVM → HyperCore.
+This introduces a subtle timing issue when performing actions that update state on HyperCore.
+This includes transfers from HyperEVM → HyperCore, and delegating or undelegating from validators.
 
-When a transfer occurs:
+For example, when a HyperEVM → HyperCore transfer occurs:
 
 - The HyperEVM balance is reduced immediately.
 - The HyperCore spot balance queried via L1Read is not updated until the next block.
 
 This desynchronization means that immediately after a transfer to HyperCore, the vault's
 `totalBalance()` computation will be incorrect, because it relies on both HyperEVM balances
-and HyperCore spot balances. If a deposit happens after a transfer in the same block, we
-will mint vHYPE against an inaccurate exchange rate.
+and HyperCore spot balances. For instance, if a deposit happens after a transfer in the
+same block, we will mint vHYPE against an inaccurate exchange rate.
 
 To avoid this, we need to enforce a **one-block delay** between HyperEVM → HyperCore transfers
 and any action (such as deposits) that requires an accurate totalBalance(). User deposits
@@ -201,6 +270,8 @@ This ensures that the vault's exchange rate is computed consistently.
 - Exchange rate: 1 HYPE = 1 vHYPE
 
 ### Diagram
+
+NOTE: This diagram is slightly out of date (09/29/2025). We will be updating these docs shortly.
 
 ```mermaid
 %%{init: {'theme':'neo-dark'}}%%
