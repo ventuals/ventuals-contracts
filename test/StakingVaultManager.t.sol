@@ -294,7 +294,7 @@ contract StakingVaultManagerTest is Test {
         // Queue the withdraw
         uint256 withdrawId = stakingVaultManager.queueWithdraw(vhypeAmount);
 
-        assertEq(withdrawId, 0);
+        assertEq(withdrawId, 1);
         assertEq(stakingVaultManager.getWithdrawQueueLength(), 1);
         assertEq(stakingVaultManager.getWithdraw(withdrawId).vhypeAmount, vhypeAmount);
         assertEq(stakingVaultManager.getWithdraw(withdrawId).account, user);
@@ -356,8 +356,8 @@ contract StakingVaultManagerTest is Test {
         uint256 withdrawId2 = stakingVaultManager.queueWithdraw(vhypeAmount2);
 
         // Verify withdraw IDs are sequential
-        assertEq(withdrawId1, 0);
-        assertEq(withdrawId2, 1);
+        assertEq(withdrawId1, 1);
+        assertEq(withdrawId2, 2);
 
         // Verify withdraw queue length
         assertEq(stakingVaultManager.getWithdrawQueueLength(), 2);
@@ -783,7 +783,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Verify the withdraw was processed
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 1, "Withdraw should be processed");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 1, "Withdraw should be processed");
 
         // User tries to cancel the processed withdraw
         vm.prank(user);
@@ -850,8 +850,8 @@ contract StakingVaultManagerTest is Test {
         assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 1, "Next withdraw index should be 1");
-        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(0);
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 1, "Last processed withdraw ID should be 1");
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(1);
         assertEq(withdraw.vhypeAmount, vhypeAmount, "Withdraw has incorrect amount of vHYPE");
         assertEq(withdraw.batchIndex, 0, "Withdraw has incorrect batch index");
         assertEq(withdraw.claimed, false, "Withdraw should not have been claimed");
@@ -894,8 +894,8 @@ contract StakingVaultManagerTest is Test {
         assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be 0");
-        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(0);
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(1);
         assertEq(withdraw.vhypeAmount, vhypeAmount, "Withdraw has incorrect amount of vHYPE");
         assertEq(withdraw.batchIndex, type(uint256).max, "Withdraw should not have been assigned to a batch");
         assertEq(withdraw.claimed, false, "Withdraw should not have been claimed");
@@ -951,10 +951,10 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.getBatch(1).finalizedAt, 0, "Batch 1 should not be finalized yet");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 2, "Next withdraw index should be 2");
-        StakingVaultManager.Withdraw memory withdraw0 = stakingVaultManager.getWithdraw(0);
-        assertEq(withdraw0.batchIndex, 0, "Withdraw 0 should be assigned to batch 0");
-        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(1);
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 2, "Last processed withdraw ID should be 2");
+        StakingVaultManager.Withdraw memory withdraw0 = stakingVaultManager.getWithdraw(1);
+        assertEq(withdraw0.batchIndex, 0, "Withdraw 1 should be assigned to batch 0");
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(2);
         assertEq(withdraw1.batchIndex, 1, "Withdraw 1 should be assigned to batch 1");
 
         // Verify vHYPE escrow balance (batch 0 vHYPE was burned, batch 1 vHYPE is still escrowed)
@@ -1025,9 +1025,9 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, 0, "Batch should have processed 0 vHYPE");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.getWithdrawQueueLength(), 1, "Withdraw should still be in queue");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Withdraw should still be in queue");
         assertEq(
-            stakingVaultManager.getWithdraw(0).batchIndex,
+            stakingVaultManager.getWithdraw(1).batchIndex,
             type(uint256).max,
             "Withdraw should not be assigned to a batch"
         );
@@ -1062,10 +1062,10 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, vhypeAmount1, "Batch should have processed 50k vHYPE");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 1, "Next withdraw index should be 1");
-        assertEq(stakingVaultManager.getWithdraw(0).batchIndex, 0, "Withdraw 0 should be assigned to batch 0");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 1, "Last processed withdraw ID should be 1");
+        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "Withdraw 1 should be assigned to batch 0");
         assertEq(
-            stakingVaultManager.getWithdraw(1).batchIndex,
+            stakingVaultManager.getWithdraw(2).batchIndex,
             type(uint256).max,
             "Withdraw 1 should not be assigned to a batch"
         );
@@ -1098,7 +1098,7 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.getBatch(0).finalizedAt, 0, "Batch should not be finalized yet");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be 0");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
 
         // Verify vHYPE state
         assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not have changed");
@@ -1125,7 +1125,7 @@ contract StakingVaultManagerTest is Test {
 
         // Cancel the first withdraw
         vm.prank(user);
-        stakingVaultManager.cancelWithdraw(0);
+        stakingVaultManager.cancelWithdraw(1);
 
         // Process batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1134,7 +1134,8 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, vhypeAmount2, "Batch should have processed 75k vHYPE");
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 2, "Next withdraw index should be 2");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 2, "Last processed withdraw ID should be 2");
+        assertEq(stakingVaultManager.nextWithdrawId(), 3, "Next withdraw ID should be 3");
 
         // Verify vHYPE state
         assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
@@ -1175,7 +1176,7 @@ contract StakingVaultManagerTest is Test {
         );
 
         // Verify withdraw state
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 3, "Next withdraw index should be 3");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Last processed withdraw ID should be 3");
 
         // Verify vHYPE state
         assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
@@ -1216,7 +1217,7 @@ contract StakingVaultManagerTest is Test {
 
         // Verify state
         assertEq(stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0");
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be 0");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
     }
 
     function test_FinalizeBatch_DepositsEqualWithdraws() public {
@@ -1940,11 +1941,11 @@ contract StakingVaultManagerTest is Test {
             vhypeAmount1 + vhypeAmount2,
             "Batch should have 80k vHYPE processed"
         );
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 2, "Next withdraw index should be 2");
-        assertEq(stakingVaultManager.getWithdraw(0).batchIndex, 0, "First withdraw should be in batch 0");
-        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "Second withdraw should be in batch 0");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 2, "Last processed withdraw ID should be 2");
+        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "First withdraw should be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(2).batchIndex, 0, "Second withdraw should be in batch 0");
         assertEq(
-            stakingVaultManager.getWithdraw(2).batchIndex,
+            stakingVaultManager.getWithdraw(3).batchIndex,
             type(uint256).max,
             "Third withdraw should not be assigned yet"
         );
@@ -1954,15 +1955,15 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.resetBatch(type(uint256).max);
 
         // Verify withdrawals were reset
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be reset to 0");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be reset to 0");
         assertEq(
-            stakingVaultManager.getWithdraw(0).batchIndex, type(uint256).max, "First withdraw should be unassigned"
+            stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "First withdraw should be unassigned"
         );
         assertEq(
-            stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "Second withdraw should be unassigned"
+            stakingVaultManager.getWithdraw(2).batchIndex, type(uint256).max, "Second withdraw should be unassigned"
         );
         assertEq(
-            stakingVaultManager.getWithdraw(2).batchIndex,
+            stakingVaultManager.getWithdraw(3).batchIndex,
             type(uint256).max,
             "Third withdraw should still be unassigned"
         );
@@ -2002,7 +2003,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Verify state before reset
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 3, "Should have processed all 3 withdraw slots");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Should have processed all 3 withdraw IDs");
         assertEq(
             stakingVaultManager.getBatch(0).vhypeProcessed,
             vhypeAmount1 + vhypeAmount3,
@@ -2013,23 +2014,25 @@ contract StakingVaultManagerTest is Test {
         vm.prank(owner);
         stakingVaultManager.resetBatch(type(uint256).max);
 
-        // Verify withdrawals were reset (except cancelled one)
-        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be reset");
-        assertEq(
-            stakingVaultManager.getWithdraw(0).batchIndex, type(uint256).max, "First withdraw should be unassigned"
-        );
+        // Verify withdrawals were reset
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be reset");
         assertEq(
             stakingVaultManager.getWithdraw(1).batchIndex, type(uint256).max, "First withdraw should be unassigned"
         );
         assertEq(
-            stakingVaultManager.getWithdraw(2).batchIndex, type(uint256).max, "Third withdraw should be unassigned"
+            stakingVaultManager.getWithdraw(3).batchIndex, type(uint256).max, "Third withdraw should be unassigned"
+        );
+        assertEq(
+            stakingVaultManager.getWithdraw(2).batchIndex,
+            type(uint256).max,
+            "Second (cancelled) withdraw should remain unassigned"
         );
     }
 
     function test_ResetBatch_NothingToReset() public {
         // Try to reset when no batch exists
         vm.prank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
+        vm.expectRevert(StakingVaultManager.NothingToReset.selector);
         stakingVaultManager.resetBatch(type(uint256).max);
     }
 
@@ -2048,7 +2051,7 @@ contract StakingVaultManagerTest is Test {
 
         // Try to reset - should fail
         vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
+        vm.expectRevert(StakingVaultManager.NothingToReset.selector);
         stakingVaultManager.resetBatch(type(uint256).max);
     }
 

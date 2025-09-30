@@ -150,7 +150,7 @@ contract StakingVaultManager is Base {
     uint256 public currentBatchIndex;
 
     /// @dev Auto-incrementing counter for withdraw IDs
-    uint256 private nextWithdrawId;
+    uint256 public nextWithdrawId;
 
     /// @dev The last withdraw ID that was processed
     uint256 public lastProcessedWithdrawId;
