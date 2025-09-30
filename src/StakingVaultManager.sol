@@ -7,9 +7,11 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {Base} from "./Base.sol";
 import {VHYPE} from "./VHYPE.sol";
 import {Converters} from "./libraries/Converters.sol";
+import {StructuredLinkedList} from "./libraries/StructuredLinkedList.sol";
 
 contract StakingVaultManager is Base {
     using Converters for *;
+    using StructuredLinkedList for StructuredLinkedList.List;
 
     /// @notice Thrown if HYPE transfer fails to given recipient for specified amount.
     error TransferFailed(address recipient, uint256 amount);
@@ -65,6 +67,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if trying to finalize before a batch has been processed.
     error NothingToFinalize();
 
+    /// @notice Thrown if trying to reset a batch that has not been processed.
+    error NothingToReset();
+
     /// @notice Thrown if the number of withdrawals requested is too large
     error InvalidWithdrawRequest();
 
@@ -105,7 +110,6 @@ contract StakingVaultManager is Base {
         /// @dev The account that requested the withdraw
         address account;
         /// @dev The amount of vHYPE to redeem (in 18 decimals)
-        /// @dev A 0 amount indicates that the withdraw was cancelled
         uint256 vhypeAmount;
         /// @dev The index of the batch this withdraw was assigned to
         /// @dev If the withdraw has not been assigned to a batch, this is set to type(uint256).max
@@ -145,11 +149,17 @@ contract StakingVaultManager is Base {
     /// @dev The current batch index
     uint256 public currentBatchIndex;
 
-    /// @dev The withdraw queue (append-only)
-    Withdraw[] private withdrawQueue;
+    /// @dev Auto-incrementing counter for withdraw IDs
+    uint256 public nextWithdrawId;
 
-    /// @dev The next withdraw index
-    uint256 public nextWithdrawIndex;
+    /// @dev The last withdraw ID that was processed
+    uint256 public lastProcessedWithdrawId;
+
+    /// @dev The withdraw queue as a linked list
+    StructuredLinkedList.List private withdrawQueue;
+
+    /// @dev Mapping from withdraw ID to withdraw data
+    mapping(uint256 => Withdraw) private withdraws;
 
     /// @dev The total amount of withdrawn HYPE claimed (in 18 decimals)
     uint256 public totalHypeClaimed;
@@ -185,6 +195,10 @@ contract StakingVaultManager is Base {
         // Set batch processing to paused by default. OWNER will enable
         // it when batches are ready to be processed
         isBatchProcessingPaused = true;
+
+        // Start at 1, because 0 is reserved for the head of the list
+        nextWithdrawId = 1;
+        lastProcessedWithdrawId = 0;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -216,24 +230,31 @@ contract StakingVaultManager is Base {
         bool success = vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
         require(success, TransferFailed(msg.sender, vhypeAmount));
 
-        Withdraw memory withdraw = Withdraw({
+        uint256 withdrawId = nextWithdrawId;
+
+        // Store the withdraw data
+        withdraws[withdrawId] = Withdraw({
             account: msg.sender,
             vhypeAmount: vhypeAmount,
             batchIndex: type(uint256).max, // Not assigned to a batch yet
             cancelled: false,
             claimed: false
         });
-        withdrawQueue.push(withdraw);
 
-        // ID of the withdraw is the index of the withdraw in the queue
-        return withdrawQueue.length - 1;
+        // Add to the end of the linked list
+        withdrawQueue.pushBack(withdrawId);
+
+        // Increment the withdraw ID counter
+        nextWithdrawId++;
+
+        return withdrawId;
     }
 
     /// @notice Claims a withdraw
     /// @param withdrawId The ID of the withdraw to claim
     /// @param destination The address to send the HYPE to
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
-        Withdraw storage withdraw = withdrawQueue[withdrawId];
+        Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(!withdraw.cancelled, WithdrawCancelled());
         require(!withdraw.claimed, WithdrawClaimed());
@@ -266,17 +287,21 @@ contract StakingVaultManager is Base {
     /// @notice Cancels a withdraw. A withdraw can only be cancelled if it has not been processed yet.
     /// @param withdrawId The ID of the withdraw to cancel
     function cancelWithdraw(uint256 withdrawId) public whenNotPaused {
-        Withdraw storage withdraw = withdrawQueue[withdrawId];
+        Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(!withdraw.cancelled, WithdrawCancelled());
-        require(withdrawId >= nextWithdrawIndex, WithdrawProcessed());
+        require(withdraw.batchIndex == type(uint256).max, WithdrawProcessed()); // Can only cancel unprocessed withdraws
 
-        // Refund vHYPE
-        bool success = vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
-        require(success, TransferFailed(msg.sender, withdraw.vhypeAmount));
+        // Remove from the linked list
+        withdrawQueue.remove(withdrawId);
 
         // Set cancelled to true
         withdraw.cancelled = true;
+
+        // Refund vHYPE
+        uint256 vhypeAmount = withdraw.vhypeAmount;
+        bool success = vHYPE.transfer(msg.sender, vhypeAmount);
+        require(success, TransferFailed(msg.sender, vhypeAmount));
     }
 
     /// @notice Processes a batch of withdraws
@@ -295,8 +320,15 @@ contract StakingVaultManager is Base {
         // - Hit the withdraw capacity, or
         // - Process the requested number of withdraws, or
         // - Have no more withdraws to process
-        while (withdrawCapacityAvailable > 0 && numWithdrawals > 0 && nextWithdrawIndex < withdrawQueue.length) {
-            Withdraw storage withdraw = withdrawQueue[nextWithdrawIndex];
+        while (withdrawCapacityAvailable > 0 && numWithdrawals > 0) {
+            // Get the next withdraw to process
+            (bool hasNextNode, uint256 nextNodeId) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
+            if (!hasNextNode) {
+                break;
+            }
+
+            Withdraw storage withdraw = withdraws[nextNodeId];
+
             uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
             if (expectedHypeAmount > withdrawCapacityAvailable) {
                 break;
@@ -316,8 +348,8 @@ contract StakingVaultManager is Base {
             // Update withdrawal information
             withdraw.batchIndex = currentBatchIndex;
 
-            // Move to next withdraw
-            nextWithdrawIndex++;
+            // Move to next withdraw in the linked list
+            lastProcessedWithdrawId = nextNodeId;
         }
 
         // Checkpoint the batch to storage
@@ -411,7 +443,7 @@ contract StakingVaultManager is Base {
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
         // We can finalize the batch if we've processed all withdraws
-        if (nextWithdrawIndex == withdrawQueue.length) {
+        if (lastProcessedWithdrawId == withdrawQueue.getTail()) {
             return;
         }
 
@@ -420,23 +452,11 @@ contract StakingVaultManager is Base {
             // We can also finalize the batch if there are withdraws left in the queue,
             // but we don't have enough capacity to process them
             uint256 withdrawCapacityRemaining = balance - minimumStakeBalance - hypeProcessed;
-            Withdraw memory withdraw = _peekNextWithdrawInQueue();
+            (, uint256 nextWithdrawIdToProcess) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
+            Withdraw memory withdraw = withdraws[nextWithdrawIdToProcess];
             uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
             require(expectedHypeAmount > withdrawCapacityRemaining, HasMoreWithdrawCapacity());
         }
-    }
-
-    function _peekNextWithdrawInQueue() internal view returns (Withdraw memory) {
-        // Peek at the next withdraw in the queue that is not cancelled (without modifying state)
-        uint256 index = nextWithdrawIndex;
-        while (index < withdrawQueue.length) {
-            Withdraw storage withdraw = withdrawQueue[index];
-            if (!withdraw.cancelled) {
-                return withdraw;
-            }
-            index++;
-        }
-        return Withdraw({account: address(0x0), vhypeAmount: 0, batchIndex: 0, cancelled: false, claimed: false});
     }
 
     /// @notice Returns the batch at the given index
@@ -450,15 +470,15 @@ contract StakingVaultManager is Base {
         return batches.length;
     }
 
-    /// @notice Returns the withdraw at the given index
-    /// @param index The index of the withdraw to return
-    function getWithdraw(uint256 index) public view returns (Withdraw memory) {
-        return withdrawQueue[index];
+    /// @notice Returns the withdraw at the given ID
+    /// @param withdrawId The ID of the withdraw to return
+    function getWithdraw(uint256 withdrawId) public view returns (Withdraw memory) {
+        return withdraws[withdrawId];
     }
 
-    /// @notice Returns the length of the withdraw queue
+    /// @notice Returns the size of the withdraw queue (number of withdraws in the linked list)
     function getWithdrawQueueLength() public view returns (uint256) {
-        return withdrawQueue.length;
+        return withdrawQueue.sizeOf();
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
@@ -588,24 +608,37 @@ contract StakingVaultManager is Base {
     /// @dev This can only be called on a batch that has not been finalized yet
     function resetBatch(uint256 numWithdrawals) external onlyOwner {
         // Can only reset if there's a batch to reset
-        require(currentBatchIndex < batches.length, NothingToFinalize());
+        require(currentBatchIndex < batches.length, NothingToReset());
+        require(lastProcessedWithdrawId > 0, NothingToReset());
 
         Batch storage batch = batches[currentBatchIndex];
 
         // Can only reset a batch that hasn't been finalized
         require(batch.finalizedAt == 0, InvalidBatch(currentBatchIndex));
 
-        while (nextWithdrawIndex > 0 && numWithdrawals > 0) {
-            uint256 index = nextWithdrawIndex - 1;
-            if (withdrawQueue[index].batchIndex == currentBatchIndex) {
-                withdrawQueue[index].batchIndex = type(uint256).max; // Update the withdraw to unassign from batch
-                if (!withdrawQueue[index].cancelled) {
-                    batch.vhypeProcessed -= withdrawQueue[index].vhypeAmount;
+        while (numWithdrawals > 0) {
+            Withdraw storage withdraw = withdraws[lastProcessedWithdrawId];
+            if (withdraw.batchIndex == currentBatchIndex) {
+                // If the withdraw is part of the current batch
+
+                // Update the withdraw to unassign from batch
+                withdraw.batchIndex = type(uint256).max;
+
+                // Remove the vHYPE processed from the batch
+                batch.vhypeProcessed -= withdraw.vhypeAmount;
+
+                // Move to the previous withdraw in the queue
+                (bool prevNodeExists, uint256 prevNodeId) = withdrawQueue.getPreviousNode(lastProcessedWithdrawId);
+                if (prevNodeExists) {
+                    lastProcessedWithdrawId = prevNodeId; // Previous withdraw exists
+                } else {
+                    lastProcessedWithdrawId = 0; // Back at the head of the queue
+                    break;
                 }
-                nextWithdrawIndex--;
+
                 numWithdrawals--;
-            } else if (withdrawQueue[index].batchIndex != type(uint256).max) {
-                // We've reached a withdrawal that's part of a different batch (earlier batch)
+            } else if (withdraw.batchIndex != type(uint256).max) {
+                // We've reached a withdrawal that's part of an earlier batch
                 // No need to continue since we've reset all withdrawals in the current batch
                 break;
             }
