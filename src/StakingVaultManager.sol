@@ -110,6 +110,8 @@ contract StakingVaultManager is Base {
         /// @dev The index of the batch this withdraw was assigned to
         /// @dev If the withdraw has not been assigned to a batch, this is set to type(uint256).max
         uint256 batchIndex;
+        /// @dev Whether the withdraw has been cancelled
+        bool cancelled;
         /// @dev Whether the withdraw has been claimed
         bool claimed;
     }
@@ -218,6 +220,7 @@ contract StakingVaultManager is Base {
             account: msg.sender,
             vhypeAmount: vhypeAmount,
             batchIndex: type(uint256).max, // Not assigned to a batch yet
+            cancelled: false,
             claimed: false
         });
         withdrawQueue.push(withdraw);
@@ -232,8 +235,8 @@ contract StakingVaultManager is Base {
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
         Withdraw storage withdraw = withdrawQueue[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
-        require(withdraw.vhypeAmount > 0, WithdrawCancelled());
-        require(withdraw.claimed == false, WithdrawClaimed());
+        require(!withdraw.cancelled, WithdrawCancelled());
+        require(!withdraw.claimed, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
         require(block.timestamp > batch.finalizedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
@@ -265,15 +268,15 @@ contract StakingVaultManager is Base {
     function cancelWithdraw(uint256 withdrawId) public whenNotPaused {
         Withdraw storage withdraw = withdrawQueue[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
-        require(withdraw.vhypeAmount > 0, WithdrawCancelled());
+        require(!withdraw.cancelled, WithdrawCancelled());
         require(withdrawId >= nextWithdrawIndex, WithdrawProcessed());
 
         // Refund vHYPE
         bool success = vHYPE.transfer(msg.sender, withdraw.vhypeAmount);
         require(success, TransferFailed(msg.sender, withdraw.vhypeAmount));
 
-        // Set to 0 to indicate that the withdraw was cancelled
-        withdraw.vhypeAmount = 0;
+        // Set cancelled to true
+        withdraw.cancelled = true;
     }
 
     /// @notice Processes a batch of withdraws
@@ -306,7 +309,9 @@ contract StakingVaultManager is Base {
             numWithdrawals--;
 
             // Update batch metrics (in memory)
-            batch.vhypeProcessed += withdraw.vhypeAmount;
+            if (!withdraw.cancelled) {
+                batch.vhypeProcessed += withdraw.vhypeAmount;
+            }
 
             // Update withdrawal information
             withdraw.batchIndex = currentBatchIndex;
@@ -426,12 +431,12 @@ contract StakingVaultManager is Base {
         uint256 index = nextWithdrawIndex;
         while (index < withdrawQueue.length) {
             Withdraw storage withdraw = withdrawQueue[index];
-            if (withdraw.vhypeAmount > 0) {
+            if (!withdraw.cancelled) {
                 return withdraw;
             }
             index++;
         }
-        return Withdraw({account: address(0x0), vhypeAmount: 0, batchIndex: 0, claimed: false});
+        return Withdraw({account: address(0x0), vhypeAmount: 0, batchIndex: 0, cancelled: false, claimed: false});
     }
 
     /// @notice Returns the batch at the given index
@@ -594,7 +599,9 @@ contract StakingVaultManager is Base {
             uint256 index = nextWithdrawIndex - 1;
             if (withdrawQueue[index].batchIndex == currentBatchIndex) {
                 withdrawQueue[index].batchIndex = type(uint256).max; // Update the withdraw to unassign from batch
-                batch.vhypeProcessed -= withdrawQueue[index].vhypeAmount;
+                if (!withdrawQueue[index].cancelled) {
+                    batch.vhypeProcessed -= withdrawQueue[index].vhypeAmount;
+                }
                 nextWithdrawIndex--;
                 numWithdrawals--;
             } else if (withdrawQueue[index].batchIndex != type(uint256).max) {
