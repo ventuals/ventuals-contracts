@@ -124,6 +124,73 @@ function pause(address contractAddress) external onlyOwner;
 function unpause(address contractAddress) external onlyOwner
 ```
 
+## Deposits and Withdrawals
+
+### Lifecycle
+
+#### Deposit
+
+- Users call `deposit` to deposit HYPE into the vault.
+- vHYPE is minted proportionally based on the current exchange rate.
+- The deposited HYPE is transferred to the StakingVault contract on HyperEVM.
+
+#### Queue Withdraw
+
+- Users call `queueWithdraw` to request a withdrawal.
+- The requested vHYPE is transferred to the StakingVaultManager contract and
+  held in escrow.
+- The withdrawal is assigned a unique ID and added to the end of the global
+  withdrawal queue (implemented as a linked list).
+- Until processed, escrowed vHYPE continues to accrue native staking yield
+  through the vault's exchange rate appreciation.
+
+#### Batch Processing
+
+- A new batch can only be created once per day.
+- Each batch records:
+  - snapshotExchangeRate – the exchange rate when processing begins
+  - vhypeProcessed – total vHYPE included in the batch
+- Withdrawals are processed until the vault would drop below the minimum stake
+  balance (500k HYPE) or the queue is empty.
+- Anyone may call `processBatch` to process withdrawals, as long as it's been
+  at least one day since the last batch was finalized.
+
+#### Finalize Batch
+
+A batch is finalized via `finalizeBatch`, which:
+
+- Burns escrowed vHYPE.
+- Reserves the equivalent amount of HYPE for withdrawal (totalHypeProcessed).
+- Transfers deposits to HyperCore and nets them against withdrawals.
+- Stakes excess deposits or unstakes from the validator if withdrawals exceed deposits.
+- Anyone may call `finalizeBatch` to finalize a batch, as long as the batch is
+  ready to be finalized.
+
+#### Claim Withdraw
+
+- After 7 days from the time the withdraw was finalized, users call `claimWithdraw`
+  to claim their HYPE.
+- HYPE is calculated using the batch's snapshotted exchange rate (or the
+  slashed exchange rate if applicable).
+- HYPE is transferred from the vault's HyperCore spot account to the HyperCore
+  spot destination.
+
+#### Cancel Withdraw
+
+- A queued withdrawal may be cancelled before it has been processed using `cancelWithdraw`.
+- The escrowed vHYPE is immediately returned to the user.
+
+#### Slashing
+
+If a slash occurs while withdrawals are queued or processing:
+
+- The contract is paused to prevent deposits/withdrawals.
+- Admins set a `slashedExchangeRate` for affected batches using `applySlash()`,
+  which is the exchange rate at the time of the slash.
+- Withdrawals in those batches are settled at the slashed rate.
+
+Once reconciled, the contract is unpaused and withdrawals can resume.
+
 ## HyperEVM and HyperCore interaction timings
 
 The L1Read precompiles will reflect the HyperCore state **at the beginning of the HyperEVM
