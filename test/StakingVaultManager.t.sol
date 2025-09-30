@@ -1270,11 +1270,7 @@ contract StakingVaultManagerTest is Test {
 
         // First call: transfer all deposits to HyperCore
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
-
-        // Second call: transfer excess 20k HYPE to staking
         _mockAndExpectStakingDepositCall((hypeDeposits - vhypeAmount).to8Decimals());
-
-        // Third call: delegate excess 20k HYPE to validator
         _mockAndExpectTokenDelegateCall(
             validator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */
         );
@@ -1372,6 +1368,75 @@ contract StakingVaultManagerTest is Test {
 
         // Finalize the batch
         vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVaultManager.finalizeBatch();
+    }
+
+    function test_FinalizeBatch_CannotFinalizeAfterSlash() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        address user2 = makeAddr("user2");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+
+        // User 1 queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // User 2 deposits HYPE into the vault
+        vm.deal(user2, hypeDeposits);
+        vm.prank(user2);
+        stakingVaultManager.deposit{value: hypeDeposits}();
+
+        // Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Apply slash to the batch (50% slash)
+        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+
+        // Attempt to finalize should revert due to insufficient balance
+        vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
+        stakingVaultManager.finalizeBatch();
+    }
+
+    function test_FinalizeBatch_CanFinalizeAfterSlashIsApplied() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        address user2 = makeAddr("user2");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+
+        // User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // User 2 deposits HYPE into the vault
+        vm.deal(user2, hypeDeposits);
+        vm.prank(user2);
+        stakingVaultManager.deposit{value: hypeDeposits}();
+
+        // Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Apply slash to the batch (50% slash)
+        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+
+        // Reset the batch
+        vm.prank(owner);
+        stakingVaultManager.resetBatch(type(uint256).max);
+
+        // Process the batch again
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Mock and expect calls for for the deposit
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        _mockAndExpectStakingDepositCall(hypeDeposits.to8Decimals());
+        _mockAndExpectTokenDelegateCall(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ );
+
+        // Finalize the batch
         stakingVaultManager.finalizeBatch();
     }
 
