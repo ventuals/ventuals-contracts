@@ -722,7 +722,7 @@ contract StakingVaultManagerTest is Test {
 
         // Verify the withdraw was cancelled
         StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
-        assertEq(withdraw.vhypeAmount, 0, "Withdraw amount should be 0 after cancellation");
+        assertTrue(withdraw.cancelled, "Withdraw should be marked as cancelled");
 
         // Verify vHYPE was refunded
         assertEq(vHYPE.balanceOf(user), vhypeAmount, "User should receive vHYPE refund");
