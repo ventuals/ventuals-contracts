@@ -229,7 +229,7 @@ contract StakingVaultManager is Base {
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
-    function deposit() public payable canDeposit whenNotPaused {
+    function deposit() external payable canDeposit whenNotPaused {
         uint256 amountToDeposit = msg.value;
 
         // Mint vHYPE
@@ -250,7 +250,7 @@ contract StakingVaultManager is Base {
     /// @notice Queues a withdraw from the vault
     /// @param vhypeAmount The amount of vHYPE to redeem (in 18 decimals)
     /// @return The ID of the withdraw
-    function queueWithdraw(uint256 vhypeAmount) public whenNotPaused returns (uint256) {
+    function queueWithdraw(uint256 vhypeAmount) external whenNotPaused returns (uint256) {
         require(vhypeAmount > 0, ZeroAmount());
 
         // This contract escrows the vHYPE until the withdraw is processed
@@ -328,7 +328,7 @@ contract StakingVaultManager is Base {
 
     /// @notice Cancels a withdraw. A withdraw can only be cancelled if it has not been processed yet.
     /// @param withdrawId The ID of the withdraw to cancel
-    function cancelWithdraw(uint256 withdrawId) public whenNotPaused {
+    function cancelWithdraw(uint256 withdrawId) external whenNotPaused {
         Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(!withdraw.cancelled, WithdrawCancelled());
@@ -350,7 +350,7 @@ contract StakingVaultManager is Base {
 
     /// @notice Processes a batch of withdraws
     /// @param numWithdrawals The number of withdraws to process
-    function processBatch(uint256 numWithdrawals) public whenNotPaused whenBatchProcessingNotPaused {
+    function processBatch(uint256 numWithdrawals) external whenNotPaused whenBatchProcessingNotPaused {
         Batch memory batch = _fetchBatch();
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
@@ -634,13 +634,13 @@ contract StakingVaultManager is Base {
 
     /// @notice Sets the minimum stake balance (in 18 decimals)
     /// @dev Minimum stake balance is the total amount of HYPE that must remain staked in the vault
-    function setMinimumStakeBalance(uint256 _minimumStakeBalance) public onlyOwner {
+    function setMinimumStakeBalance(uint256 _minimumStakeBalance) external onlyOwner {
         minimumStakeBalance = _minimumStakeBalance;
     }
 
     /// @notice Switches the validator to delegate HYPE to
     /// @param newValidator The new validator
-    function switchValidator(address newValidator) public onlyOwner {
+    function switchValidator(address newValidator) external onlyOwner {
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
         stakingVault.tokenRedelegate(validator, newValidator, delegatorSummary.delegated);
 
@@ -649,13 +649,13 @@ contract StakingVaultManager is Base {
 
     /// @notice Sets the minimum deposit amount (in 18 decimals)
     /// @param _minimumDepositAmount The minimum deposit amount (in 18 decimals)
-    function setMinimumDepositAmount(uint256 _minimumDepositAmount) public onlyOwner {
+    function setMinimumDepositAmount(uint256 _minimumDepositAmount) external onlyOwner {
         minimumDepositAmount = _minimumDepositAmount;
     }
 
     /// @notice Sets whether batch processing is paused
     /// @param _isBatchProcessingPaused Whether batch processing is paused
-    function setBatchProcessingPaused(bool _isBatchProcessingPaused) public onlyOwner {
+    function setBatchProcessingPaused(bool _isBatchProcessingPaused) external onlyOwner {
         isBatchProcessingPaused = _isBatchProcessingPaused;
     }
 
@@ -717,7 +717,7 @@ contract StakingVaultManager is Base {
     /// @notice Applies a slash to a batch
     /// @param batchIndex The index of the batch to apply the slash to
     /// @param slashedExchangeRate The new exchange rate that should be applied to the batch (in 18 decimals)
-    function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) public onlyOwner {
+    function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) external onlyOwner {
         require(batchIndex < batches.length, InvalidBatch(batchIndex));
         Batch storage batch = batches[batchIndex];
 
