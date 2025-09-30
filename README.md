@@ -7,10 +7,14 @@
 
 Smart contracts for the Ventuals HYPE LST (vHYPE).
 
-Ventuals is creating a HYPE LST (vHYPE) to raise the stake requirement for its HIP-3 deployment. Contributors deposit HYPE and receive vHYPE, a fully transferable
-ERC20 issued 1:1 against their principal deposit.
+Ventuals is raising HYPE through a custom liquid staking token (LST) for its
+HIP-3 deployment. Contributors receive vHYPE, which is a fully transferable
+ERC20 that represents a claim on the underlying HYPE principal.
 
-vHYPE serves as a proportional claim on the underlying HYPE stake, which will grow over time as native staking yield is distributed.
+- Minimum stake: 500k HYPE must remain staked with validators, which is the
+  current requirement for HIP-3 deployers.
+- Liquidity: Additional deposits provide a liquidity buffer for withdrawals.
+- Native yield: All native staking yield accrues proportionally to vHYPE holders.
 
 ## Getting Started
 
