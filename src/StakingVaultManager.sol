@@ -282,7 +282,11 @@ contract StakingVaultManager is Base {
         Batch memory batch = _fetchBatch();
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
-        uint256 withdrawCapacityAvailable = totalBalance() - minimumStakeBalance - hypeProcessed;
+        uint256 balance = totalBalance();
+        uint256 withdrawCapacityAvailable = 0;
+        if (balance >= minimumStakeBalance + hypeProcessed) {
+            withdrawCapacityAvailable = balance - minimumStakeBalance - hypeProcessed;
+        }
 
         // Iterate until we:
         // - Hit the withdraw capacity, or
@@ -401,23 +405,20 @@ contract StakingVaultManager is Base {
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
-        // Safety check to ensure we are still above the minimum stake amount
-        uint256 balance = totalBalance();
-        require(balance >= minimumStakeBalance, NotEnoughBalance());
-        uint256 withdrawCapacity = balance - minimumStakeBalance;
-        require(withdrawCapacity >= hypeProcessed, NotEnoughBalance());
-
         // We can finalize the batch if we've processed all withdraws
         if (nextWithdrawIndex == withdrawQueue.length) {
             return;
         }
 
-        // We can also finalize the batch if there are withdraws left in the queue,
-        // but we don't have enough capacity to process them
-        uint256 withdrawCapacityRemaining = withdrawCapacity - hypeProcessed;
-        Withdraw memory withdraw = _peekNextWithdrawInQueue();
-        uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
-        require(expectedHypeAmount > withdrawCapacityRemaining, HasMoreWithdrawCapacity());
+        uint256 balance = totalBalance();
+        if (balance >= minimumStakeBalance + hypeProcessed) {
+            // We can also finalize the batch if there are withdraws left in the queue,
+            // but we don't have enough capacity to process them
+            uint256 withdrawCapacityRemaining = balance - minimumStakeBalance - hypeProcessed;
+            Withdraw memory withdraw = _peekNextWithdrawInQueue();
+            uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
+            require(expectedHypeAmount > withdrawCapacityRemaining, HasMoreWithdrawCapacity());
+        }
     }
 
     function _peekNextWithdrawInQueue() internal view returns (Withdraw memory) {
@@ -593,9 +594,7 @@ contract StakingVaultManager is Base {
             uint256 index = nextWithdrawIndex - 1;
             if (withdrawQueue[index].batchIndex == currentBatchIndex) {
                 withdrawQueue[index].batchIndex = type(uint256).max; // Update the withdraw to unassign from batch
-
                 batch.vhypeProcessed -= withdrawQueue[index].vhypeAmount;
-
                 nextWithdrawIndex--;
                 numWithdrawals--;
             } else if (withdrawQueue[index].batchIndex != type(uint256).max) {
