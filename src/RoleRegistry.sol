@@ -25,7 +25,7 @@ contract RoleRegistry is Initializable, EnumerableRoles, UUPSUpgradeable, Ownabl
     /// @notice Grants a role to an account. Only the owner can grant a role.
     /// @param role The role to grant
     /// @param account The account to grant the role to
-    function grantRole(bytes32 role, address account) public {
+    function grantRole(bytes32 role, address account) external {
         // setRole will check that the msg.sender is the owner()
         setRole(account, uint256(role), true);
     }
@@ -33,7 +33,7 @@ contract RoleRegistry is Initializable, EnumerableRoles, UUPSUpgradeable, Ownabl
     /// @notice Revokes a role from an account. Only the owner can revoke a role.
     /// @param role The role to revoke
     /// @param account The account to revoke the role from
-    function revokeRole(bytes32 role, address account) public {
+    function revokeRole(bytes32 role, address account) external {
         // setRole will check that the msg.sender is the owner()
         setRole(account, uint256(role), false);
     }
