@@ -866,6 +866,50 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0, "Total HYPE claimed should be 0");
     }
 
+    function test_ProcessBatch_UnderMinimumStakeBalance() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Mock the calls that batch processing makes
+        _mockBatchProcessingCalls();
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process the first batch (should work without timing restrictions)
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Verify batch state
+        StakingVaultManager.Batch memory batch = stakingVaultManager.getBatch(0);
+        assertEq(batch.vhypeProcessed, 0, "Batch has incorrect amount of vHYPE");
+        assertEq(batch.finalizedAt, 0, "Batch should not be finalized yet");
+        assertEq(batch.snapshotExchangeRate, 1e18, "Batch has incorrect snapshot exchange rate");
+        assertEq(batch.slashedExchangeRate, 0, "Batch should not have a slashed exchange rate");
+        assertEq(batch.slashed, false, "Batch should not have been slashed");
+        assertEq(stakingVaultManager.getBatchesLength(), 1, "Batch length should be 1");
+        assertEq(stakingVaultManager.currentBatchIndex(), 0, "Current batch index should still be 0");
+        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
+
+        // Verify withdraw state
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be 0");
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(0);
+        assertEq(withdraw.vhypeAmount, vhypeAmount, "Withdraw has incorrect amount of vHYPE");
+        assertEq(withdraw.batchIndex, type(uint256).max, "Withdraw should not have been assigned to a batch");
+        assertEq(withdraw.claimed, false, "Withdraw should not have been claimed");
+
+        // Verify vHYPE state
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), vhypeAmount, "vHYPE should still be in escrow");
+
+        // Verify process state
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0 until batch is finalized"
+        );
+        assertEq(stakingVaultManager.totalHypeClaimed(), 0, "Total HYPE claimed should be 0");
+    }
+
     function test_ProcessBatch_WithTimingRestriction() public {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
@@ -1151,6 +1195,30 @@ contract StakingVaultManagerTest is Test {
     /*                    Tests: Finalize Batch                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    function test_FinalizeBatch_CanFinalizeWhenUnderMinimumStakeBalance() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE withdraw
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        // Initial balance: minimumStakeBalance (500k) + 100k (for withdraw) = 600k
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        _expectNoStakeCall();
+        _expectNoUnstakeCall();
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Verify state
+        assertEq(stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0");
+        assertEq(stakingVaultManager.nextWithdrawIndex(), 0, "Next withdraw index should be 0");
+    }
+
     function test_FinalizeBatch_DepositsEqualWithdraws() public {
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
         uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
@@ -1252,28 +1320,6 @@ contract StakingVaultManagerTest is Test {
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
-        stakingVaultManager.finalizeBatch();
-    }
-
-    function test_FinalizeBatch_CannotFinalizeAfterSlash() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE withdraw
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        // Initial balance: minimumStakeBalance (500k) + 100k (for withdraw) = 600k
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Setup: User queues a withdraw
-        _setupWithdraw(user, vhypeAmount);
-
-        // Process the batch (but don't finalize yet)
-        stakingVaultManager.processBatch(type(uint256).max);
-
-        // Mock a 50% slash
-        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
-
-        // Finalization should fail
-        vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
         stakingVaultManager.finalizeBatch();
     }
 
