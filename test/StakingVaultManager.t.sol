@@ -1375,6 +1375,28 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
     }
 
+    function test_FinalizeBatch_CannotFinalizeAfterSlash() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+
+        // User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Apply slash to the batch (50% slash)
+        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+
+        // Attempt to finalize should revert due to insufficient balance
+        vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
+        stakingVaultManager.finalizeBatch();
+    }
+
     function test_FinalizeBatch_ZeroDeposits() public {
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE withdraw
 
