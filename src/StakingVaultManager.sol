@@ -79,6 +79,30 @@ contract StakingVaultManager is Base {
     /// @param deposited The amount of HYPE deposited (in 18 decimals)
     event Deposit(address indexed depositor, uint256 minted, uint256 deposited);
 
+    /// @notice Emitted when a withdraw is queued
+    /// @param account The address that queued the withdraw
+    /// @param withdrawId The ID of the withdraw
+    /// @param withdraw The withdraw data
+    event QueueWithdraw(address indexed account, uint256 withdrawId, Withdraw withdraw);
+
+    /// @notice Emitted when a withdraw is cancelled
+    /// @param account The address that cancelled the withdraw
+    /// @param withdrawId The ID of the withdraw
+    /// @param withdraw The withdraw data
+    event CancelWithdraw(address indexed account, uint256 withdrawId, Withdraw withdraw);
+
+    /// @notice Emitted when a withdraw is processed
+    /// @param account The address that processed the withdraw
+    /// @param withdrawId The ID of the withdraw
+    /// @param withdraw The withdraw data
+    event ProcessWithdraw(address indexed account, uint256 withdrawId, Withdraw withdraw);
+
+    /// @notice Emitted when a withdraw is claimed
+    /// @param account The address that claimed the withdraw
+    /// @param withdrawId The ID of the withdraw
+    /// @param withdraw The withdraw data
+    event ClaimWithdraw(address indexed account, uint256 withdrawId, Withdraw withdraw);
+
     /// @notice Emitted when an emergency staking withdraw is executed
     /// @param sender The address that executed the emergency withdraw
     /// @param amount The amount of HYPE withdrawn
@@ -161,6 +185,9 @@ contract StakingVaultManager is Base {
     /// @dev Mapping from withdraw ID to withdraw data
     mapping(uint256 => Withdraw) private withdraws;
 
+    /// @dev Mapping from account to withdraw IDs
+    mapping(address => uint256[]) private accountWithdrawIds;
+
     /// @dev The total amount of withdrawn HYPE claimed (in 18 decimals)
     uint256 public totalHypeClaimed;
 
@@ -233,19 +260,23 @@ contract StakingVaultManager is Base {
         uint256 withdrawId = nextWithdrawId;
 
         // Store the withdraw data
-        withdraws[withdrawId] = Withdraw({
+        Withdraw memory withdraw = Withdraw({
             account: msg.sender,
             vhypeAmount: vhypeAmount,
             batchIndex: type(uint256).max, // Not assigned to a batch yet
             cancelled: false,
             claimed: false
         });
+        withdraws[withdrawId] = withdraw;
+        accountWithdrawIds[msg.sender].push(withdrawId);
 
         // Add to the end of the linked list
         withdrawQueue.pushBack(withdrawId);
 
         // Increment the withdraw ID counter
         nextWithdrawId++;
+
+        emit QueueWithdraw(msg.sender, withdrawId, withdraw);
 
         return withdrawId;
     }
@@ -282,6 +313,17 @@ contract StakingVaultManager is Base {
 
         withdraw.claimed = true;
         totalHypeClaimed += hypeAmount;
+
+        emit ClaimWithdraw(msg.sender, withdrawId, withdraw);
+    }
+
+    /// @notice Claims multiple withdraws
+    /// @param withdrawIds The IDs of the withdraws to claim
+    /// @param destination The address to send the HYPE to
+    function batchClaimWithdraws(uint256[] calldata withdrawIds, address destination) public whenNotPaused {
+        for (uint256 i = 0; i < withdrawIds.length; i++) {
+            claimWithdraw(withdrawIds[i], destination);
+        }
     }
 
     /// @notice Cancels a withdraw. A withdraw can only be cancelled if it has not been processed yet.
@@ -302,6 +344,8 @@ contract StakingVaultManager is Base {
         uint256 vhypeAmount = withdraw.vhypeAmount;
         bool success = vHYPE.transfer(msg.sender, vhypeAmount);
         require(success, TransferFailed(msg.sender, vhypeAmount));
+
+        emit CancelWithdraw(msg.sender, withdrawId, withdraw);
     }
 
     /// @notice Processes a batch of withdraws
@@ -571,6 +615,17 @@ contract StakingVaultManager is Base {
     function spotAccountBalance() public view returns (uint256) {
         L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(HYPE_TOKEN_ID);
         return spotBalance.total.to18Decimals();
+    }
+
+    /// @notice Returns the withdraws for a given account
+    /// @param account The account to get withdraws for
+    function getAccountWithdraws(address account) public view returns (Withdraw[] memory) {
+        uint256[] memory withdrawIds = accountWithdrawIds[account];
+        Withdraw[] memory _withdraws = new Withdraw[](withdrawIds.length);
+        for (uint256 i = 0; i < withdrawIds.length; i++) {
+            _withdraws[i] = withdraws[withdrawIds[i]];
+        }
+        return _withdraws;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
