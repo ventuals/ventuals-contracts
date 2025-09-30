@@ -71,6 +71,15 @@ library StructuredLinkedList {
     }
 
     /**
+     * @dev Gets the tail of the list
+     * @param self stored linked list from contract
+     * @return uint256 the tail of the list
+     */
+    function getTail(List storage self) internal view returns (uint256) {
+        return self.list[_HEAD][_PREV];
+    }
+
+    /**
      * @dev Returns the links of a node as a tuple
      * @param self stored linked list from contract
      * @param _node id of the node to get
@@ -197,15 +206,6 @@ library StructuredLinkedList {
      */
     function popBack(List storage self) internal returns (uint256) {
         return _pop(self, _PREV);
-    }
-
-    /**
-     * @dev Gets the tail of the list
-     * @param self stored linked list from contract
-     * @return uint256 the tail of the list
-     */
-    function tail(List storage self) internal view returns (uint256) {
-        return self.list[_HEAD][_PREV];
     }
 
     /**

@@ -443,7 +443,7 @@ contract StakingVaultManager is Base {
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
         // We can finalize the batch if we've processed all withdraws
-        if (lastProcessedWithdrawId == withdrawQueue.tail()) {
+        if (lastProcessedWithdrawId == withdrawQueue.getTail()) {
             return;
         }
 
@@ -452,8 +452,8 @@ contract StakingVaultManager is Base {
             // We can also finalize the batch if there are withdraws left in the queue,
             // but we don't have enough capacity to process them
             uint256 withdrawCapacityRemaining = balance - minimumStakeBalance - hypeProcessed;
-            (, uint256 nextWithdrawId) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
-            Withdraw memory withdraw = withdraws[nextWithdrawId];
+            (, uint256 nextWithdrawIdToProcess) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
+            Withdraw memory withdraw = withdraws[nextWithdrawIdToProcess];
             uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
             require(expectedHypeAmount > withdrawCapacityRemaining, HasMoreWithdrawCapacity());
         }
