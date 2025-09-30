@@ -55,9 +55,6 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the account balance is less than the reserved HYPE for withdraws.
     error AccountBalanceLessThanReservedHypeForWithdraws();
 
-    /// @notice Thrown if trying to process more withdrawals than allowed.
-    error WithdrawNotAvailable();
-
     /// @notice Thrown if we don't have enough balance to finalize the batch.
     error NotEnoughBalance();
 
@@ -486,15 +483,21 @@ contract StakingVaultManager is Base {
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
-        // We can finalize the batch if we've processed all withdraws
+        uint256 balance = totalBalance();
+
+        // Make sure we have enough balance to cover the withdraws
+        if (hypeProcessed > 0) {
+            require(balance >= minimumStakeBalance + hypeProcessed, NotEnoughBalance());
+        }
+
+        // If we've processed all withdraws, we can finalize the batch
         if (lastProcessedWithdrawId == withdrawQueue.getTail()) {
             return;
         }
 
-        uint256 balance = totalBalance();
+        // If we haven't processed all withdraws, make sure we've processed all withdraws that we
+        // have capacity for
         if (balance >= minimumStakeBalance + hypeProcessed) {
-            // We can also finalize the batch if there are withdraws left in the queue,
-            // but we don't have enough capacity to process them
             uint256 withdrawCapacityRemaining = balance - minimumStakeBalance - hypeProcessed;
             (, uint256 nextWithdrawIdToProcess) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
             Withdraw memory withdraw = withdraws[nextWithdrawIdToProcess];
