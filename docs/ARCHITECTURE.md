@@ -1,7 +1,5 @@
 # Architecture
 
-NOTE: Some sections of this document are out of date (09/29/2025). We will be updating these docs shortly.
-
 ## Background
 
 Ventuals is creating a HYPE liquid staking token (vHYPE) to raise the minimum stake
@@ -193,6 +191,8 @@ Once reconciled, the contract is unpaused and withdrawals can resume.
 
 ## HyperEVM and HyperCore interaction timings
 
+NOTE: This section is slightly out of date (09/29/2025). We will be updating these docs shortly.
+
 The L1Read precompiles will reflect the HyperCore state **at the beginning of the HyperEVM
 block** ([Hyperliquid docs](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/hyperevm/interaction-timings)).
 This introduces a subtle timing issue when performing actions that update state on HyperCore.
@@ -270,6 +270,8 @@ This ensures that the vault's exchange rate is computed consistently.
 - Exchange rate: 1 HYPE = 1 vHYPE
 
 ### Diagram
+
+NOTE: This diagram is slightly out of date (09/29/2025). We will be updating these docs shortly.
 
 ```mermaid
 %%{init: {'theme':'neo-dark'}}%%
