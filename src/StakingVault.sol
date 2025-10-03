@@ -192,7 +192,7 @@ contract StakingVault is IStakingVault, Base {
         // state is updated in the L1Read precompiles before reading it.
         require(
             lastDelegationChangeBlockNumber[_validator] == 0
-                || block.number > lastDelegationChangeBlockNumber[_validator] + 1,
+                || block.number > lastDelegationChangeBlockNumber[_validator],
             CannotReadDelegationUntilNextBlock()
         );
 
