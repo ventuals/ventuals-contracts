@@ -30,7 +30,7 @@ library L1ReadLibrary {
     struct Delegation {
         address validator;
         uint64 amount;
-        uint64 lockedUntilTimestamp;
+        uint64 lockedUntilTimestamp; // in milliseconds
     }
 
     struct DelegatorSummary {

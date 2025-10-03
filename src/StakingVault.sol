@@ -8,7 +8,7 @@ import {Base} from "./Base.sol";
 import {Converters} from "./libraries/Converters.sol";
 
 contract StakingVault is IStakingVault, Base {
-    using Converters for uint256;
+    using Converters for *;
 
     address public immutable HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
 
@@ -148,8 +148,7 @@ contract StakingVault is IStakingVault, Base {
 
     /// @notice Delegates to the validator, and checkpoints this block number as the last delegation change
     function _delegate(address validator, uint64 weiAmount) internal {
-        /// Set isUndelegate to false
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false);
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false /* isUndelegate */ );
         // Update the last delegation change block number
         lastDelegationChangeBlockNumber[validator] = block.number;
     }
@@ -163,12 +162,11 @@ contract StakingVault is IStakingVault, Base {
         // Check if the stake is unlocked. This value will only be correct in the block after
         // a delegate action is processed.
         require(
-            _delegation.lockedUntilTimestamp <= block.timestamp,
+            _delegation.lockedUntilTimestamp <= block.timestamp * 1000,
             StakeLockedUntilTimestamp(validator, _delegation.lockedUntilTimestamp)
         );
 
-        /// set isUndelegate to true.
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true);
+        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true /* isUndelegate */ );
 
         // Update the last delegation change block number
         lastDelegationChangeBlockNumber[validator] = block.number;
