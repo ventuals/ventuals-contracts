@@ -75,6 +75,10 @@ interface IStakingVault {
     /// @param amount The amount of HYPE to transfer (18 decimals)
     function transferHypeToCore(uint256 amount) external;
 
+    /// @dev Get the delegation for the given validator
+    /// @param validator The validator to get the delegation for
+    function delegation(address validator) external view returns (bool, L1ReadLibrary.Delegation memory);
+
     /// @dev Get the delegator summary for the staking vault using HyperCore precompiles
     function delegatorSummary() external view returns (L1ReadLibrary.DelegatorSummary memory);
 

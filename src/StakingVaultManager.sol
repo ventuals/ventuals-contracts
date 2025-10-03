@@ -399,9 +399,19 @@ contract StakingVaultManager is Base {
             // Initialize a new batch at the current index
             // Only enforce timing restriction if this is not the first batch
             if (lastFinalizedBatchTime != 0) {
+                // There's a 1 day lockup period after HYPE is staked to a validator, so we enforce a 1 day delay between batches
                 require(
                     block.timestamp > lastFinalizedBatchTime + 1 days, BatchNotReady(lastFinalizedBatchTime + 1 days)
-                ); // TODO: Should we add a buffer?
+                );
+
+                // The documentation states that the validator stake will be unlocked after 1 day. However, the documentation
+                // doesn't specify exactly when the validator stake will be unlocked, so we add an extra safety check here in
+                // case it's not exactly 1 day.
+                (bool exists, L1ReadLibrary.Delegation memory delegation) = stakingVault.delegation(validator);
+                require(
+                    exists && block.timestamp > delegation.lockedUntilTimestamp / 1000, /* convert to seconds for comparison */
+                    BatchNotReady(delegation.lockedUntilTimestamp / 1000 /* convert to seconds */ )
+                );
             }
             uint256 snapshotExchangeRate = exchangeRate();
 
