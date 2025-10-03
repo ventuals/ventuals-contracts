@@ -138,6 +138,7 @@ contract VHYPETest is Test {
         vm.assume(amount > 0);
         vm.assume(amount >= burnAmount);
         vm.assume(burnAmount > 0);
+        vm.assume(burnAmount < type(uint256).max); // Exclude max uint256 to avoid infinite approval behavior
 
         vm.prank(manager);
         vHYPE.mint(user1, amount);
