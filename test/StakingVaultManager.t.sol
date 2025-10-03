@@ -416,7 +416,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
@@ -498,7 +498,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
@@ -580,7 +580,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
@@ -609,7 +609,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock insufficient spot balance (only half of what's needed)
         _mockSpotBalance((vhypeAmount / 2).to8Decimals());
@@ -671,7 +671,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(vhypeAmount.to8Decimals());
