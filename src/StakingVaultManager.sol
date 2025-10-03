@@ -61,6 +61,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if we don't have enough balance to finalize the batch.
     error NotEnoughBalance();
 
+    /// @notice Thrown if the updated minimum stake balance is too large.
+    error MinimumStakeBalanceTooLarge();
+
     /// @notice Thrown if we have more withdraw capacity when a batch is finalized.
     error HasMoreWithdrawCapacity();
 
@@ -645,6 +648,13 @@ contract StakingVaultManager is Base {
     /// @notice Sets the minimum stake balance (in 18 decimals)
     /// @dev Minimum stake balance is the total amount of HYPE that must remain staked in the vault
     function setMinimumStakeBalance(uint256 _minimumStakeBalance) external onlyOwner {
+        // If we're in the middle of processing a batch, check that we haven't processed more HYPE
+        // than what we'd have left after setting the minimum stake balance
+        if (currentBatchIndex < batches.length) {
+            uint256 newWithdrawCapacity = totalBalance() - _minimumStakeBalance;
+            StakingVaultManager.Batch memory batch = batches[currentBatchIndex];
+            require(newWithdrawCapacity >= vHYPEtoHYPE(batch.vhypeProcessed), MinimumStakeBalanceTooLarge());
+        }
         minimumStakeBalance = _minimumStakeBalance;
     }
 
