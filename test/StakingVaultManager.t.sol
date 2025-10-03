@@ -35,7 +35,8 @@ contract StakingVaultManagerTest is Test {
     address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant MINIMUM_STAKE_BALANCE = 500_000 * 1e18; // 500k HYPE
-    uint256 public constant MINIMUM_DEPOSIT_AMOUNT = 1e16; // 0.01 HYPE
+    uint256 public constant MINIMUM_DEPOSIT_AMOUNT = 1e18; // 1 HYPE
+    uint256 public constant MINIMUM_WITHDRAW_AMOUNT = 1e18; // 1 HYPE
 
     // Events
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
@@ -73,7 +74,8 @@ contract StakingVaultManagerTest is Test {
             address(stakingVault),
             validator,
             MINIMUM_STAKE_BALANCE,
-            MINIMUM_DEPOSIT_AMOUNT
+            MINIMUM_DEPOSIT_AMOUNT,
+            MINIMUM_WITHDRAW_AMOUNT
         );
         ERC1967Proxy stakingVaultManagerProxy =
             new ERC1967Proxy(address(stakingVaultManagerImplementation), stakingVaultManagerInitData);
@@ -121,7 +123,8 @@ contract StakingVaultManagerTest is Test {
             address(stakingVault),
             validator,
             MINIMUM_STAKE_BALANCE,
-            MINIMUM_DEPOSIT_AMOUNT
+            MINIMUM_DEPOSIT_AMOUNT,
+            MINIMUM_WITHDRAW_AMOUNT
         );
     }
 
@@ -283,6 +286,7 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_QueueWithdraw_Success() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // Setup: User has vHYPE balance
@@ -314,7 +318,19 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.queueWithdraw(0);
     }
 
+    function test_QueueWithdraw_BelowMinimumAmount() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+
+        vm.expectRevert(StakingVaultManager.BelowMinimumWithdrawAmount.selector);
+        stakingVaultManager.queueWithdraw(MINIMUM_WITHDRAW_AMOUNT - 1);
+    }
+
     function test_QueueWithdraw_InsufficientBalance() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // User doesn't have any vHYPE balance
@@ -326,6 +342,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_QueueWithdraw_InsufficientAllowance() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // Setup: User has vHYPE balance but no allowance
@@ -339,6 +356,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_QueueWithdraw_MultipleWithdraws() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount1 = 50_000 * 1e18; // 50k vHYPE
         uint256 vhypeAmount2 = 25_000 * 1e18; // 25k vHYPE
         uint256 totalVhype = vhypeAmount1 + vhypeAmount2;
@@ -380,6 +398,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_QueueWithdraw_WhenContractPaused() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // Setup: User has vHYPE balance and approval
@@ -465,6 +484,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_WithdrawCancelled() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
 
         // Setup: Mint vHYPE to owner and setup withdraw
@@ -705,6 +725,7 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_CancelWithdraw_Success() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
@@ -732,6 +753,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_CancelWithdraw_NotAuthorized() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
         address otherUser = makeAddr("otherUser");
 
@@ -749,6 +771,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_CancelWithdraw_AlreadyCancelled() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
@@ -769,6 +792,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_CancelWithdraw_AlreadyProcessed() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
 
         // Setup: Mock sufficient balance for processing
@@ -794,6 +818,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_CancelWithdraw_WhenContractPaused() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it

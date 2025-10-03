@@ -25,6 +25,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the deposit amount is below the minimum deposit amount.
     error BelowMinimumDepositAmount();
 
+    /// @notice Thrown if the withdraw amount is below the minimum withdraw amount.
+    error BelowMinimumWithdrawAmount();
+
     /// @notice Thrown if the caller is not authorized to perform the action.
     error NotAuthorized();
 
@@ -161,6 +164,9 @@ contract StakingVaultManager is Base {
     /// @dev The minimum amount of HYPE that can be deposited (in 18 decimals)
     uint256 public minimumDepositAmount;
 
+    /// @dev The minimum amount of HYPE that can be withdrawn (in 18 decimals)
+    uint256 public minimumWithdrawAmount;
+
     /// @dev Whether batch processing is paused
     bool public isBatchProcessingPaused;
 
@@ -209,7 +215,8 @@ contract StakingVaultManager is Base {
         address _stakingVault,
         address _validator,
         uint256 _minimumStakeBalance,
-        uint256 _minimumDepositAmount
+        uint256 _minimumDepositAmount,
+        uint256 _minimumWithdrawAmount
     ) public initializer {
         __Base_init(_roleRegistry);
 
@@ -219,6 +226,7 @@ contract StakingVaultManager is Base {
         validator = _validator;
         minimumStakeBalance = _minimumStakeBalance;
         minimumDepositAmount = _minimumDepositAmount;
+        minimumWithdrawAmount = _minimumWithdrawAmount;
 
         // Set batch processing to paused by default. OWNER will enable
         // it when batches are ready to be processed
@@ -256,6 +264,7 @@ contract StakingVaultManager is Base {
     /// @return The ID of the withdraw
     function queueWithdraw(uint256 vhypeAmount) external whenNotPaused returns (uint256) {
         require(vhypeAmount > 0, ZeroAmount());
+        require(vHYPEtoHYPE(vhypeAmount) >= minimumWithdrawAmount, BelowMinimumWithdrawAmount());
 
         // This contract escrows the vHYPE until the withdraw is processed
         bool success = vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
