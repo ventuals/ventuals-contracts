@@ -1220,6 +1220,35 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
     }
 
+    function test_FinalizeBatch_DustHypeAmountNotTransferred() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        uint256 dustHypeAmount = 0.5e10; // dust
+        address user2 = makeAddr("user2");
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegations(validator, totalBalance.to8Decimals());
+
+        // Setup: User 1 queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: User 2 deposits HYPE into the vault
+        vm.deal(user2, hypeDeposits + dustHypeAmount);
+        vm.prank(user2);
+        stakingVaultManager.deposit{value: hypeDeposits + dustHypeAmount}();
+
+        // Expect a transfer to HyperCore call with the dust amount removed
+        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        _expectNoStakeCall();
+        _expectNoUnstakeCall();
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+    }
+
     function test_FinalizeBatch_DepositsEqualWithdraws() public {
         uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
         uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
