@@ -110,6 +110,108 @@ contract VHYPETest is Test {
         vHYPE.burn(burnAmount);
     }
 
+    function test_Burn_WhenPaused() public {
+        address user = makeAddr("user");
+        uint256 amount = 1000e18;
+        uint256 burnAmount = 500e18;
+
+        vm.prank(manager);
+        vHYPE.mint(user, amount);
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(vHYPE));
+
+        vm.prank(user);
+        vm.expectRevert();
+        vHYPE.burn(burnAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Tests: Burn From                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_BurnFrom_WithApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user1 != address(0));
+        vm.assume(user2 != address(0));
+        vm.assume(user1 != user2);
+        vm.assume(amount > 0);
+        vm.assume(amount >= burnAmount);
+        vm.assume(burnAmount > 0);
+
+        vm.prank(manager);
+        vHYPE.mint(user1, amount);
+
+        vm.prank(user1);
+        vHYPE.approve(user2, burnAmount);
+
+        vm.prank(user2);
+        vHYPE.burnFrom(user1, burnAmount);
+
+        assertEq(vHYPE.balanceOf(user1), amount - burnAmount);
+        assertEq(vHYPE.totalSupply(), amount - burnAmount);
+        assertEq(vHYPE.allowance(user1, user2), 0);
+    }
+
+    function test_BurnFrom_WithoutApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user1 != address(0));
+        vm.assume(user2 != address(0));
+        vm.assume(user1 != user2);
+        vm.assume(amount > 0);
+        vm.assume(burnAmount > 0);
+
+        vm.prank(manager);
+        vHYPE.mint(user1, amount);
+
+        vm.prank(user2);
+        vm.expectRevert();
+        vHYPE.burnFrom(user1, burnAmount);
+    }
+
+    function test_BurnFrom_InsufficientAllowance(address user1, address user2, uint256 amount, uint256 burnAmount)
+        public
+    {
+        vm.assume(user1 != address(0));
+        vm.assume(user2 != address(0));
+        vm.assume(user1 != user2);
+        vm.assume(amount > 0);
+        vm.assume(burnAmount > 1);
+        vm.assume(amount >= burnAmount);
+
+        uint256 approval = burnAmount - 1;
+
+        vm.prank(manager);
+        vHYPE.mint(user1, amount);
+
+        vm.prank(user1);
+        vHYPE.approve(user2, approval);
+
+        vm.prank(user2);
+        vm.expectRevert();
+        vHYPE.burnFrom(user1, burnAmount);
+    }
+
+    function test_BurnFrom_WhenPaused() public {
+        address user1 = makeAddr("user1");
+        address user2 = makeAddr("user2");
+        uint256 amount = 1000e18;
+        uint256 burnAmount = 500e18;
+
+        vm.prank(manager);
+        vHYPE.mint(user1, amount);
+
+        vm.prank(user1);
+        vHYPE.approve(user2, burnAmount);
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(vHYPE));
+
+        vm.prank(user2);
+        vm.expectRevert();
+        vHYPE.burnFrom(user1, burnAmount);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       Tests: Transfer                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
