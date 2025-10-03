@@ -15,7 +15,6 @@ import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {Base} from "../src/Base.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 
@@ -994,6 +993,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         uint256 lockTime = block.timestamp + 1 days + 1 seconds;
+        // forge-lint: disable-next-line(unsafe-typecast)
         _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64(lockTime * 1000));
 
         // User queues the second withdraw
@@ -2833,6 +2833,7 @@ contract StakingVaultManagerTest is Test {
     function _setupWithdraw(address withdrawUser, uint256 vhypeAmount) internal returns (uint256 withdrawId) {
         // Transfer vHYPE to the user
         vm.prank(owner);
+        // forge-lint: disable-next-line(erc20-unchecked-transfer)
         vHYPE.transfer(withdrawUser, vhypeAmount);
 
         // User approves and queues withdraw
