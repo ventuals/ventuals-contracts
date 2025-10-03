@@ -164,8 +164,11 @@ contract StakingVaultManager is Base {
     /// @dev Whether batch processing is paused
     bool public isBatchProcessingPaused;
 
-    /// The timestamp at which the last batch was finalized.
-    uint256 lastFinalizedBatchTime;
+    /// @dev The timestamp at which the last batch was finalized.
+    uint256 public lastFinalizedBatchTime;
+
+    /// @dev The additional time to wait after a batch is finalized before it can be claimed
+    uint256 public claimWindowBuffer;
 
     /// @dev Batches of deposits and withdraws
     Batch[] private batches;
@@ -226,6 +229,9 @@ contract StakingVaultManager is Base {
         // Start at 1, because 0 is reserved for the head of the list
         nextWithdrawId = 1;
         lastProcessedWithdrawId = 0;
+
+        // Set claim window buffer to 12 hours
+        claimWindowBuffer = 12 hours;
     }
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
@@ -292,7 +298,10 @@ contract StakingVaultManager is Base {
         require(!withdraw.claimed, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
-        require(batch.finalizedAt > 0 && block.timestamp > batch.finalizedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
+        require(
+            batch.finalizedAt > 0 && block.timestamp > batch.finalizedAt + 7 days + claimWindowBuffer,
+            WithdrawUnclaimable()
+        );
 
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
@@ -658,6 +667,12 @@ contract StakingVaultManager is Base {
     /// @param _minimumDepositAmount The minimum deposit amount (in 18 decimals)
     function setMinimumDepositAmount(uint256 _minimumDepositAmount) external onlyOwner {
         minimumDepositAmount = _minimumDepositAmount;
+    }
+
+    /// @notice Sets the claim window buffer (in seconds)
+    /// @param _claimWindowBuffer The claim window buffer (in seconds)
+    function setClaimWindowBuffer(uint256 _claimWindowBuffer) external onlyOwner {
+        claimWindowBuffer = _claimWindowBuffer;
     }
 
     /// @notice Sets whether batch processing is paused

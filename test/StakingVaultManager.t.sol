@@ -416,7 +416,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
@@ -498,7 +498,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
@@ -580,7 +580,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
@@ -609,7 +609,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock insufficient spot balance (only half of what's needed)
         _mockSpotBalance((vhypeAmount / 2).to8Decimals());
@@ -671,7 +671,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock spot balance check (vault has enough HYPE)
         _mockSpotBalance(vhypeAmount.to8Decimals());
@@ -1981,6 +1981,51 @@ contract StakingVaultManagerTest is Test {
         // Verify deposit succeeded
         assertEq(vHYPE.balanceOf(user), newMinimumAmount);
         assertEq(address(stakingVault).balance, newMinimumAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*         Tests: Set Claim Window Buffer (Only Owner)        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetClaimWindowBuffer_OnlyOwner() public {
+        uint256 newClaimWindowBuffer = 14 days;
+
+        // Owner can set claim window buffer
+        vm.prank(owner);
+        stakingVaultManager.setClaimWindowBuffer(newClaimWindowBuffer);
+        assertEq(stakingVaultManager.claimWindowBuffer(), newClaimWindowBuffer, "Claim window buffer should be updated");
+    }
+
+    function test_SetClaimWindowBuffer_NotOwner() public {
+        uint256 newClaimWindowBuffer = 14 days;
+
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.setClaimWindowBuffer(newClaimWindowBuffer);
+    }
+
+    function test_SetClaimWithdrawBuffer_UpdatesClaimWithdrawValidation() public {
+        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize the batch
+        _mockBatchProcessingCalls();
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make withdraw claimable (7 days + 1 second)
+        vm.warp(block.timestamp + 7 days + 1);
+
+        // User claims the withdraw
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.WithdrawUnclaimable.selector));
+        stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
