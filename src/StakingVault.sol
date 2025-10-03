@@ -157,14 +157,14 @@ contract StakingVault is IStakingVault, Base {
     /// @notice Undelegates to the validator, and checkpoints this block number as the last delegation change
     function _undelegate(address validator, uint64 weiAmount) internal {
         // Check if we have enough HYPE to undelegate
-        (bool exists, L1ReadLibrary.Delegation memory delegation) = _getDelegation(validator);
-        require(exists && delegation.amount >= weiAmount, InsufficientHYPEBalance());
+        (bool exists, L1ReadLibrary.Delegation memory _delegation) = _getDelegation(validator);
+        require(exists && _delegation.amount >= weiAmount, InsufficientHYPEBalance());
 
         // Check if the stake is unlocked. This value will only be correct in the block after
         // a delegate action is processed.
         require(
-            delegation.lockedUntilTimestamp <= block.timestamp,
-            StakeLockedUntilTimestamp(validator, delegation.lockedUntilTimestamp)
+            _delegation.lockedUntilTimestamp <= block.timestamp,
+            StakeLockedUntilTimestamp(validator, _delegation.lockedUntilTimestamp)
         );
 
         /// set isUndelegate to true.
