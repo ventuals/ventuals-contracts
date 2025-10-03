@@ -230,7 +230,7 @@ contract StakingVaultManager is Base {
 
     /// @notice Deposits HYPE into the vault, and mints the equivalent amount of vHYPE. Refunds any excess HYPE if only a partial deposit is made. Reverts if the vault is full.
     function deposit() external payable canDeposit whenNotPaused {
-        uint256 amountToDeposit = msg.value;
+        uint256 amountToDeposit = msg.value.stripUnsafePrecision();
 
         // Mint vHYPE
         // IMPORTANT: We need to make sure that we mint the vHYPE _before_ transferring the HYPE to the staking vault,
@@ -445,7 +445,7 @@ contract StakingVaultManager is Base {
         // Check if we can finalize the batch. This will revert if we cannot finalize the batch.
         _canFinalizeBatch(batch);
 
-        uint256 depositsInBatch = address(stakingVault).balance;
+        uint256 depositsInBatch = stakingVault.evmBalance();
         uint256 withdrawsInBatch = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
         // Update totalHypeProcessed to track reserved HYPE for withdrawals
@@ -594,7 +594,7 @@ contract StakingVaultManager is Base {
     /// @notice Returns the total HYPE balance that belongs to the vault (in 18 decimals)
     function totalBalance() public view returns (uint256) {
         // EVM + Spot + Staking account balances
-        uint256 accountBalances = stakingAccountBalance() + spotAccountBalance() + address(stakingVault).balance;
+        uint256 accountBalances = stakingAccountBalance() + spotAccountBalance() + stakingVault.evmBalance();
 
         // The total amount of HYPE that is reserved to be returned to users for withdraws, but is still in
         // under the StakingVault accounts because they have not finished processing or been claimed

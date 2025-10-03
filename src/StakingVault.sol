@@ -5,8 +5,11 @@ import {IStakingVault} from "./interfaces/IStakingVault.sol";
 import {CoreWriterLibrary} from "./libraries/CoreWriterLibrary.sol";
 import {L1ReadLibrary} from "./libraries/L1ReadLibrary.sol";
 import {Base} from "./Base.sol";
+import {Converters} from "./libraries/Converters.sol";
 
 contract StakingVault is IStakingVault, Base {
+    using Converters for uint256;
+
     address public immutable HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
 
     /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
@@ -100,6 +103,11 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
         return L1ReadLibrary.spotBalance(address(this), tokenId);
+    }
+
+    /// @inheritdoc IStakingVault
+    function evmBalance() external view returns (uint256) {
+        return address(this).balance.stripUnsafePrecision();
     }
 
     /// @notice Delegates to the validator, and checkpoints this block number as the last delegation change

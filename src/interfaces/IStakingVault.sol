@@ -75,4 +75,8 @@ interface IStakingVault {
     /// @dev Get the spot balance for the given token for the staking vault using HyperCore precompiles
     /// @param tokenId The token ID to get the spot balance for (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory);
+
+    /// @dev Get the balance of HYPE in the StakingVault contract (HyperEVM)
+    /// @dev Truncates any precision beyond 8 decimals to prevent loss when transferring to HyperCore
+    function evmBalance() external view returns (uint256);
 }

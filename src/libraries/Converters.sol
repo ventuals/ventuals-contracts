@@ -13,4 +13,9 @@ library Converters {
     function to8Decimals(uint256 amount) internal pure returns (uint64) {
         return SafeCast.toUint64(amount / 1e10);
     }
+
+    /// @dev Strips the last 10 decimal places from an amount. Used for converting HYPE values to 8 decimals before sending to HyperCore.
+    function stripUnsafePrecision(uint256 amount) internal pure returns (uint256) {
+        return amount / 1e10 * 1e10;
+    }
 }
