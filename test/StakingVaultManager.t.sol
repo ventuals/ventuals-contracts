@@ -1968,6 +1968,29 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.setMinimumStakeBalance(newMinimumStakeBalance);
     }
 
+    function test_SetMinimumStakeBalance_TooLowDuringBatchProcessing() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: Mock sufficient balance (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process the batch (but don't finalize it yet)
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Calculate the new minimum stake balance that would be too high
+        // Total balance is 600k, batch processed 100k, so we need at least 500k minimum stake balance
+        // Setting it to 500k + 1 should fail
+        uint256 newMinimumStakeBalanceTooLarge = totalBalance - vhypeAmount + 1;
+
+        vm.prank(owner);
+        vm.expectRevert(StakingVaultManager.MinimumStakeBalanceTooLarge.selector);
+        stakingVaultManager.setMinimumStakeBalance(newMinimumStakeBalanceTooLarge);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*       Tests: Set Minimum Deposit Amount (Only Owner)       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
