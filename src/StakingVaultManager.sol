@@ -144,9 +144,6 @@ contract StakingVaultManager is Base {
         bool claimed;
     }
 
-    /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
-    uint64 public immutable HYPE_TOKEN_ID;
-
     /// forge-lint: disable-next-line(mixed-case-variable)
     VHYPE public vHYPE;
 
@@ -198,9 +195,7 @@ contract StakingVaultManager is Base {
     uint256 public totalHypeProcessed;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(uint64 _hypeTokenId) {
-        HYPE_TOKEN_ID = _hypeTokenId;
-
+    constructor() {
         _disableInitializers();
     }
 
@@ -306,20 +301,9 @@ contract StakingVaultManager is Base {
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
 
-        // Note: If the destination account doesn't exist on HyperCore, the spotSend will silently fail
-        // and the HYPE will not actually be sent. We check the account exists before making the call,
-        // so users don't lose their HYPE if their HyperCore account doesn't exist.
-        L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(destination);
-        require(coreUserExists.exists, CoreUserDoesNotExist(destination));
-
-        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
-        // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
-        L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(address(stakingVault), HYPE_TOKEN_ID);
-        require(spotBalance.total.to18Decimals() >= hypeAmount, InsufficientBalance());
-
         // NOTE: We don't need to worry about transfer to Core timings here, because claimable HYPE is excluded
         // from the total balance (via `totalHypeProcessed`)
-        stakingVault.spotSend(destination, HYPE_TOKEN_ID, hypeAmount.to8Decimals());
+        stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmount.to8Decimals());
 
         withdraw.claimed = true;
         totalHypeClaimed += hypeAmount;
@@ -629,7 +613,7 @@ contract StakingVaultManager is Base {
     /// @notice Total HYPE balance in the staking vault's spot account balance (in 18 decimals)
     /// @dev Uses L1Read precompiles to get the spot balance for the staking vault from HyperCore
     function spotAccountBalance() public view returns (uint256) {
-        L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(HYPE_TOKEN_ID);
+        L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(stakingVault.HYPE_TOKEN_ID());
         return spotBalance.total.to18Decimals();
     }
 

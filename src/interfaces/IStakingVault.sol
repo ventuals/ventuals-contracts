@@ -11,7 +11,7 @@ interface IStakingVault {
     error TransferFailed(address recipient, uint256 amount);
 
     /// @notice Thrown if the StakingVault is not activated on HyperCore.
-    error NotActivatedOnHyperCore();
+    error CoreUserDoesNotExist(address account);
 
     /// @notice Thrown if a deposit cannot be made until the next block.
     error CannotDepositUntilNextBlock();
@@ -36,6 +36,9 @@ interface IStakingVault {
 
     /// @notice Emitted when HYPE is deposited into the vault (HyperEVM -> HyperEVM)
     event Deposit(address indexed sender, uint256 amount);
+
+    /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
+    function HYPE_TOKEN_ID() external view returns (uint64);
 
     /// @dev Deposit HYPE into the vault (HyperEVM -> HyperEVM)
     /// @dev msg.value is the amount of HYPE to deposit (18 decimals)

@@ -12,6 +12,9 @@ contract StakingVault is IStakingVault, Base {
 
     address public immutable HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
 
+    /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
+    uint64 public immutable HYPE_TOKEN_ID;
+
     /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
     /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
     uint256 public lastEvmToCoreTransferBlockNumber;
@@ -25,8 +28,10 @@ contract StakingVault is IStakingVault, Base {
     mapping(address => bool) public whitelistedValidators;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
+    constructor(uint64 hypeTokenId) {
         _disableInitializers();
+
+        HYPE_TOKEN_ID = hypeTokenId;
     }
 
     function initialize(address _roleRegistry, address[] memory _whitelistedValidators) public initializer {
@@ -80,6 +85,18 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function spotSend(address destination, uint64 token, uint64 weiAmount) external onlyManager whenNotPaused {
         require(weiAmount > 0, ZeroAmount());
+
+        // Note: If the destination account doesn't exist on HyperCore, the spotSend will silently fail
+        // and the HYPE will not actually be sent. We check the account exists before making the call,
+        // so users don't lose their HYPE if their HyperCore account doesn't exist.
+        L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(destination);
+        require(coreUserExists.exists, CoreUserDoesNotExist(destination));
+
+        // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
+        // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
+        L1ReadLibrary.SpotBalance memory _spotBalance = L1ReadLibrary.spotBalance(address(this), HYPE_TOKEN_ID);
+        require(_spotBalance.total >= weiAmount, InsufficientHYPEBalance());
+
         CoreWriterLibrary.spotSend(destination, token, weiAmount);
     }
 
@@ -92,9 +109,8 @@ contract StakingVault is IStakingVault, Base {
         // If the StakingVault is not activated on HyperCore, and a HyperEVM -> HyperCore HYPE transfer is made,
         // the transferred HYPE will be lost.
         L1ReadLibrary.CoreUserExists memory coreUserExists = L1ReadLibrary.coreUserExists(address(this));
-        if (!coreUserExists.exists) {
-            revert NotActivatedOnHyperCore();
-        }
+        require(coreUserExists.exists, CoreUserDoesNotExist(address(this)));
+
         _transfer(payable(HYPE_SYSTEM_ADDRESS), amount);
 
         lastEvmToCoreTransferBlockNumber = block.number;
