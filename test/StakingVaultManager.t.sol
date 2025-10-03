@@ -32,6 +32,7 @@ contract StakingVaultManagerTest is Test {
     address public user = makeAddr("user");
 
     address public validator = makeAddr("validator");
+    address public validator2 = makeAddr("validator2");
     address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant MINIMUM_STAKE_BALANCE = 500_000 * 1e18; // 500k HYPE
@@ -55,9 +56,12 @@ contract StakingVaultManagerTest is Test {
         vHYPE = VHYPE(address(vhypeProxy));
 
         // Deploy StakingVault
+        address[] memory whitelistedValidators = new address[](2);
+        whitelistedValidators[0] = validator;
+        whitelistedValidators[1] = validator2;
         StakingVault stakingVaultImplementation = new StakingVault();
         bytes memory stakingVaultInitData =
-            abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistry));
+            abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistry), whitelistedValidators);
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
@@ -1351,14 +1355,13 @@ contract StakingVaultManagerTest is Test {
 
     function test_FinalizeBatch_CannotFinalizeAfterSwitchValidatorInSameBlock() public {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-        address newValidator = makeAddr("newValidator");
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
         _mockDelegations(validator, totalBalance.to8Decimals());
         _mockAndExpectTokenDelegateCall(validator, totalBalance.to8Decimals(), true);
-        _mockAndExpectTokenDelegateCall(newValidator, totalBalance.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(validator2, totalBalance.to8Decimals(), false);
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1368,7 +1371,7 @@ contract StakingVaultManagerTest is Test {
 
         // Switch validator
         vm.prank(owner);
-        stakingVaultManager.switchValidator(newValidator);
+        stakingVaultManager.switchValidator(validator2);
 
         // Finalize the batch
         vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
@@ -2334,7 +2337,6 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_SwitchValidator_OnlyOwner() public {
-        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
         // Current validator should be defaultValidator
@@ -2347,17 +2349,16 @@ contract StakingVaultManagerTest is Test {
         _mockAndExpectTokenDelegateCall(validator, amount.to8Decimals(), true);
 
         // Mock the delegate call (to new validator)
-        _mockAndExpectTokenDelegateCall(newValidator, amount.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(validator2, amount.to8Decimals(), false);
 
         vm.prank(owner);
-        stakingVaultManager.switchValidator(newValidator);
+        stakingVaultManager.switchValidator(validator2);
 
         // Verify validator was updated
-        assertEq(stakingVaultManager.validator(), newValidator);
+        assertEq(stakingVaultManager.validator(), validator2);
     }
 
     function test_SwitchValidator_NotOwner() public {
-        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18;
 
         _mockDelegatorSummary(amount.to8Decimals());
@@ -2365,7 +2366,7 @@ contract StakingVaultManagerTest is Test {
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
-        stakingVaultManager.switchValidator(newValidator);
+        stakingVaultManager.switchValidator(validator2);
     }
 
     function test_SwitchValidator_SameValidator() public {
@@ -2380,7 +2381,6 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_SwitchValidator_StakeLockedUntilFuture() public {
-        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
@@ -2391,11 +2391,10 @@ contract StakingVaultManagerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, validator, futureTimestamp)
         );
-        stakingVaultManager.switchValidator(newValidator);
+        stakingVaultManager.switchValidator(validator2);
     }
 
     function test_SwitchValidator_StakeUnlockedAtExactTimestamp() public {
-        address newValidator = makeAddr("newValidator");
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
@@ -2405,13 +2404,13 @@ contract StakingVaultManagerTest is Test {
         // Mock the undelegate call (from current validator)
         _mockAndExpectTokenDelegateCall(validator, amount.to8Decimals(), true);
         // Mock the delegate call (to new validator)
-        _mockAndExpectTokenDelegateCall(newValidator, amount.to8Decimals(), false);
+        _mockAndExpectTokenDelegateCall(validator2, amount.to8Decimals(), false);
 
         vm.prank(owner);
-        stakingVaultManager.switchValidator(newValidator);
+        stakingVaultManager.switchValidator(validator2);
 
         // Verify validator was updated
-        assertEq(stakingVaultManager.validator(), newValidator);
+        assertEq(stakingVaultManager.validator(), validator2);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
