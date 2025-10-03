@@ -122,6 +122,11 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
+    function delegation(address validator) external view returns (bool, L1ReadLibrary.Delegation memory) {
+        return _getDelegation(validator);
+    }
+
+    /// @inheritdoc IStakingVault
     function delegatorSummary() external view returns (L1ReadLibrary.DelegatorSummary memory) {
         return L1ReadLibrary.delegatorSummary(address(this));
     }

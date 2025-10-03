@@ -913,12 +913,13 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0, "Total HYPE claimed should be 0");
     }
 
-    function test_ProcessBatch_WithTimingRestriction() public {
+    function test_ProcessBatch_WithOneDayLockedStake() public {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64((block.timestamp + 1 days) * 1000));
 
         // Setup: Mock the calls that batch processing makes
         _mockBatchProcessingCalls();
@@ -940,7 +941,7 @@ contract StakingVaultManagerTest is Test {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Advance time by 1 day + 1 second and try again (should succeed)
-        vm.warp(block.timestamp + 1 days + 1);
+        vm.warp(block.timestamp + 1 days + 1 seconds);
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Verify batch state
@@ -971,6 +972,37 @@ contract StakingVaultManagerTest is Test {
             vhypeAmount / 2,
             "Total HYPE processed should include finalized batch 0"
         );
+    }
+
+    function test_ProcessBatch_WithOneDayLockedStakeAndExtraTime() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: Mock sufficient balance for processing (exchange rate = 1)
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Setup: Mock the calls that batch processing makes
+        _mockBatchProcessingCalls();
+
+        // User queues the first withdraw
+        _setupWithdraw(user, vhypeAmount / 2);
+
+        // Process the first batch (should work without timing restrictions)
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Finalize the first batch
+        stakingVaultManager.finalizeBatch();
+
+        uint256 lockTime = block.timestamp + 1 days + 1 seconds;
+        _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64(lockTime * 1000));
+
+        // User queues the second withdraw
+        _setupWithdraw(user, vhypeAmount / 2);
+
+        // Advance time by 1 day + 1 second (should fail)
+        vm.warp(lockTime);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, lockTime));
+        stakingVaultManager.processBatch(type(uint256).max);
     }
 
     function test_ProcessBatch_WhenBatchProcessingPaused() public {
@@ -2805,9 +2837,10 @@ contract StakingVaultManagerTest is Test {
 
         uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
 
-        // Mock delegator summary and spot balance
+        // Mock delegations and spot balance
         _mockDelegatorSummary(delegatedBalance);
-        _mockSpotBalance(0); // Zero for simplicity
+        _mockDelegations(validator, delegatedBalance);
+        _mockSpotBalance(0);
 
         // Mint vHYPE supply to owner
         if (totalSupply > 0) {
@@ -2837,14 +2870,14 @@ contract StakingVaultManagerTest is Test {
         _mockDelegations(validator, weiAmount);
     }
 
-    function _mockDelegations(address validator, uint64 weiAmount) internal {
-        _mockDelegationsWithLock(validator, weiAmount, 0);
+    function _mockDelegations(address _validator, uint64 weiAmount) internal {
+        _mockDelegationsWithLock(_validator, weiAmount, 0);
     }
 
-    function _mockDelegationsWithLock(address validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
+    function _mockDelegationsWithLock(address _validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
         L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](1);
         mockDelegations[0] = L1ReadLibrary.Delegation({
-            validator: validator,
+            validator: _validator,
             amount: weiAmount,
             lockedUntilTimestamp: lockedUntilTimestamp
         });
