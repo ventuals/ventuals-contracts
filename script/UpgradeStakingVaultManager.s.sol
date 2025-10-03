@@ -15,7 +15,7 @@ contract UpgradeStakingVaultManager is Script {
         vm.startBroadcast();
 
         StakingVaultManager proxy = StakingVaultManager(payable(stakingVaultManagerAddress));
-        StakingVaultManager newImplementation = new StakingVaultManager(hypeTokenId);
+        StakingVaultManager newImplementation = new StakingVaultManager();
         proxy.upgradeToAndCall(address(newImplementation), "");
         console.log("StakingVaultManager proxy address:", address(proxy));
         console.log("StakingVaultManager new implementation:", address(newImplementation));

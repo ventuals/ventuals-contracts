@@ -59,14 +59,14 @@ contract StakingVaultManagerTest is Test {
         address[] memory whitelistedValidators = new address[](2);
         whitelistedValidators[0] = validator;
         whitelistedValidators[1] = validator2;
-        StakingVault stakingVaultImplementation = new StakingVault();
+        StakingVault stakingVaultImplementation = new StakingVault(HYPE_TOKEN_ID);
         bytes memory stakingVaultInitData =
             abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistry), whitelistedValidators);
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
         // Deploy StakingVaultManager
-        StakingVaultManager stakingVaultManagerImplementation = new StakingVaultManager(HYPE_TOKEN_ID);
+        StakingVaultManager stakingVaultManagerImplementation = new StakingVaultManager();
         bytes memory stakingVaultManagerInitData = abi.encodeWithSelector(
             StakingVaultManager.initialize.selector,
             address(roleRegistry),
@@ -112,7 +112,6 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.validator(), validator);
         assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE);
         assertEq(stakingVaultManager.minimumDepositAmount(), MINIMUM_DEPOSIT_AMOUNT);
-        assertEq(stakingVaultManager.HYPE_TOKEN_ID(), HYPE_TOKEN_ID);
     }
 
     function test_CannotInitializeTwice() public {
@@ -620,7 +619,7 @@ contract StakingVaultManagerTest is Test {
 
         // User tries to claim but vault has insufficient balance
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.InsufficientBalance.selector);
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -2534,7 +2533,7 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_UpgradeToAndCall_OnlyOwner() public {
-        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction();
 
         vm.prank(owner);
         stakingVaultManager.upgradeToAndCall(address(newImplementation), "");
@@ -2550,7 +2549,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_UpgradeToAndCall_NotOwner() public {
-        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction();
 
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
@@ -2576,7 +2575,7 @@ contract StakingVaultManagerTest is Test {
         assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
-        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction newImplementation = new StakingVaultManagerWithExtraFunction();
         vm.prank(newOwner);
         stakingVaultManager.upgradeToAndCall(address(newImplementation), "");
 
@@ -2591,8 +2590,7 @@ contract StakingVaultManagerTest is Test {
         assertTrue(newProxy.extraFunction());
 
         // Verify that the old owner can no longer upgrade
-        StakingVaultManagerWithExtraFunction anotherImplementation =
-            new StakingVaultManagerWithExtraFunction(HYPE_TOKEN_ID);
+        StakingVaultManagerWithExtraFunction anotherImplementation = new StakingVaultManagerWithExtraFunction();
         vm.prank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         stakingVaultManager.upgradeToAndCall(address(anotherImplementation), "");
@@ -2947,8 +2945,6 @@ contract StakingVaultManagerTest is Test {
 }
 
 contract StakingVaultManagerWithExtraFunction is StakingVaultManager {
-    constructor(uint64 _hypeTokenId) StakingVaultManager(_hypeTokenId) {}
-
     function extraFunction() public pure returns (bool) {
         return true;
     }
