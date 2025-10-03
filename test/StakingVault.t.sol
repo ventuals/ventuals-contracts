@@ -57,39 +57,39 @@ contract StakingVaultTest is Test {
         vm.assume(weiAmount < type(uint64).max);
 
         // Mock the CoreWriter call to deposit
-        bytes memory encodedAction_deposit = abi.encode(weiAmount);
-        bytes memory data_deposit = new bytes(4 + encodedAction_deposit.length);
-        data_deposit[0] = 0x01;
-        data_deposit[1] = 0x00;
-        data_deposit[2] = 0x00;
-        data_deposit[3] = 0x04; // Staking deposit action ID
-        for (uint256 i = 0; i < encodedAction_deposit.length; i++) {
-            data_deposit[4 + i] = encodedAction_deposit[i];
+        bytes memory encodedActionDeposit = abi.encode(weiAmount);
+        bytes memory dataDeposit = new bytes(4 + encodedActionDeposit.length);
+        dataDeposit[0] = 0x01;
+        dataDeposit[1] = 0x00;
+        dataDeposit[2] = 0x00;
+        dataDeposit[3] = 0x04; // Staking deposit action ID
+        for (uint256 i = 0; i < encodedActionDeposit.length; i++) {
+            dataDeposit[4 + i] = encodedActionDeposit[i];
         }
         vm.mockCall(
             CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data_deposit),
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, dataDeposit),
             abi.encode()
         );
 
         // Mock the CoreWriter call to delegate
-        bytes memory encodedAction_delegate = abi.encode(validator, weiAmount, false);
-        bytes memory data_delegate = new bytes(4 + encodedAction_delegate.length);
-        data_delegate[0] = 0x01;
-        data_delegate[1] = 0x00;
-        data_delegate[2] = 0x00;
-        data_delegate[3] = 0x03; // Token delegate action ID
-        for (uint256 i = 0; i < encodedAction_delegate.length; i++) {
-            data_delegate[4 + i] = encodedAction_delegate[i];
+        bytes memory encodedActionDelegate = abi.encode(validator, weiAmount, false);
+        bytes memory dataDelegate = new bytes(4 + encodedActionDelegate.length);
+        dataDelegate[0] = 0x01;
+        dataDelegate[1] = 0x00;
+        dataDelegate[2] = 0x00;
+        dataDelegate[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedActionDelegate.length; i++) {
+            dataDelegate[4 + i] = encodedActionDelegate[i];
         }
         vm.mockCall(
             CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data_delegate),
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, dataDelegate),
             abi.encode()
         );
 
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data_deposit));
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data_delegate));
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, dataDeposit));
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, dataDelegate));
 
         vm.prank(manager);
         stakingVault.stake(validator, weiAmount);
@@ -121,39 +121,39 @@ contract StakingVaultTest is Test {
         uint64 weiAmount = 1e8;
 
         // Mock the CoreWriter call to deposit
-        bytes memory encodedAction_deposit = abi.encode(weiAmount);
-        bytes memory data_deposit = new bytes(4 + encodedAction_deposit.length);
-        data_deposit[0] = 0x01;
-        data_deposit[1] = 0x00;
-        data_deposit[2] = 0x00;
-        data_deposit[3] = 0x04; // Staking deposit action ID
-        for (uint256 i = 0; i < encodedAction_deposit.length; i++) {
-            data_deposit[4 + i] = encodedAction_deposit[i];
+        bytes memory encodedActionDeposit = abi.encode(weiAmount);
+        bytes memory dataDeposit = new bytes(4 + encodedActionDeposit.length);
+        dataDeposit[0] = 0x01;
+        dataDeposit[1] = 0x00;
+        dataDeposit[2] = 0x00;
+        dataDeposit[3] = 0x04; // Staking deposit action ID
+        for (uint256 i = 0; i < encodedActionDeposit.length; i++) {
+            dataDeposit[4 + i] = encodedActionDeposit[i];
         }
         vm.mockCall(
             CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data_deposit),
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, dataDeposit),
             abi.encode()
         );
 
         // Mock the CoreWriter call to delegate
-        bytes memory encodedAction_delegate = abi.encode(validator, weiAmount, false);
-        bytes memory data_delegate = new bytes(4 + encodedAction_delegate.length);
-        data_delegate[0] = 0x01;
-        data_delegate[1] = 0x00;
-        data_delegate[2] = 0x00;
-        data_delegate[3] = 0x03; // Token delegate action ID
-        for (uint256 i = 0; i < encodedAction_delegate.length; i++) {
-            data_delegate[4 + i] = encodedAction_delegate[i];
+        bytes memory encodedActionDelegate = abi.encode(validator, weiAmount, false);
+        bytes memory dataDelegate = new bytes(4 + encodedActionDelegate.length);
+        dataDelegate[0] = 0x01;
+        dataDelegate[1] = 0x00;
+        dataDelegate[2] = 0x00;
+        dataDelegate[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedActionDelegate.length; i++) {
+            dataDelegate[4 + i] = encodedActionDelegate[i];
         }
         vm.mockCall(
             CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data_delegate),
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, dataDelegate),
             abi.encode()
         );
 
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data_deposit), 2);
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data_delegate), 2);
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, dataDeposit), 2);
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, dataDelegate), 2);
 
         vm.startPrank(manager);
         stakingVault.stake(validator, weiAmount);
@@ -170,40 +170,40 @@ contract StakingVaultTest is Test {
         _mockDelegations(validator, weiAmount);
 
         // Mock the CoreWriter call
-        bytes memory encodedAction_undelegate = abi.encode(validator, weiAmount, true);
-        bytes memory data_undelegate = new bytes(4 + encodedAction_undelegate.length);
-        data_undelegate[0] = 0x01;
-        data_undelegate[1] = 0x00;
-        data_undelegate[2] = 0x00;
-        data_undelegate[3] = 0x03; // Token delegate action ID
-        for (uint256 i = 0; i < encodedAction_undelegate.length; i++) {
-            data_undelegate[4 + i] = encodedAction_undelegate[i];
+        bytes memory encodedActionUndelegate = abi.encode(validator, weiAmount, true);
+        bytes memory dataUndelegate = new bytes(4 + encodedActionUndelegate.length);
+        dataUndelegate[0] = 0x01;
+        dataUndelegate[1] = 0x00;
+        dataUndelegate[2] = 0x00;
+        dataUndelegate[3] = 0x03; // Token delegate action ID
+        for (uint256 i = 0; i < encodedActionUndelegate.length; i++) {
+            dataUndelegate[4 + i] = encodedActionUndelegate[i];
         }
         vm.mockCall(
             CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data_undelegate),
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, dataUndelegate),
             abi.encode()
         );
 
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data_undelegate));
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, dataUndelegate));
 
         // Mock the CoreWriter call
-        bytes memory encodedAction_withdraw = abi.encode(weiAmount);
-        bytes memory data_withdraw = new bytes(4 + encodedAction_withdraw.length);
-        data_withdraw[0] = 0x01;
-        data_withdraw[1] = 0x00;
-        data_withdraw[2] = 0x00;
-        data_withdraw[3] = 0x05; // Staking withdraw action ID
-        for (uint256 i = 0; i < encodedAction_withdraw.length; i++) {
-            data_withdraw[4 + i] = encodedAction_withdraw[i];
+        bytes memory encodedActionWithdraw = abi.encode(weiAmount);
+        bytes memory dataWithdraw = new bytes(4 + encodedActionWithdraw.length);
+        dataWithdraw[0] = 0x01;
+        dataWithdraw[1] = 0x00;
+        dataWithdraw[2] = 0x00;
+        dataWithdraw[3] = 0x05; // Staking withdraw action ID
+        for (uint256 i = 0; i < encodedActionWithdraw.length; i++) {
+            dataWithdraw[4 + i] = encodedActionWithdraw[i];
         }
         vm.mockCall(
             CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data_withdraw),
+            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, dataWithdraw),
             abi.encode()
         );
 
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data_withdraw));
+        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, dataWithdraw));
 
         vm.prank(manager);
         stakingVault.unstake(validator, weiAmount);
