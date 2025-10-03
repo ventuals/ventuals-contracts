@@ -20,6 +20,8 @@ contract StakingVaultTest is Test {
     address public owner = makeAddr("owner");
     address public manager = makeAddr("manager");
     address public operator = makeAddr("operator");
+    address public validator = makeAddr("validator");
+    address public validator2 = makeAddr("validator2");
 
     function setUp() public {
         RoleRegistry roleRegistryImplementation = new RoleRegistry();
@@ -27,9 +29,12 @@ contract StakingVaultTest is Test {
         ERC1967Proxy roleRegistryProxy = new ERC1967Proxy(address(roleRegistryImplementation), roleRegistryInitData);
         roleRegistry = RoleRegistry(address(roleRegistryProxy));
 
+        address[] memory whitelistedValidators = new address[](2);
+        whitelistedValidators[0] = validator;
+        whitelistedValidators[1] = validator2;
         StakingVault stakingVaultImplementation = new StakingVault();
         bytes memory stakingVaultInitData =
-            abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistryProxy));
+            abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistryProxy), whitelistedValidators);
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
         stakingVault = StakingVault(payable(stakingVaultProxy));
 
@@ -45,7 +50,7 @@ contract StakingVaultTest is Test {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                      Tests: Stake                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_Stake_Success(address validator, uint64 weiAmount) public {
+    function test_Stake_Success(uint64 weiAmount) public {
         vm.assume(weiAmount > 0);
         vm.assume(weiAmount < type(uint64).max);
 
@@ -91,7 +96,7 @@ contract StakingVaultTest is Test {
         assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
     }
 
-    function test_Stake_NotManager(address validator, address notManager) public {
+    function test_Stake_NotManager(address notManager) public {
         vm.assume(notManager != manager);
 
         vm.deal(notManager, 1e18);
@@ -105,7 +110,6 @@ contract StakingVaultTest is Test {
     }
 
     function test_Stake_ZeroAmount() public {
-        address validator = makeAddr("validator");
         vm.startPrank(manager);
         vm.expectRevert(IStakingVault.ZeroAmount.selector);
         stakingVault.stake(validator, 0);
@@ -113,7 +117,6 @@ contract StakingVaultTest is Test {
 
     function test_Stake_CanCallTwiceInSameBlock() public {
         uint64 weiAmount = 1e8;
-        address validator = makeAddr("validator");
 
         // Mock the CoreWriter call to deposit
         bytes memory encodedAction_deposit = abi.encode(weiAmount);
@@ -158,7 +161,7 @@ contract StakingVaultTest is Test {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     Tests: Unstake                         */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_Unstake_Success(address validator, uint64 weiAmount) public {
+    function test_Unstake_Success(uint64 weiAmount) public {
         vm.assume(weiAmount > 0);
 
         /// Mock a delegation before undelegate
@@ -207,7 +210,7 @@ contract StakingVaultTest is Test {
         assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
     }
 
-    function test_Unstake_NotManager(address validator, address notManager) public {
+    function test_Unstake_NotManager(address notManager) public {
         vm.assume(notManager != manager);
 
         vm.startPrank(notManager);
@@ -220,14 +223,12 @@ contract StakingVaultTest is Test {
     }
 
     function test_Unstake_ZeroAmount() public {
-        address validator = makeAddr("validator");
         vm.startPrank(manager);
         vm.expectRevert(IStakingVault.ZeroAmount.selector);
         stakingVault.unstake(validator, 0);
     }
 
     function test_Unstake_InsufficientBalance() public {
-        address validator = makeAddr("validator");
         uint64 delegatedAmount = 50_000 * 1e8; // 50k HYPE delegated
         uint64 requestedAmount = 100_000 * 1e8; // 100k HYPE requested
 
@@ -239,7 +240,6 @@ contract StakingVaultTest is Test {
     }
 
     function test_Unstake_ValidatorNotFound() public {
-        address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
 
         // Mock empty delegations (validator not found)
@@ -253,7 +253,6 @@ contract StakingVaultTest is Test {
     }
 
     function test_Unstake_StakeLockedUntilFuture() public {
-        address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
@@ -267,7 +266,6 @@ contract StakingVaultTest is Test {
     }
 
     function test_Unstake_StakeUnlockedAtExactTimestamp() public {
-        address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
@@ -297,7 +295,6 @@ contract StakingVaultTest is Test {
     }
 
     function test_Unstake_CannotCallTwiceInSameBlock() public {
-        address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
 
         // Mock the CoreWriter call
@@ -328,7 +325,6 @@ contract StakingVaultTest is Test {
     }
 
     function test_Unstake_CannotCallAfterStakeInSameBlock() public {
-        address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
 
         // Mock CoreWriter calls for tokenDelegate
@@ -365,12 +361,11 @@ contract StakingVaultTest is Test {
     /*                  Tests: Token Redelegate                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_TokenRedelegate(address fromValidator, address toValidator, uint64 weiAmount) public {
-        vm.assume(fromValidator != toValidator);
+    function test_TokenRedelegate_Success(uint64 weiAmount) public {
         vm.assume(weiAmount > 0);
 
         // Mock the CoreWriter calls for both undelegate and delegate
-        bytes memory undelegateAction = abi.encode(fromValidator, weiAmount, true);
+        bytes memory undelegateAction = abi.encode(validator, weiAmount, true);
         bytes memory undelegateData = new bytes(4 + undelegateAction.length);
         undelegateData[0] = 0x01;
         undelegateData[1] = 0x00;
@@ -380,7 +375,7 @@ contract StakingVaultTest is Test {
             undelegateData[4 + i] = undelegateAction[i];
         }
 
-        bytes memory delegateAction = abi.encode(toValidator, weiAmount, false);
+        bytes memory delegateAction = abi.encode(validator2, weiAmount, false);
         bytes memory delegateData = new bytes(4 + delegateAction.length);
         delegateData[0] = 0x01;
         delegateData[1] = 0x00;
@@ -404,18 +399,17 @@ contract StakingVaultTest is Test {
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, undelegateData));
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, delegateData));
 
-        _mockDelegations(fromValidator, weiAmount);
+        _mockDelegations(validator, weiAmount);
 
         vm.prank(manager);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
 
         // Verify both validators' lastDelegationChangeBlockNumber were updated
-        assertEq(stakingVault.lastDelegationChangeBlockNumber(fromValidator), block.number);
-        assertEq(stakingVault.lastDelegationChangeBlockNumber(toValidator), block.number);
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator2), block.number);
     }
 
     function test_TokenRedelegate_SameValidator() public {
-        address validator = makeAddr("validator");
         uint64 weiAmount = 1e8;
 
         vm.startPrank(manager);
@@ -424,30 +418,24 @@ contract StakingVaultTest is Test {
     }
 
     function test_TokenRedelegate_ZeroAmount() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
-
         vm.startPrank(manager);
         vm.expectRevert(IStakingVault.ZeroAmount.selector);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, 0);
+        stakingVault.tokenRedelegate(validator, validator2, 0);
     }
 
     function test_TokenRedelegate_InsufficientBalance() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
         uint64 delegatedAmount = 50_000 * 1e8; // 50k HYPE delegated
         uint64 requestedAmount = 100_000 * 1e8; // 100k HYPE requested
 
-        _mockDelegations(fromValidator, delegatedAmount);
+        _mockDelegations(validator, delegatedAmount);
 
         vm.startPrank(manager);
         vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, requestedAmount);
+        stakingVault.tokenRedelegate(validator, validator2, requestedAmount);
     }
 
     function test_TokenRedelegate_ValidatorNotFound() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
+        address validator3 = makeAddr("validator3");
         uint64 weiAmount = 1e8;
 
         // Mock empty delegations (validator not found)
@@ -456,33 +444,29 @@ contract StakingVaultTest is Test {
         vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
 
         vm.startPrank(manager);
-        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.ValidatorNotWhitelisted.selector, validator3));
+        stakingVault.tokenRedelegate(validator, validator3, weiAmount);
     }
 
     function test_TokenRedelegate_StakeLockedUntilFuture() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
         uint64 weiAmount = 1e8;
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
-        _mockDelegationsWithLock(fromValidator, weiAmount, futureTimestamp);
+        _mockDelegationsWithLock(validator, weiAmount, futureTimestamp);
 
         vm.startPrank(manager);
         vm.expectRevert(
-            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, fromValidator, futureTimestamp)
+            abi.encodeWithSelector(IStakingVault.StakeLockedUntilTimestamp.selector, validator, futureTimestamp)
         );
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
     }
 
     function test_TokenRedelegate_StakeUnlockedAtExactTimestamp() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
         uint64 weiAmount = 1e8;
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
         // Mock the CoreWriter calls for both undelegate and delegate
-        bytes memory undelegateAction = abi.encode(fromValidator, weiAmount, true);
+        bytes memory undelegateAction = abi.encode(validator, weiAmount, true);
         bytes memory undelegateData = new bytes(4 + undelegateAction.length);
         undelegateData[0] = 0x01;
         undelegateData[1] = 0x00;
@@ -492,7 +476,7 @@ contract StakingVaultTest is Test {
             undelegateData[4 + i] = undelegateAction[i];
         }
 
-        bytes memory delegateAction = abi.encode(toValidator, weiAmount, false);
+        bytes memory delegateAction = abi.encode(validator2, weiAmount, false);
         bytes memory delegateData = new bytes(4 + delegateAction.length);
         delegateData[0] = 0x01;
         delegateData[1] = 0x00;
@@ -513,21 +497,18 @@ contract StakingVaultTest is Test {
             abi.encode()
         );
 
-        _mockDelegationsWithLock(fromValidator, weiAmount, currentTimestamp);
+        _mockDelegationsWithLock(validator, weiAmount, currentTimestamp);
 
         vm.prank(manager);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
 
         // Should succeed and update block numbers for both validators
-        assertEq(stakingVault.lastDelegationChangeBlockNumber(fromValidator), block.number);
-        assertEq(stakingVault.lastDelegationChangeBlockNumber(toValidator), block.number);
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator), block.number);
+        assertEq(stakingVault.lastDelegationChangeBlockNumber(validator2), block.number);
     }
 
     function test_TokenRedelegate_NotManager(address notManager) public {
         vm.assume(notManager != manager);
-
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
         uint64 weiAmount = 1e8;
 
         vm.startPrank(notManager);
@@ -536,12 +517,10 @@ contract StakingVaultTest is Test {
                 IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
             )
         );
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
     }
 
     function test_TokenRedelegate_WhenPaused() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
         uint64 weiAmount = 1e8;
 
         // Pause the contract
@@ -550,16 +529,14 @@ contract StakingVaultTest is Test {
 
         vm.startPrank(manager);
         vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVault)));
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
     }
 
     function test_TokenRedelegate_CannotCallTwiceInSameBlock() public {
-        address fromValidator = makeAddr("fromValidator");
-        address toValidator = makeAddr("toValidator");
         uint64 weiAmount = 1e8;
 
         // Mock the CoreWriter calls for both undelegate and delegate
-        bytes memory undelegateAction = abi.encode(fromValidator, weiAmount, true);
+        bytes memory undelegateAction = abi.encode(validator, weiAmount, true);
         bytes memory undelegateData = new bytes(4 + undelegateAction.length);
         undelegateData[0] = 0x01;
         undelegateData[1] = 0x00;
@@ -569,7 +546,7 @@ contract StakingVaultTest is Test {
             undelegateData[4 + i] = undelegateAction[i];
         }
 
-        bytes memory delegateAction = abi.encode(toValidator, weiAmount, false);
+        bytes memory delegateAction = abi.encode(validator2, weiAmount, false);
         bytes memory delegateData = new bytes(4 + delegateAction.length);
         delegateData[0] = 0x01;
         delegateData[1] = 0x00;
@@ -590,23 +567,21 @@ contract StakingVaultTest is Test {
             abi.encode()
         );
 
-        _mockDelegations(fromValidator, weiAmount);
+        _mockDelegations(validator, weiAmount);
 
         vm.startPrank(manager);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
 
         // Second call in same block should fail during the tokenUndelegate call
         vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
-        stakingVault.tokenRedelegate(fromValidator, toValidator, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
     }
 
     function test_TokenRedelegate_CannotCallAfterTokenDelegateInSameBlock() public {
-        address validator1 = makeAddr("validator1");
-        address validator2 = makeAddr("validator2");
         uint64 weiAmount = 1e8;
 
         // Mock CoreWriter calls for tokenDelegate
-        bytes memory delegateAction = abi.encode(validator1, weiAmount, false);
+        bytes memory delegateAction = abi.encode(validator, weiAmount, false);
         bytes memory delegateData = new bytes(4 + delegateAction.length);
         delegateData[0] = 0x01;
         delegateData[1] = 0x00;
@@ -622,26 +597,24 @@ contract StakingVaultTest is Test {
         );
 
         // Mock delegations for validator1 so tokenRedelegate can try to undelegate from it
-        _mockDelegations(validator1, weiAmount);
+        _mockDelegations(validator, weiAmount);
 
         vm.startPrank(manager);
 
         // First call tokenDelegate on validator1
-        stakingVault.stake(validator1, weiAmount);
+        stakingVault.stake(validator, weiAmount);
 
         // Now try to call tokenRedelegate FROM validator1 in the same block - should fail
         // because we can't read delegations for validator1 in the same block
         vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
-        stakingVault.tokenRedelegate(validator1, validator2, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
     }
 
     function test_TokenRedelegate_CannotCallAfterTokenUndelegateInSameBlock() public {
-        address validator1 = makeAddr("validator1");
-        address validator2 = makeAddr("validator2");
         uint64 weiAmount = 1e8;
 
         // Mock CoreWriter calls for tokenUndelegate
-        bytes memory undelegateAction = abi.encode(validator1, weiAmount, true);
+        bytes memory undelegateAction = abi.encode(validator, weiAmount, true);
         bytes memory undelegateData = new bytes(4 + undelegateAction.length);
         undelegateData[0] = 0x01;
         undelegateData[1] = 0x00;
@@ -656,17 +629,17 @@ contract StakingVaultTest is Test {
             abi.encode()
         );
 
-        _mockDelegations(validator1, weiAmount);
+        _mockDelegations(validator, weiAmount);
 
         vm.startPrank(manager);
 
         // First call tokenUndelegate on validator1
-        stakingVault.unstake(validator1, weiAmount);
+        stakingVault.unstake(validator, weiAmount);
 
         // Now try to call tokenRedelegate FROM validator1 in the same block - should fail
         // because we can't read delegations for validator1 in the same block
         vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
-        stakingVault.tokenRedelegate(validator1, validator2, weiAmount);
+        stakingVault.tokenRedelegate(validator, validator2, weiAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -1090,7 +1063,6 @@ contract StakingVaultTest is Test {
     /*                    Tests: Pause                            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_FunctionsWhenPaused() public {
-        address validator = makeAddr("validator");
         vm.prank(owner);
         roleRegistry.pause(address(stakingVault));
 
