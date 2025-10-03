@@ -25,6 +25,9 @@ interface IStakingVault {
     /// @notice Thrown if the validator is locked until a timestamp in the future.
     error StakeLockedUntilTimestamp(address validator, uint64 lockedUntilTimestamp);
 
+    /// @notice Thrown if the validator is not whitelisted.
+    error ValidatorNotWhitelisted(address validator);
+
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
@@ -79,4 +82,12 @@ interface IStakingVault {
     /// @dev Get the balance of HYPE in the StakingVault contract (HyperEVM)
     /// @dev Truncates any precision beyond 8 decimals to prevent loss when transferring to HyperCore
     function evmBalance() external view returns (uint256);
+
+    /// @dev Add a validator to the whitelist
+    /// @param validator The validator to add to the whitelist
+    function addValidator(address validator) external;
+
+    /// @dev Remove a validator from the whitelist
+    /// @param validator The validator to remove from the whitelist
+    function removeValidator(address validator) external;
 }

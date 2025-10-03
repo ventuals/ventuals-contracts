@@ -21,13 +21,19 @@ contract StakingVault is IStakingVault, Base {
     ///      validator, and reading the delegation state for the validator from the L1Read precompiles
     mapping(address => uint256) public lastDelegationChangeBlockNumber;
 
+    /// @dev The validators that are whitelisted to be delegated to
+    mapping(address => bool) public whitelistedValidators;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(address _roleRegistry) public initializer {
+    function initialize(address _roleRegistry, address[] memory _whitelistedValidators) public initializer {
         __Base_init(_roleRegistry);
+        for (uint256 i = 0; i < _whitelistedValidators.length; i++) {
+            whitelistedValidators[_whitelistedValidators[i]] = true;
+        }
     }
 
     /// @inheritdoc IStakingVault
@@ -44,6 +50,7 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function stake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
         require(weiAmount > 0, ZeroAmount());
+        require(whitelistedValidators[validator], ValidatorNotWhitelisted(validator));
         CoreWriterLibrary.stakingDeposit(weiAmount);
         _delegate(validator, weiAmount);
     }
@@ -51,6 +58,7 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function unstake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
         require(weiAmount > 0, ZeroAmount());
+        require(whitelistedValidators[validator], ValidatorNotWhitelisted(validator));
         _undelegate(validator, weiAmount);
         CoreWriterLibrary.stakingWithdraw(weiAmount);
     }
@@ -63,6 +71,8 @@ contract StakingVault is IStakingVault, Base {
     {
         require(weiAmount > 0, ZeroAmount());
         require(fromValidator != toValidator, RedelegateToSameValidator());
+        require(whitelistedValidators[fromValidator], ValidatorNotWhitelisted(fromValidator));
+        require(whitelistedValidators[toValidator], ValidatorNotWhitelisted(toValidator));
         _undelegate(fromValidator, weiAmount); // Will revert if the stake is locked, or if the validator does not have enough HYPE to undelegate
         _delegate(toValidator, weiAmount);
     }
@@ -108,6 +118,16 @@ contract StakingVault is IStakingVault, Base {
     /// @inheritdoc IStakingVault
     function evmBalance() external view returns (uint256) {
         return address(this).balance.stripUnsafePrecision();
+    }
+
+    /// @inheritdoc IStakingVault
+    function addValidator(address validator) external onlyOperator whenNotPaused {
+        whitelistedValidators[validator] = true;
+    }
+
+    /// @inheritdoc IStakingVault
+    function removeValidator(address validator) external onlyOperator whenNotPaused {
+        delete whitelistedValidators[validator];
     }
 
     /// @notice Delegates to the validator, and checkpoints this block number as the last delegation change
