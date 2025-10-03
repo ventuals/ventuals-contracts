@@ -17,6 +17,8 @@ contract StakingVaultTest is Test {
     RoleRegistry roleRegistry;
     StakingVault stakingVault;
 
+    uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
+
     address public owner = makeAddr("owner");
     address public manager = makeAddr("manager");
     address public operator = makeAddr("operator");
@@ -32,7 +34,7 @@ contract StakingVaultTest is Test {
         address[] memory whitelistedValidators = new address[](2);
         whitelistedValidators[0] = validator;
         whitelistedValidators[1] = validator2;
-        StakingVault stakingVaultImplementation = new StakingVault();
+        StakingVault stakingVaultImplementation = new StakingVault(HYPE_TOKEN_ID);
         bytes memory stakingVaultInitData =
             abi.encodeWithSelector(StakingVault.initialize.selector, address(roleRegistryProxy), whitelistedValidators);
         ERC1967Proxy stakingVaultProxy = new ERC1967Proxy(address(stakingVaultImplementation), stakingVaultInitData);
@@ -44,7 +46,7 @@ contract StakingVaultTest is Test {
         vm.stopPrank();
 
         // Mock the core user exists check to return true
-        _mockCoreUserExists(true);
+        _mockCoreUserExists(address(stakingVault), true);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -645,7 +647,7 @@ contract StakingVaultTest is Test {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Spot Send                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_SpotSend(address destination, uint64 token, uint64 weiAmount) public {
+    function test_SpotSend_Success(address destination, uint64 token, uint64 weiAmount) public {
         vm.assume(weiAmount > 0);
 
         // Mock the CoreWriter call
@@ -663,6 +665,9 @@ contract StakingVaultTest is Test {
             abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
             abi.encode()
         );
+
+        _mockCoreUserExists(destination, true);
+        _mockSpotBalance(weiAmount);
 
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
 
@@ -693,6 +698,31 @@ contract StakingVaultTest is Test {
         vm.startPrank(manager);
         vm.expectRevert(IStakingVault.ZeroAmount.selector);
         stakingVault.spotSend(destination, token, 0);
+    }
+
+    function test_SpotSend_CoreUserDoesNotExist() public {
+        address destination = address(0x456);
+        uint64 token = 0;
+        uint64 weiAmount = 1e8;
+
+        _mockCoreUserExists(destination, false);
+
+        vm.startPrank(manager);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CoreUserDoesNotExist.selector, destination));
+        stakingVault.spotSend(destination, token, weiAmount);
+    }
+
+    function test_SpotSend_InsufficientBalance() public {
+        address destination = address(0x456);
+        uint64 token = 0;
+        uint64 weiAmount = 1e8;
+
+        _mockCoreUserExists(destination, true);
+        _mockSpotBalance(0);
+
+        vm.startPrank(manager);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.InsufficientHYPEBalance.selector));
+        stakingVault.spotSend(destination, token, weiAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -888,10 +918,10 @@ contract StakingVaultTest is Test {
         vm.deal(address(stakingVault), amount);
 
         // Mock the core user exists check to return false
-        _mockCoreUserExists(false);
+        _mockCoreUserExists(address(stakingVault), false);
 
         vm.prank(manager);
-        vm.expectRevert(IStakingVault.NotActivatedOnHyperCore.selector);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CoreUserDoesNotExist.selector, address(stakingVault)));
         stakingVault.transferHypeToCore(amount);
 
         // Balance should remain unchanged
@@ -1127,7 +1157,7 @@ contract StakingVaultTest is Test {
     /*                 Tests: Upgradeability                      */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     function test_UpgradeToAndCall_OnlyOwner() public {
-        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction(HYPE_TOKEN_ID);
 
         vm.prank(owner);
         stakingVault.upgradeToAndCall(address(newImplementation), "");
@@ -1143,7 +1173,7 @@ contract StakingVaultTest is Test {
     function test_UpgradeToAndCall_NotOwner(address notOwner) public {
         vm.assume(notOwner != owner);
 
-        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction(HYPE_TOKEN_ID);
 
         vm.startPrank(notOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
@@ -1174,7 +1204,7 @@ contract StakingVaultTest is Test {
         assertEq(roleRegistry.owner(), newOwner);
 
         // New owner upgrades the contract
-        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction();
+        StakingVaultWithExtraFunction newImplementation = new StakingVaultWithExtraFunction(HYPE_TOKEN_ID);
         vm.prank(newOwner);
         stakingVault.upgradeToAndCall(address(newImplementation), "");
 
@@ -1186,30 +1216,43 @@ contract StakingVaultTest is Test {
         assertTrue(newProxy.extraFunction());
 
         // Verify that the old owner can no longer upgrade
-        StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction();
+        StakingVaultWithExtraFunction anotherImplementation = new StakingVaultWithExtraFunction(HYPE_TOKEN_ID);
         vm.startPrank(originalOwner);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, originalOwner));
         stakingVault.upgradeToAndCall(address(anotherImplementation), "");
     }
 
-    /// @dev Helper function to mock the core user exists check
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                    Helper Functions                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @dev Helper function to mock the core user exists check for a specific destination
+    /// @param destination The destination address to check
     /// @param exists Whether the core user should exist on HyperCore
-    function _mockCoreUserExists(bool exists) internal {
+    function _mockCoreUserExists(address destination, bool exists) internal {
         L1ReadLibrary.CoreUserExists memory mockCoreUserExists = L1ReadLibrary.CoreUserExists({exists: exists});
         bytes memory encodedCoreUserExists = abi.encode(mockCoreUserExists);
+        vm.mockCall(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(destination), encodedCoreUserExists);
+    }
+
+    /// @dev Helper function to mock spot balance for testing staking deposit calls
+    /// @param total The total balance to mock (in 8 decimals)
+    function _mockSpotBalance(uint64 total) internal {
         vm.mockCall(
-            L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedCoreUserExists
+            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
+            abi.encode(address(stakingVault), HYPE_TOKEN_ID),
+            abi.encode(L1ReadLibrary.SpotBalance({total: total, hold: 0, entryNtl: 0}))
         );
     }
 
-    function _mockDelegations(address validator, uint64 weiAmount) internal {
-        _mockDelegationsWithLock(validator, weiAmount, 0);
+    function _mockDelegations(address _validator, uint64 weiAmount) internal {
+        _mockDelegationsWithLock(_validator, weiAmount, 0);
     }
 
-    function _mockDelegationsWithLock(address validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
+    function _mockDelegationsWithLock(address _validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
         L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](1);
         mockDelegations[0] = L1ReadLibrary.Delegation({
-            validator: validator,
+            validator: _validator,
             amount: weiAmount,
             lockedUntilTimestamp: lockedUntilTimestamp
         });
@@ -1220,6 +1263,8 @@ contract StakingVaultTest is Test {
 }
 
 contract StakingVaultWithExtraFunction is StakingVault {
+    constructor(uint64 hypeTokenId) StakingVault(hypeTokenId) {}
+
     function extraFunction() public pure returns (bool) {
         return true;
     }
