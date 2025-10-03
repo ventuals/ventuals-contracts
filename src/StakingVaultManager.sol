@@ -31,6 +31,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the withdraw was cancelled.
     error WithdrawCancelled();
 
+    /// @notice Thrown if the withdraw was not processed.
+    error WithdrawNotProcessed();
+
     /// @notice Thrown if the withdraw was already processed.
     error WithdrawProcessed();
 
@@ -285,10 +288,11 @@ contract StakingVaultManager is Base {
         Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(!withdraw.cancelled, WithdrawCancelled());
+        require(withdraw.batchIndex != type(uint256).max, WithdrawNotProcessed());
         require(!withdraw.claimed, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
-        require(block.timestamp > batch.finalizedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
+        require(batch.finalizedAt > 0 && block.timestamp > batch.finalizedAt + 7 days, WithdrawUnclaimable()); // TODO: Should we add a buffer?
 
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);

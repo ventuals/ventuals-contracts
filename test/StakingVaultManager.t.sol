@@ -410,11 +410,9 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
-
-        // Finalize the batch
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
@@ -450,9 +448,10 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
         vm.warp(block.timestamp + 7 days + 1);
@@ -493,9 +492,10 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
         vm.warp(block.timestamp + 7 days + 1);
@@ -526,9 +526,10 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
         vm.warp(block.timestamp + 6 days);
@@ -549,11 +550,9 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
-
-        // Finalize the batch
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
@@ -575,9 +574,10 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
         vm.warp(block.timestamp + 7 days + 1);
@@ -603,9 +603,10 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
         vm.warp(block.timestamp + 7 days + 1);
@@ -629,9 +630,10 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
         vm.warp(block.timestamp + 7 days + 1);
@@ -659,11 +661,9 @@ contract StakingVaultManagerTest is Test {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Process the batch
+        // Process and finalize the batch
         _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
-
-        // Finalize the batch
         stakingVaultManager.finalizeBatch();
 
         // Slash the batch
