@@ -110,6 +110,23 @@ contract VHYPETest is Test {
         vHYPE.burn(burnAmount);
     }
 
+    function test_Burn_WhenPaused() public {
+        address user = makeAddr("user");
+        uint256 amount = 1000e18;
+        uint256 burnAmount = 500e18;
+
+        vm.prank(manager);
+        vHYPE.mint(user, amount);
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(vHYPE));
+
+        vm.prank(user);
+        vm.expectRevert();
+        vHYPE.burn(burnAmount);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Burn From                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
