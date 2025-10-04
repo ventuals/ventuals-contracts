@@ -137,10 +137,14 @@ contract StakingVaultManager is Base {
 
     /// @dev A withdraw from the vault
     struct Withdraw {
+        /// @dev The ID of the withdraw
+        uint256 id;
         /// @dev The account that requested the withdraw
         address account;
         /// @dev The amount of vHYPE to redeem (in 18 decimals)
         uint256 vhypeAmount;
+        /// @dev The timestamp at which the withdraw was queued
+        uint256 queuedAt;
         /// @dev The index of the batch this withdraw was assigned to
         /// @dev If the withdraw has not been assigned to a batch, this is set to type(uint256).max
         uint256 batchIndex;
@@ -274,8 +278,10 @@ contract StakingVaultManager is Base {
 
         // Store the withdraw data
         Withdraw memory withdraw = Withdraw({
+            id: withdrawId,
             account: msg.sender,
             vhypeAmount: vhypeAmount,
+            queuedAt: block.timestamp,
             batchIndex: type(uint256).max, // Not assigned to a batch yet
             cancelled: false,
             claimed: false
@@ -527,24 +533,30 @@ contract StakingVaultManager is Base {
 
     /// @notice Returns the batch at the given index
     /// @param index The index of the batch to return
-    function getBatch(uint256 index) public view returns (Batch memory) {
+    function getBatch(uint256 index) external view returns (Batch memory) {
         return batches[index];
     }
 
     /// @notice Returns the length of the batches array
-    function getBatchesLength() public view returns (uint256) {
+    function getBatchesLength() external view returns (uint256) {
         return batches.length;
     }
 
     /// @notice Returns the withdraw at the given ID
     /// @param withdrawId The ID of the withdraw to return
-    function getWithdraw(uint256 withdrawId) public view returns (Withdraw memory) {
+    function getWithdraw(uint256 withdrawId) external view returns (Withdraw memory) {
         return withdraws[withdrawId];
     }
 
     /// @notice Returns the size of the withdraw queue (number of withdraws in the linked list)
-    function getWithdrawQueueLength() public view returns (uint256) {
+    function getWithdrawQueueLength() external view returns (uint256) {
         return withdrawQueue.sizeOf();
+    }
+
+    function getWithdrawClaimableAt(uint256 withdrawId) external view returns (uint256) {
+        Withdraw memory withdraw = withdraws[withdrawId];
+        Batch memory batch = batches[withdraw.batchIndex];
+        return batch.finalizedAt + 7 days + claimWindowBuffer;
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
