@@ -555,7 +555,16 @@ contract StakingVaultManager is Base {
 
     function getWithdrawClaimableAt(uint256 withdrawId) external view returns (uint256) {
         Withdraw memory withdraw = withdraws[withdrawId];
-        Batch memory batch = batches[withdraw.batchIndex];
+        uint256 batchIndex = withdraw.batchIndex;
+        // Not assigned to a batch yet, return max uint256
+        if (batchIndex == type(uint256).max) {
+            return type(uint256).max;
+        }
+        Batch memory batch = batches[batchIndex];
+        // Batch not finalized yet, return max uint256
+        if (batch.finalizedAt == 0) {
+            return type(uint256).max;
+        }
         return batch.finalizedAt + 7 days + claimWindowBuffer;
     }
 
