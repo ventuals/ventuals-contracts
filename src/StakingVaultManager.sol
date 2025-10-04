@@ -431,9 +431,11 @@ contract StakingVaultManager is Base {
                     BatchNotReady(delegation.lockedUntilTimestamp / 1000 /* convert to seconds */ )
                 );
             }
+            uint256 snapshotExchangeRate = exchangeRate();
+
             batch = Batch({
                 vhypeProcessed: 0,
-                snapshotExchangeRate: exchangeRate(),
+                snapshotExchangeRate: snapshotExchangeRate,
                 slashedExchangeRate: 0,
                 slashed: false,
                 finalizedAt: 0
@@ -555,16 +557,17 @@ contract StakingVaultManager is Base {
     /// @param withdrawId The ID of the withdraw to return
     function getWithdrawAmount(uint256 withdrawId) external view returns (uint256) {
         Withdraw memory withdraw = withdraws[withdrawId];
+        uint256 vhypeAmount = withdraw.vhypeAmount;
 
         // If the withdraw hasn't been processed yet, use the current exchange rate
         if (withdraw.batchIndex == type(uint256).max) {
-            return vHYPEtoHYPE(withdraw.vhypeAmount);
+            return vHYPEtoHYPE(vhypeAmount);
         }
 
         // Otherwise, use the exchange rate from the batch
         Batch memory batch = batches[withdraw.batchIndex];
-        return
-            _vHYPEtoHYPE(withdraw.vhypeAmount, batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate);
+        uint256 _exchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
+        return _vHYPEtoHYPE(vhypeAmount, _exchangeRate);
     }
 
     /// @notice Returns the time at which the withdraw will be claimable
@@ -572,11 +575,12 @@ contract StakingVaultManager is Base {
     /// @param withdrawId The ID of the withdraw to return
     function getWithdrawClaimableAt(uint256 withdrawId) external view returns (uint256) {
         Withdraw memory withdraw = withdraws[withdrawId];
+        uint256 batchIndex = withdraw.batchIndex;
         // Not assigned to a batch yet, return max uint256
-        if (withdraw.batchIndex == type(uint256).max) {
+        if (batchIndex == type(uint256).max) {
             return type(uint256).max;
         }
-        Batch memory batch = batches[withdraw.batchIndex];
+        Batch memory batch = batches[batchIndex];
         // Batch not finalized yet, return max uint256
         if (batch.finalizedAt == 0) {
             return type(uint256).max;
@@ -697,11 +701,9 @@ contract StakingVaultManager is Base {
         // If we're in the middle of processing a batch, check that we haven't processed more HYPE
         // than what we'd have left after setting the minimum stake balance
         if (currentBatchIndex < batches.length) {
+            uint256 newWithdrawCapacity = totalBalance() - _minimumStakeBalance;
             StakingVaultManager.Batch memory batch = batches[currentBatchIndex];
-            require(
-                totalBalance() - _minimumStakeBalance >= vHYPEtoHYPE(batch.vhypeProcessed),
-                MinimumStakeBalanceTooLarge()
-            );
+            require(newWithdrawCapacity >= vHYPEtoHYPE(batch.vhypeProcessed), MinimumStakeBalanceTooLarge());
         }
         minimumStakeBalance = _minimumStakeBalance;
     }
