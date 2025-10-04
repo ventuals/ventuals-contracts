@@ -1603,6 +1603,155 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*         Tests: Get Withdraw Amount and Claimable At       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_GetWithdrawAmount_UnprocessedWithdraw() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Mock exchange rate = 1.5 (150% - vault has earned 50% yield)
+        uint256 totalBalance = 600_000 * 1e18; // 600k HYPE
+        uint256 totalSupply = 400_000 * 1e18; // 400k vHYPE
+        _mockBalancesForExchangeRate(totalBalance, totalSupply);
+
+        // Queue a withdraw (not processed yet)
+        _setupWithdraw(user, vhypeAmount);
+
+        // Get withdraw amount - should use current exchange rate
+        uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(1);
+
+        // Expected: 100k vHYPE * 1.5 = 150k HYPE
+        assertEq(withdrawAmount, 150_000 * 1e18);
+    }
+
+    function test_GetWithdrawAmount_ProcessedWithdraw() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Mock exchange rate = 1 at time of processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Queue and process withdraw
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Verify withdraw is in batch 0
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(1);
+        assertEq(withdraw.batchIndex, 0);
+
+        // Get withdraw amount - should use snapshot exchange rate from batch
+        uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(1);
+
+        // Expected: 100k vHYPE * 1.0 = 100k HYPE (using batch snapshot rate)
+        assertEq(withdrawAmount, vhypeAmount);
+    }
+
+    function test_GetWithdrawAmount_SlashedBatch() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Mock exchange rate = 1 at time of processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Queue and process withdraw
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Slash the batch to 0.8 exchange rate (80% of original)
+        uint256 slashedExchangeRate = 0.8e18;
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, slashedExchangeRate);
+
+        // Get withdraw amount - should use slashed exchange rate
+        uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(1);
+
+        // Expected: 100k vHYPE * 0.8 = 80k HYPE (using slashed rate)
+        assertEq(withdrawAmount, 80_000 * 1e18);
+    }
+
+    function test_GetWithdrawClaimableAt_UnprocessedWithdraw() public {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Mock exchange rate = 1 at time of processing
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Queue a withdraw (not processed yet)
+        _setupWithdraw(user, vhypeAmount);
+
+        // Should return max uint256 for unprocessed withdraw
+        uint256 claimableAt = stakingVaultManager.getWithdrawClaimableAt(1);
+        assertEq(claimableAt, type(uint256).max);
+    }
+
+    function test_GetWithdrawClaimableAt_NotFinalized() public {
+        uint256 vhypeAmount = 100_000 * 1e18;
+
+        // Mock balances
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+
+        // Queue and process withdraw (but don't finalize)
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should return max uint256 for processed but not finalized
+        uint256 claimableAt = stakingVaultManager.getWithdrawClaimableAt(1);
+        assertEq(claimableAt, type(uint256).max);
+    }
+
+    function test_GetWithdrawClaimableAt_Finalized() public {
+        uint256 vhypeAmount = 100_000 * 1e18;
+
+        // Mock balances
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockBatchProcessingCalls();
+
+        // Queue, process, and finalize withdraw
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        uint256 finalizeTime = block.timestamp;
+        stakingVaultManager.finalizeBatch();
+
+        // Get claimable time
+        uint256 claimableAt = stakingVaultManager.getWithdrawClaimableAt(1);
+
+        // Expected: finalize time + 7 days + claim window buffer (1 day default)
+        uint256 expectedClaimableAt = finalizeTime + 7 days + stakingVaultManager.claimWindowBuffer();
+        assertEq(claimableAt, expectedClaimableAt);
+    }
+
+    function test_GetWithdrawClaimableAt_WithCustomClaimWindowBuffer() public {
+        uint256 vhypeAmount = 100_000 * 1e18;
+        uint256 customBuffer = 3 days;
+
+        // Set custom claim window buffer
+        vm.prank(owner);
+        stakingVaultManager.setClaimWindowBuffer(customBuffer);
+
+        // Mock balances
+        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
+        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        _mockBatchProcessingCalls();
+
+        // Queue, process, and finalize withdraw
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        uint256 finalizeTime = block.timestamp;
+        stakingVaultManager.finalizeBatch();
+
+        // Get claimable time
+        uint256 claimableAt = stakingVaultManager.getWithdrawClaimableAt(1);
+
+        // Expected: finalize time + 7 days + custom buffer (3 days)
+        uint256 expectedClaimableAt = finalizeTime + 7 days + customBuffer;
+        assertEq(claimableAt, expectedClaimableAt);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                Tests: Balance Calculations                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
