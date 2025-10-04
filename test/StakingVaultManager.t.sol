@@ -2066,6 +2066,59 @@ contract StakingVaultManagerTest is Test {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*       Tests: Set Minimum Withdraw Amount (Only Owner)      */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetMinimumWithdrawAmount_OnlyOwner() public {
+        uint256 newMinimumAmount = 5e16; // 0.05 HYPE
+
+        vm.prank(owner);
+        stakingVaultManager.setMinimumWithdrawAmount(newMinimumAmount);
+
+        assertEq(stakingVaultManager.minimumWithdrawAmount(), newMinimumAmount);
+    }
+
+    function test_SetMinimumWithdrawAmount_NotOwner() public {
+        uint256 newMinimumAmount = 5e16; // 0.05 HYPE
+
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.setMinimumWithdrawAmount(newMinimumAmount);
+    }
+
+    function test_SetMinimumWithdrawAmount_UpdatesWithdrawValidation() public {
+        uint256 newMinimumAmount = 5e16; // 0.05 HYPE
+        uint256 belowNewMinimum = newMinimumAmount - 1; // 1 wei below new minimum
+
+        // Mock balances for withdraw (exchange rate = 1)
+        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
+        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
+        _mockBalancesForExchangeRate(existingBalance, existingSupply);
+
+        // Give user some vHYPE
+        vm.prank(owner);
+        vHYPE.transfer(user, 1e18);
+
+        // Set new minimum amount
+        vm.prank(owner);
+        stakingVaultManager.setMinimumWithdrawAmount(newMinimumAmount);
+
+        // Try to withdraw below new minimum - should fail
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), belowNewMinimum);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumWithdrawAmount.selector));
+        stakingVaultManager.queueWithdraw(belowNewMinimum);
+
+        // Withdraw exactly the new minimum - should succeed
+        vHYPE.approve(address(stakingVaultManager), newMinimumAmount);
+        uint256 withdrawId = stakingVaultManager.queueWithdraw(newMinimumAmount);
+
+        // Verify withdraw succeeded
+        assertEq(withdrawId, 1);
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), newMinimumAmount);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*         Tests: Set Claim Window Buffer (Only Owner)        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 

@@ -682,6 +682,12 @@ contract StakingVaultManager is Base {
         minimumDepositAmount = _minimumDepositAmount;
     }
 
+    /// @notice Sets the minimum withdraw amount (in 18 decimals)
+    /// @param _minimumWithdrawAmount The minimum withdraw amount (in 18 decimals)
+    function setMinimumWithdrawAmount(uint256 _minimumWithdrawAmount) external onlyOwner {
+        minimumWithdrawAmount = _minimumWithdrawAmount;
+    }
+
     /// @notice Sets the claim window buffer (in seconds)
     /// @param _claimWindowBuffer The claim window buffer (in seconds)
     function setClaimWindowBuffer(uint256 _claimWindowBuffer) external onlyOwner {
