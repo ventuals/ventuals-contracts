@@ -8,9 +8,6 @@ import {console} from "forge-std/console.sol";
 contract UpgradeStakingVaultManager is Script {
     function run() public {
         address stakingVaultManagerAddress = vm.envAddress("STAKING_VAULT_MANAGER");
-        bool isTestnet = vm.envBool("IS_TESTNET");
-
-        uint64 hypeTokenId = isTestnet ? 1105 : 150; // https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids
 
         vm.startBroadcast();
 
