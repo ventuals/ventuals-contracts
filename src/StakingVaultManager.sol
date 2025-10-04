@@ -553,6 +553,26 @@ contract StakingVaultManager is Base {
         return withdrawQueue.sizeOf();
     }
 
+    /// @notice Returns the amount of HYPE for the given withdraw ID
+    /// @param withdrawId The ID of the withdraw to return
+    function getWithdrawAmount(uint256 withdrawId) external view returns (uint256) {
+        Withdraw memory withdraw = withdraws[withdrawId];
+        uint256 vhypeAmount = withdraw.vhypeAmount;
+
+        // If the withdraw hasn't been processed yet, use the current exchange rate
+        if (withdraw.batchIndex == type(uint256).max) {
+            return vHYPEtoHYPE(vhypeAmount);
+        }
+
+        // Otherwise, use the exchange rate from the batch
+        Batch memory batch = batches[withdraw.batchIndex];
+        uint256 _exchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
+        return _vHYPEtoHYPE(vhypeAmount, _exchangeRate);
+    }
+
+    /// @notice Returns the time at which the withdraw will be claimable
+    /// @dev Returns `type(uint256).max` if the withdraw has not been processed yet
+    /// @param withdrawId The ID of the withdraw to return
     function getWithdrawClaimableAt(uint256 withdrawId) external view returns (uint256) {
         Withdraw memory withdraw = withdraws[withdrawId];
         uint256 batchIndex = withdraw.batchIndex;
