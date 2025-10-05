@@ -311,10 +311,7 @@ contract StakingVaultManager is Base {
         require(!withdraw.claimed, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
-        require(
-            batch.finalizedAt > 0 && block.timestamp > batch.finalizedAt + 7 days + claimWindowBuffer,
-            WithdrawUnclaimable()
-        );
+        require(batch.finalizedAt > 0 && block.timestamp > batch.finalizedAt, WithdrawUnclaimable());
 
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
@@ -414,23 +411,23 @@ contract StakingVaultManager is Base {
 
     function _fetchBatch() internal view returns (Batch memory batch) {
         if (currentBatchIndex == batches.length) {
-            // Initialize a new batch at the current index
-            // Only enforce timing restriction if this is not the first batch
-            if (lastFinalizedBatchTime != 0) {
-                // There's a 1 day lockup period after HYPE is staked to a validator, so we enforce a 1 day delay between batches
-                require(
-                    block.timestamp > lastFinalizedBatchTime + 1 days, BatchNotReady(lastFinalizedBatchTime + 1 days)
-                );
+            // // Initialize a new batch at the current index
+            // // Only enforce timing restriction if this is not the first batch
+            // if (lastFinalizedBatchTime != 0) {
+            //     // There's a 1 day lockup period after HYPE is staked to a validator, so we enforce a 1 day delay between batches
+            //     require(
+            //         block.timestamp > lastFinalizedBatchTime + 1 days, BatchNotReady(lastFinalizedBatchTime + 1 days)
+            //     );
 
-                // The documentation states that the validator stake will be unlocked after 1 day. However, the documentation
-                // doesn't specify exactly when the validator stake will be unlocked, so we add an extra safety check here in
-                // case it's not exactly 1 day.
-                (bool exists, L1ReadLibrary.Delegation memory delegation) = stakingVault.delegation(validator);
-                require(
-                    exists && block.timestamp > delegation.lockedUntilTimestamp / 1000, /* convert to seconds for comparison */
-                    BatchNotReady(delegation.lockedUntilTimestamp / 1000 /* convert to seconds */ )
-                );
-            }
+            //     // The documentation states that the validator stake will be unlocked after 1 day. However, the documentation
+            //     // doesn't specify exactly when the validator stake will be unlocked, so we add an extra safety check here in
+            //     // case it's not exactly 1 day.
+            //     (bool exists, L1ReadLibrary.Delegation memory delegation) = stakingVault.delegation(validator);
+            //     require(
+            //         exists && block.timestamp > delegation.lockedUntilTimestamp / 1000, /* convert to seconds for comparison */
+            //         BatchNotReady(delegation.lockedUntilTimestamp / 1000 /* convert to seconds */ )
+            //     );
+            // }
             uint256 snapshotExchangeRate = exchangeRate();
 
             batch = Batch({
@@ -488,19 +485,19 @@ contract StakingVaultManager is Base {
         }
 
         // Net out the deposits and withdraws in the batch
-        if (depositsInBatch > withdrawsInBatch) {
-            // All withdraws are covered by deposits
+        // if (depositsInBatch > withdrawsInBatch) {
+        //     // All withdraws are covered by deposits
 
-            // Stake the excess HYPE
-            uint256 amountToStake = depositsInBatch - withdrawsInBatch;
-            stakingVault.stake(validator, amountToStake.to8Decimals());
-        } else if (depositsInBatch < withdrawsInBatch) {
-            // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
+        //     // Stake the excess HYPE
+        //     uint256 amountToStake = depositsInBatch - withdrawsInBatch;
+        //     stakingVault.stake(validator, amountToStake.to8Decimals());
+        // } else if (depositsInBatch < withdrawsInBatch) {
+        //     // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
 
-            // Unstake the amount not covered by deposits from the staking vault
-            uint256 amountToUnstake = withdrawsInBatch - depositsInBatch;
-            stakingVault.unstake(validator, amountToUnstake.to8Decimals());
-        }
+        //     // Unstake the amount not covered by deposits from the staking vault
+        //     uint256 amountToUnstake = withdrawsInBatch - depositsInBatch;
+        //     stakingVault.unstake(validator, amountToUnstake.to8Decimals());
+        // }
     }
 
     function _canFinalizeBatch(Batch memory batch) internal view {
@@ -585,7 +582,7 @@ contract StakingVaultManager is Base {
         if (batch.finalizedAt == 0) {
             return type(uint256).max;
         }
-        return batch.finalizedAt + 7 days + claimWindowBuffer;
+        return batch.finalizedAt;
     }
 
     /// @notice Calculates the vHYPE amount for a given HYPE amount, based on the exchange rate
