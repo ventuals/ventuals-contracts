@@ -109,6 +109,31 @@ contract StakingVaultManager is Base {
     /// @param withdraw The withdraw data
     event ClaimWithdraw(address indexed account, uint256 withdrawId, Withdraw withdraw);
 
+    /// @notice Emitted when a batch is processed
+    /// @param batchId The ID of the batch
+    /// @param batch The batch data
+    event ProcessBatch(uint256 batchId, Batch batch);
+
+    /// @notice Emitted when a batch is finalized
+    /// @param batchId The ID of the batch
+    /// @param batch The batch data
+    event FinalizeBatch(uint256 batchId, Batch batch);
+
+    /// @notice Emitted when a batch is slashed
+    /// @param batchIndex The index of the batch
+    /// @param slashedExchangeRate The exchange rate after the slash
+    event ApplySlash(uint256 batchIndex, uint256 slashedExchangeRate);
+
+    /// @notice Emitted when a batch is reset
+    /// @param batchIndex The index of the batch
+    /// @param batch The batch data
+    event ResetBatch(uint256 batchIndex, Batch batch);
+
+    /// @notice Emitted when a batch is finalized after being reset
+    /// @param batchIndex The index of the batch
+    /// @param batch The batch data
+    event FinalizeResetBatch(uint256 batchIndex, Batch batch);
+
     /// @notice Emitted when an emergency staking withdraw is executed
     /// @param sender The address that executed the emergency withdraw
     /// @param amount The amount of HYPE withdrawn
@@ -444,12 +469,16 @@ contract StakingVaultManager is Base {
             // Update withdrawal information
             withdraw.batchIndex = currentBatchIndex;
 
+            emit ProcessWithdraw(withdraw.account, withdraw.id, withdraw);
+
             // Move to next withdraw in the linked list
             lastProcessedWithdrawId = nextNodeId;
         }
 
         // Checkpoint the batch to storage
         _checkpointBatch(batch);
+
+        emit ProcessBatch(currentBatchIndex, batch);
     }
 
     function _fetchBatch() internal view returns (Batch memory batch) {
@@ -516,9 +545,6 @@ contract StakingVaultManager is Base {
         batches[currentBatchIndex].finalizedAt = block.timestamp;
         lastFinalizedBatchTime = block.timestamp;
 
-        // Increment the batch index
-        currentBatchIndex++;
-
         // Burn the escrowed vHYPE (burn from this contract's balance)
         vHYPE.burn(batch.vhypeProcessed);
 
@@ -541,6 +567,11 @@ contract StakingVaultManager is Base {
             uint256 amountToUnstake = withdrawsInBatch - depositsInBatch;
             stakingVault.unstake(validator, amountToUnstake.to8Decimals());
         }
+
+        emit FinalizeBatch(currentBatchIndex, batches[currentBatchIndex]);
+
+        // Increment the batch index
+        currentBatchIndex++;
     }
 
     function _canFinalizeBatch(Batch memory batch) internal view {
@@ -826,6 +857,8 @@ contract StakingVaultManager is Base {
                 break;
             }
         }
+
+        emit ResetBatch(currentBatchIndex, batch);
     }
 
     /// @notice Finalizes the reset batch, removing it from the array
@@ -840,6 +873,8 @@ contract StakingVaultManager is Base {
 
         // Remove the batch entirely
         batches.pop();
+
+        emit FinalizeResetBatch(currentBatchIndex, batch);
     }
 
     /// @notice Applies a slash to a batch
@@ -859,6 +894,8 @@ contract StakingVaultManager is Base {
 
         batch.slashedExchangeRate = slashedExchangeRate;
         batch.slashed = true;
+
+        emit ApplySlash(batchIndex, slashedExchangeRate);
     }
 
     /// @notice Execute an emergency staking withdraw
