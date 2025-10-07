@@ -17,14 +17,20 @@ import {Base} from "../src/Base.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
+import {HyperCoreSimulator} from "./HyperCoreSimulator.sol";
+import {MockHyperCoreState} from "./MockHyperCoreState.sol";
 
 contract StakingVaultManagerTest is Test {
     using Converters for *;
+
+    MockHyperCoreState mockHyperCoreState;
 
     StakingVaultManager stakingVaultManager;
     RoleRegistry roleRegistry;
     VHYPE vHYPE;
     StakingVault stakingVault;
+
+    address internal constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
 
     address public owner = makeAddr("owner");
     address public operator = makeAddr("operator");
@@ -90,10 +96,14 @@ contract StakingVaultManagerTest is Test {
         vm.stopPrank();
 
         // Mock HYPE system contract
-        MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
-        vm.etch(HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
-        _mockSpotBalance(0);
-        _mockDelegatorSummary(0);
+        // MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
+        // vm.etch(HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
+        // _mockSpotBalance(0);
+        // _mockDelegatorSummary(0);
+
+        HyperCoreSimulator.init();
+
+        mockHyperCoreState = MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS);
 
         // Mock the core user exists check to return true
         _mockCoreUserExists(address(stakingVault), true);
@@ -3221,11 +3231,7 @@ contract StakingVaultManagerTest is Test {
     /// @dev Helper function to mock spot balance for testing staking deposit calls
     /// @param total The total balance to mock (in 8 decimals)
     function _mockSpotBalance(uint64 total) internal {
-        vm.mockCall(
-            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
-            abi.encode(address(stakingVault), HYPE_TOKEN_ID),
-            abi.encode(L1ReadLibrary.SpotBalance({total: total, hold: 0, entryNtl: 0}))
-        );
+        mockHyperCoreState.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, total);
     }
 
     function _mockAndExpectStakingDepositCall(uint64 weiAmount) internal {
