@@ -96,7 +96,8 @@ contract DeployContracts is Script {
             getValidator(isTestnet), /* Default validator */
             getMinimumStakeBalance(isTestnet, isTestVault), /* Minimum stake balance */
             getMinimumDepositAmount(isTestnet, isTestVault), /* Minimum deposit amount */
-            getMinimumWithdrawAmount(isTestnet, isTestVault) /* Minimum withdraw amount */
+            getMinimumWithdrawAmount(isTestnet, isTestVault), /* Minimum withdraw amount */
+            getMaximumWithdrawAmount(isTestnet, isTestVault) /* Maximum withdraw amount */
         );
         ERC1967Proxy stakingVaultManagerProxy =
             new ERC1967Proxy(address(stakingVaultManagerImplementation), stakingVaultManagerInitData);
@@ -135,6 +136,14 @@ contract DeployContracts is Script {
             return 0.01 * 1e18; // 0.01 HYPE
         } else {
             return 1 * 1e18; // 1 HYPE
+        }
+    }
+
+    function getMaximumWithdrawAmount(bool isTestnet, bool isTestVault) internal pure returns (uint256) {
+        if (isTestnet || isTestVault) {
+            return 0.02 * 1e18; // 0.02 HYPE
+        } else {
+            return 10_000 * 1e18; // 10k HYPE
         }
     }
 
