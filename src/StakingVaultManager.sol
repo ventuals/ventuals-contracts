@@ -119,6 +119,21 @@ contract StakingVaultManager is Base {
     /// @param batch The batch data
     event FinalizeBatch(uint256 batchId, Batch batch);
 
+    /// @notice Emitted when a batch is slashed
+    /// @param batchIndex The index of the batch
+    /// @param slashedExchangeRate The exchange rate after the slash
+    event ApplySlash(uint256 batchIndex, uint256 slashedExchangeRate);
+
+    /// @notice Emitted when a batch is reset
+    /// @param batchIndex The index of the batch
+    /// @param batch The batch data
+    event ResetBatch(uint256 batchIndex, Batch batch);
+
+    /// @notice Emitted when a batch is finalized after being reset
+    /// @param batchIndex The index of the batch
+    /// @param batch The batch data
+    event FinalizeResetBatch(uint256 batchIndex, Batch batch);
+
     /// @notice Emitted when an emergency staking withdraw is executed
     /// @param sender The address that executed the emergency withdraw
     /// @param amount The amount of HYPE withdrawn
@@ -842,6 +857,8 @@ contract StakingVaultManager is Base {
                 break;
             }
         }
+
+        emit ResetBatch(currentBatchIndex, batch);
     }
 
     /// @notice Finalizes the reset batch, removing it from the array
@@ -856,6 +873,8 @@ contract StakingVaultManager is Base {
 
         // Remove the batch entirely
         batches.pop();
+
+        emit FinalizeResetBatch(currentBatchIndex, batch);
     }
 
     /// @notice Applies a slash to a batch
@@ -875,6 +894,8 @@ contract StakingVaultManager is Base {
 
         batch.slashedExchangeRate = slashedExchangeRate;
         batch.slashed = true;
+
+        emit ApplySlash(batchIndex, slashedExchangeRate);
     }
 
     /// @notice Execute an emergency staking withdraw
