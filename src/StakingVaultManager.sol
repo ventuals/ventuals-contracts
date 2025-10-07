@@ -148,10 +148,10 @@ contract StakingVaultManager is Base {
         /// @dev The index of the batch this withdraw was assigned to
         /// @dev If the withdraw has not been assigned to a batch, this is set to type(uint256).max
         uint256 batchIndex;
-        /// @dev Whether the withdraw has been cancelled
-        bool cancelled;
-        /// @dev Whether the withdraw has been claimed
-        bool claimed;
+        /// @dev The timestamp at which the withdraw was cancelled. 0 if not cancelled
+        uint256 cancelledAt;
+        /// @dev The timestamp at which the withdraw was claimed. 0 if not claimed
+        uint256 claimedAt;
     }
 
     /// forge-lint: disable-next-line(mixed-case-variable)
@@ -170,6 +170,9 @@ contract StakingVaultManager is Base {
 
     /// @dev The minimum amount of HYPE that can be withdrawn (in 18 decimals)
     uint256 public minimumWithdrawAmount;
+
+    /// @dev The maximum amount of HYPE that can be withdrawn (in 18 decimals)
+    uint256 public maximumWithdrawAmount;
 
     /// @dev Whether batch processing is paused
     bool public isBatchProcessingPaused;
@@ -220,7 +223,8 @@ contract StakingVaultManager is Base {
         address _validator,
         uint256 _minimumStakeBalance,
         uint256 _minimumDepositAmount,
-        uint256 _minimumWithdrawAmount
+        uint256 _minimumWithdrawAmount,
+        uint256 _maximumWithdrawAmount
     ) public initializer {
         __Base_init(_roleRegistry);
 
@@ -231,6 +235,7 @@ contract StakingVaultManager is Base {
         minimumStakeBalance = _minimumStakeBalance;
         minimumDepositAmount = _minimumDepositAmount;
         minimumWithdrawAmount = _minimumWithdrawAmount;
+        maximumWithdrawAmount = _maximumWithdrawAmount;
 
         // Set batch processing to paused by default. OWNER will enable
         // it when batches are ready to be processed
@@ -265,8 +270,8 @@ contract StakingVaultManager is Base {
 
     /// @notice Queues a withdraw from the vault
     /// @param vhypeAmount The amount of vHYPE to redeem (in 18 decimals)
-    /// @return The ID of the withdraw
-    function queueWithdraw(uint256 vhypeAmount) external whenNotPaused returns (uint256) {
+    /// @return The IDs of the withdraws
+    function queueWithdraw(uint256 vhypeAmount) external whenNotPaused returns (uint256[] memory) {
         require(vhypeAmount > 0, ZeroAmount());
         require(vHYPEtoHYPE(vhypeAmount) >= minimumWithdrawAmount, BelowMinimumWithdrawAmount());
 
@@ -274,30 +279,65 @@ contract StakingVaultManager is Base {
         bool success = vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
         require(success, TransferFailed(msg.sender, vhypeAmount));
 
-        uint256 withdrawId = nextWithdrawId;
+        uint256[] memory withdrawAmounts = _splitWithdraws(vhypeAmount);
+        uint256[] memory withdrawIds = new uint256[](withdrawAmounts.length);
+        for (uint256 i = 0; i < withdrawAmounts.length; i++) {
+            uint256 withdrawId = nextWithdrawId;
 
-        // Store the withdraw data
-        Withdraw memory withdraw = Withdraw({
-            id: withdrawId,
-            account: msg.sender,
-            vhypeAmount: vhypeAmount,
-            queuedAt: block.timestamp,
-            batchIndex: type(uint256).max, // Not assigned to a batch yet
-            cancelled: false,
-            claimed: false
-        });
-        withdraws[withdrawId] = withdraw;
-        accountWithdrawIds[msg.sender].push(withdrawId);
+            // Store the withdraw data
+            Withdraw memory withdraw = Withdraw({
+                id: withdrawId,
+                account: msg.sender,
+                vhypeAmount: withdrawAmounts[i],
+                queuedAt: block.timestamp,
+                batchIndex: type(uint256).max, // Not assigned to a batch yet
+                cancelledAt: 0,
+                claimedAt: 0
+            });
+            withdraws[withdrawId] = withdraw;
+            accountWithdrawIds[msg.sender].push(withdrawId);
 
-        // Add to the end of the linked list
-        withdrawQueue.pushBack(withdrawId);
+            // Add to the end of the linked list
+            withdrawQueue.pushBack(withdrawId);
 
-        // Increment the withdraw ID counter
-        nextWithdrawId++;
+            // Increment the withdraw ID counter
+            nextWithdrawId++;
 
-        emit QueueWithdraw(msg.sender, withdrawId, withdraw);
+            withdrawIds[i] = withdrawId;
 
-        return withdrawId;
+            emit QueueWithdraw(msg.sender, withdrawId, withdraw);
+        }
+
+        return withdrawIds;
+    }
+
+    function _splitWithdraws(uint256 vhypeAmount) internal view returns (uint256[] memory) {
+        uint256 maximumWithdrawVhypeAmount = HYPETovHYPE(maximumWithdrawAmount);
+
+        // Calculate number of withdraws needed
+        uint256 withdrawCount = (vhypeAmount + maximumWithdrawVhypeAmount - 1) / maximumWithdrawVhypeAmount;
+
+        // Check if the last chunk would be below threshold
+        uint256 lastChunkAmount = vhypeAmount % maximumWithdrawVhypeAmount;
+        if (lastChunkAmount > 0 && lastChunkAmount < minimumWithdrawAmount && withdrawCount > 1) {
+            withdrawCount--; // Merge last chunk into previous one
+        }
+
+        uint256[] memory withdrawAmounts = new uint256[](withdrawCount);
+        uint256 remaining = vhypeAmount;
+
+        for (uint256 i = 0; i < withdrawCount; i++) {
+            if (i == withdrawCount - 1) {
+                // Last withdrawal gets all remaining amount
+                withdrawAmounts[i] = remaining;
+            } else {
+                // Take maximum for all other withdrawals
+                withdrawAmounts[i] = maximumWithdrawVhypeAmount;
+                remaining -= maximumWithdrawVhypeAmount;
+            }
+        }
+
+        return withdrawAmounts;
     }
 
     /// @notice Claims a withdraw
@@ -306,9 +346,9 @@ contract StakingVaultManager is Base {
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
         Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
-        require(!withdraw.cancelled, WithdrawCancelled());
+        require(withdraw.cancelledAt == 0, WithdrawCancelled());
         require(withdraw.batchIndex != type(uint256).max, WithdrawNotProcessed());
-        require(!withdraw.claimed, WithdrawClaimed());
+        require(withdraw.claimedAt == 0, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
         require(
@@ -323,7 +363,7 @@ contract StakingVaultManager is Base {
         // from the total balance (via `totalHypeProcessed`)
         stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmount.to8Decimals());
 
-        withdraw.claimed = true;
+        withdraw.claimedAt = block.timestamp;
         totalHypeClaimed += hypeAmount;
 
         emit ClaimWithdraw(msg.sender, withdrawId, withdraw);
@@ -343,14 +383,14 @@ contract StakingVaultManager is Base {
     function cancelWithdraw(uint256 withdrawId) external whenNotPaused {
         Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
-        require(!withdraw.cancelled, WithdrawCancelled());
+        require(withdraw.cancelledAt == 0, WithdrawCancelled());
         require(withdraw.batchIndex == type(uint256).max, WithdrawProcessed()); // Can only cancel unprocessed withdraws
 
         // Remove from the linked list
         withdrawQueue.remove(withdrawId);
 
-        // Set cancelled to true
-        withdraw.cancelled = true;
+        // Set cancelled timestamp
+        withdraw.cancelledAt = block.timestamp;
 
         // Refund vHYPE
         uint256 vhypeAmount = withdraw.vhypeAmount;
@@ -397,7 +437,7 @@ contract StakingVaultManager is Base {
             numWithdrawals--;
 
             // Update batch metrics (in memory)
-            if (!withdraw.cancelled) {
+            if (withdraw.cancelledAt == 0) {
                 batch.vhypeProcessed += withdraw.vhypeAmount;
             }
 
@@ -727,6 +767,12 @@ contract StakingVaultManager is Base {
     /// @param _minimumWithdrawAmount The minimum withdraw amount (in 18 decimals)
     function setMinimumWithdrawAmount(uint256 _minimumWithdrawAmount) external onlyOwner {
         minimumWithdrawAmount = _minimumWithdrawAmount;
+    }
+
+    /// @notice Sets the maximum withdraw amount (in 18 decimals)
+    /// @param _maximumWithdrawAmount The maximum withdraw amount (in 18 decimals)
+    function setMaximumWithdrawAmount(uint256 _maximumWithdrawAmount) external onlyOwner {
+        maximumWithdrawAmount = _maximumWithdrawAmount;
     }
 
     /// @notice Sets the claim window buffer (in seconds)
