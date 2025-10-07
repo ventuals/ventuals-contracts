@@ -279,28 +279,16 @@ contract StakingVaultManager is Base {
         bool success = vHYPE.transferFrom(msg.sender, address(this), vhypeAmount);
         require(success, TransferFailed(msg.sender, vhypeAmount));
 
-        uint256 maximumWithdrawVhypeAmount = HYPETovHYPE(maximumWithdrawAmount);
-        uint256 withdrawCount;
-        if (vhypeAmount < maximumWithdrawVhypeAmount) {
-            withdrawCount = 1;
-        } else {
-            // Chunk the withdraw into multiple withdraws if necessary
-            withdrawCount = vhypeAmount / maximumWithdrawVhypeAmount;
-            uint256 remainingVHYPE = vhypeAmount % maximumWithdrawVhypeAmount;
-            if (remainingVHYPE > 0) {
-                withdrawCount++;
-            }
-        }
-
-        uint256[] memory withdrawIds = new uint256[](withdrawCount);
-        for (uint256 i = 0; i < withdrawCount; i++) {
+        uint256[] memory withdrawAmounts = _splitWithdraws(vhypeAmount);
+        uint256[] memory withdrawIds = new uint256[](withdrawAmounts.length);
+        for (uint256 i = 0; i < withdrawAmounts.length; i++) {
             uint256 withdrawId = nextWithdrawId;
 
             // Store the withdraw data
             Withdraw memory withdraw = Withdraw({
                 id: withdrawId,
                 account: msg.sender,
-                vhypeAmount: vhypeAmount,
+                vhypeAmount: withdrawAmounts[i],
                 queuedAt: block.timestamp,
                 batchIndex: type(uint256).max, // Not assigned to a batch yet
                 cancelledAt: 0,
@@ -321,6 +309,35 @@ contract StakingVaultManager is Base {
         }
 
         return withdrawIds;
+    }
+
+    function _splitWithdraws(uint256 vhypeAmount) internal view returns (uint256[] memory) {
+        uint256 maximumWithdrawVhypeAmount = HYPETovHYPE(maximumWithdrawAmount);
+
+        // Calculate number of withdraws needed
+        uint256 withdrawCount = (vhypeAmount + maximumWithdrawVhypeAmount - 1) / maximumWithdrawVhypeAmount;
+
+        // Check if the last chunk would be below threshold
+        uint256 lastChunkAmount = vhypeAmount % maximumWithdrawVhypeAmount;
+        if (lastChunkAmount > 0 && lastChunkAmount < minimumWithdrawAmount && withdrawCount > 1) {
+            withdrawCount--; // Merge last chunk into previous one
+        }
+
+        uint256[] memory withdrawAmounts = new uint256[](withdrawCount);
+        uint256 remaining = vhypeAmount;
+
+        for (uint256 i = 0; i < withdrawCount; i++) {
+            if (i == withdrawCount - 1) {
+                // Last withdrawal gets all remaining amount
+                withdrawAmounts[i] = remaining;
+            } else {
+                // Take maximum for all other withdrawals
+                withdrawAmounts[i] = maximumWithdrawVhypeAmount;
+                remaining -= maximumWithdrawVhypeAmount;
+            }
+        }
+
+        return withdrawAmounts;
     }
 
     /// @notice Claims a withdraw
