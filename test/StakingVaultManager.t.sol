@@ -290,7 +290,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_QueueWithdraw_Success() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
 
         // Setup: User has vHYPE balance
         vm.prank(address(stakingVaultManager));
@@ -310,6 +310,78 @@ contract StakingVaultManagerTest is Test {
         assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).batchIndex, type(uint256).max);
         assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).cancelledAt, 0);
         assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).claimedAt, 0);
+
+        // Verify vHYPE was transferred to the staking vault manager
+        assertEq(vHYPE.balanceOf(user), 0);
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), vhypeAmount);
+    }
+
+    function test_QueueWithdraw_SplitIntoMultipleWithdraws() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
+        uint256 vhypeAmount = 15_000 * 1e18; // 15k vHYPE
+
+        // Setup: User has vHYPE balance
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        assertEq(stakingVaultManager.exchangeRate(), 1e18);
+
+        // User approves the staking vault manager to spend vHYPE
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+
+        // Queue the withdraw
+        uint256[] memory withdrawIds = stakingVaultManager.queueWithdraw(vhypeAmount);
+
+        assertEq(withdrawIds.length, 2);
+        assertEq(stakingVaultManager.getWithdrawQueueLength(), 2);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).vhypeAmount, 10_000 * 1e18);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).cancelledAt, 0);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).claimedAt, 0);
+
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).vhypeAmount, 5_000 * 1e18);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).cancelledAt, 0);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).claimedAt, 0);
+
+        // Verify vHYPE was transferred to the staking vault manager
+        assertEq(vHYPE.balanceOf(user), 0);
+        assertEq(vHYPE.balanceOf(address(stakingVaultManager)), vhypeAmount);
+    }
+
+    function test_QueueWithdraw_SplitIntoMultipleWithdraws_TinyRemainder() public {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
+        uint256 vhypeAmount = 20_000 * 1e18 + 1; // 20k vHYPE + 1 wei
+
+        // Setup: User has vHYPE balance
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        assertEq(stakingVaultManager.exchangeRate(), 1e18);
+
+        // User approves the staking vault manager to spend vHYPE
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+
+        // Queue the withdraw
+        uint256[] memory withdrawIds = stakingVaultManager.queueWithdraw(vhypeAmount);
+
+        assertEq(withdrawIds.length, 2);
+        assertEq(stakingVaultManager.getWithdrawQueueLength(), 2);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).vhypeAmount, 10_000 * 1e18);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).cancelledAt, 0);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[0]).claimedAt, 0);
+
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).vhypeAmount, 10_000 * 1e18 + 1);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).account, user);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).batchIndex, type(uint256).max);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).cancelledAt, 0);
+        assertEq(stakingVaultManager.getWithdraw(withdrawIds[1]).claimedAt, 0);
 
         // Verify vHYPE was transferred to the staking vault manager
         assertEq(vHYPE.balanceOf(user), 0);
