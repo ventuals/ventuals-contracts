@@ -504,7 +504,7 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_ClaimWithdraw_Success() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -541,7 +541,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_NotAuthorized() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         address otherUser = makeAddr("otherUser");
 
         // Setup: Mock sufficient balance for processing
@@ -567,7 +567,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_ClaimWithdraw_WithdrawCancelled() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mint vHYPE to owner and setup withdraw
         vm.prank(address(stakingVaultManager));
@@ -587,7 +587,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_AlreadyClaimed() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -621,7 +621,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_TooEarly() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -645,7 +645,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_ExactlySevenDays() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -669,7 +669,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_CoreUserDoesNotExist() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -698,7 +698,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_InsufficientBalance() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -725,7 +725,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_WhenContractPaused() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -756,7 +756,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ClaimWithdraw_WithSlashedBatch() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing (1:1 exchange rate)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -808,7 +808,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_CancelWithdraw_Success() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
         vm.prank(address(stakingVaultManager));
@@ -836,7 +836,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_CancelWithdraw_NotAuthorized() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         address otherUser = makeAddr("otherUser");
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
@@ -854,7 +854,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_CancelWithdraw_AlreadyCancelled() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
         vm.prank(address(stakingVaultManager));
@@ -875,7 +875,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_CancelWithdraw_AlreadyProcessed() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -901,7 +901,7 @@ contract StakingVaultManagerTest is Test {
 
     function test_CancelWithdraw_WhenContractPaused() public {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
         vm.prank(address(stakingVaultManager));
@@ -932,7 +932,7 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_ProcessBatch_FirstBatch() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -976,7 +976,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_ProcessBatch_UnderMinimumStakeBalance() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
@@ -1542,8 +1542,8 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_FinalizeBatch_CannotFinalizeAfterSlash() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
-        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+        uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
@@ -1571,8 +1571,8 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_FinalizeBatch_CanFinalizeAfterSlashIsApplied() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
-        uint256 hypeDeposits = 50_000 * 1e18; // 50k HYPE deposits (exchange rate = 1)
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+        uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
@@ -1611,7 +1611,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_FinalizeBatch_ZeroDeposits() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE withdraw
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE withdraw
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -1689,7 +1689,7 @@ contract StakingVaultManagerTest is Test {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_GetWithdrawAmount_UnprocessedWithdraw() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
 
         // Mock exchange rate = 1.5 (150% - vault has earned 50% yield)
         uint256 totalBalance = 600_000 * 1e18; // 600k HYPE
@@ -1702,12 +1702,11 @@ contract StakingVaultManagerTest is Test {
         // Get withdraw amount - should use current exchange rate
         uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(1);
 
-        // Expected: 100k vHYPE * 1.5 = 150k HYPE
-        assertEq(withdrawAmount, 150_000 * 1e18);
+        assertEq(withdrawAmount, 3_000 * 1e18);
     }
 
     function test_GetWithdrawAmount_ProcessedWithdraw() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Mock exchange rate = 1 at time of processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -1724,12 +1723,11 @@ contract StakingVaultManagerTest is Test {
         // Get withdraw amount - should use snapshot exchange rate from batch
         uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(1);
 
-        // Expected: 100k vHYPE * 1.0 = 100k HYPE (using batch snapshot rate)
         assertEq(withdrawAmount, vhypeAmount);
     }
 
     function test_GetWithdrawAmount_SlashedBatch() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Mock exchange rate = 1 at time of processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -1747,12 +1745,12 @@ contract StakingVaultManagerTest is Test {
         // Get withdraw amount - should use slashed exchange rate
         uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(1);
 
-        // Expected: 100k vHYPE * 0.8 = 80k HYPE (using slashed rate)
-        assertEq(withdrawAmount, 80_000 * 1e18);
+        // Expected: 5k vHYPE * 0.8 = 4k HYPE (using slashed rate)
+        assertEq(withdrawAmount, 4_000 * 1e18);
     }
 
     function test_GetWithdrawClaimableAt_UnprocessedWithdraw() public {
-        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Mock exchange rate = 1 at time of processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -1767,7 +1765,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_GetWithdrawClaimableAt_NotFinalized() public {
-        uint256 vhypeAmount = 100_000 * 1e18;
+        uint256 vhypeAmount = 5_000 * 1e18;
 
         // Mock balances
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -1783,7 +1781,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_GetWithdrawClaimableAt_Finalized() public {
-        uint256 vhypeAmount = 100_000 * 1e18;
+        uint256 vhypeAmount = 5_000 * 1e18;
 
         // Mock balances
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
@@ -1806,7 +1804,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_GetWithdrawClaimableAt_WithCustomClaimWindowBuffer() public {
-        uint256 vhypeAmount = 100_000 * 1e18;
+        uint256 vhypeAmount = 5_000 * 1e18;
         uint256 customBuffer = 3 days;
 
         // Set custom claim window buffer
@@ -2372,7 +2370,7 @@ contract StakingVaultManagerTest is Test {
     }
 
     function test_SetClaimWithdrawBuffer_UpdatesClaimWithdrawValidation() public {
-        uint256 vhypeAmount = 50_000 * 1e18; // 50k vHYPE
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
