@@ -87,8 +87,8 @@ contract MockHyperCoreState {
         spotBalances[user][token] = weiAmount;
     }
 
-    function mockDelegatorSummary(address user, L1ReadLibrary.DelegatorSummary memory delegatorSummary) external {
-        delegatorSummaries[user] = delegatorSummary;
+    function mockDelegatorSummary(address user, L1ReadLibrary.DelegatorSummary memory _delegatorSummary) external {
+        delegatorSummaries[user] = _delegatorSummary;
     }
 
     function mockDelegation(address user, L1ReadLibrary.Delegation memory delegation) external {
@@ -101,11 +101,11 @@ contract MockHyperCoreState {
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function spotBalance(address user, uint64 token) external view returns (L1ReadLibrary.SpotBalance memory) {
-        L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.SpotBalance({total: 0, hold: 0, entryNtl: 0});
+        L1ReadLibrary.SpotBalance memory result = L1ReadLibrary.SpotBalance({total: 0, hold: 0, entryNtl: 0});
         if (token == HYPE_TOKEN_ID) {
-            spotBalance.total = spotBalances[user][token];
+            result.total = spotBalances[user][token];
         }
-        return spotBalance;
+        return result;
     }
 
     function delegatorSummary(address user) external view returns (L1ReadLibrary.DelegatorSummary memory) {
@@ -114,11 +114,11 @@ contract MockHyperCoreState {
 
     function delegations(address user) external view returns (L1ReadLibrary.Delegation[] memory) {
         EnumerableSet.AddressSet storage validators = userToValidators[user];
-        L1ReadLibrary.Delegation[] memory delegations = new L1ReadLibrary.Delegation[](validators.length());
+        L1ReadLibrary.Delegation[] memory result = new L1ReadLibrary.Delegation[](validators.length());
         for (uint256 i = 0; i < validators.length(); i++) {
-            delegations[i] = validatorDelegations[user][validators.at(i)];
+            result[i] = validatorDelegations[user][validators.at(i)];
         }
-        return delegations;
+        return result;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -249,7 +249,7 @@ contract MockHyperCoreState {
 
     function processTokenDelegate(TokenDelegate memory delegate) internal {
         L1ReadLibrary.Delegation storage delegation = validatorDelegations[delegate.msgSender][delegate.validator];
-        L1ReadLibrary.DelegatorSummary storage delegatorSummary = delegatorSummaries[delegate.msgSender];
+        L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[delegate.msgSender];
         if (delegate.isUndelegate) {
             if (block.timestamp < delegation.lockedUntilTimestamp / 1000) {
                 console.log("[warn] Delegation is locked");
@@ -257,9 +257,9 @@ contract MockHyperCoreState {
                 console.log("[warn] Delegation amount is less than delegate amount");
             } else {
                 // Update delegator summary
-                delegatorSummary.delegated -= delegate.amount;
-                delegatorSummary.totalPendingWithdrawal += delegate.amount;
-                delegatorSummary.nPendingWithdrawals += 1;
+                _delegatorSummary.delegated -= delegate.amount;
+                _delegatorSummary.totalPendingWithdrawal += delegate.amount;
+                _delegatorSummary.nPendingWithdrawals += 1;
 
                 // Update delegation
                 delegation.amount -= delegate.amount;
@@ -271,12 +271,12 @@ contract MockHyperCoreState {
                 }
             }
         } else {
-            if (delegatorSummary.undelegated < delegate.amount) {
+            if (_delegatorSummary.undelegated < delegate.amount) {
                 console.log("[warn] Undelegated amount is less than delegate amount");
             } else {
                 // Update delegator summary
-                delegatorSummary.undelegated -= delegate.amount;
-                delegatorSummary.delegated += delegate.amount;
+                _delegatorSummary.undelegated -= delegate.amount;
+                _delegatorSummary.delegated += delegate.amount;
 
                 // Update delegation
                 delegation.amount += delegate.amount;
@@ -293,8 +293,8 @@ contract MockHyperCoreState {
         spotBalances[deposit.msgSender][systemAddressToTokenId[HYPE_SYSTEM_ADDRESS]] -= deposit.weiAmount;
 
         // Update delegator summary
-        L1ReadLibrary.DelegatorSummary storage delegatorSummary = delegatorSummaries[deposit.msgSender];
-        delegatorSummary.undelegated += deposit.weiAmount;
+        L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[deposit.msgSender];
+        _delegatorSummary.undelegated += deposit.weiAmount;
     }
 
     function processStakingWithdraw(StakingWithdraw memory withdraw) internal {
@@ -303,10 +303,10 @@ contract MockHyperCoreState {
         spotBalances[withdraw.msgSender][systemAddressToTokenId[HYPE_SYSTEM_ADDRESS]] += withdraw.weiAmount;
 
         // Update delegator summary
-        L1ReadLibrary.DelegatorSummary storage delegatorSummary = delegatorSummaries[withdraw.msgSender];
-        delegatorSummary.undelegated -= withdraw.weiAmount;
-        delegatorSummary.totalPendingWithdrawal += withdraw.weiAmount;
-        delegatorSummary.nPendingWithdrawals += 1;
+        L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[withdraw.msgSender];
+        _delegatorSummary.undelegated -= withdraw.weiAmount;
+        _delegatorSummary.totalPendingWithdrawal += withdraw.weiAmount;
+        _delegatorSummary.nPendingWithdrawals += 1;
     }
 
     /// @dev HyperCore -> EVM transfer
