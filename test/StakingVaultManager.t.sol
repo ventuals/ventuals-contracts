@@ -20,7 +20,7 @@ import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 import {HyperCoreSimulator} from "./HyperCoreSimulator.sol";
 import {MockHyperCoreState} from "./MockHyperCoreState.sol";
 
-contract StakingVaultManagerTest is Test {
+contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     using Converters for *;
 
     MockHyperCoreState mockHyperCoreState;
@@ -30,15 +30,12 @@ contract StakingVaultManagerTest is Test {
     VHYPE vHYPE;
     StakingVault stakingVault;
 
-    address internal constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
-
     address public owner = makeAddr("owner");
     address public operator = makeAddr("operator");
     address public user = makeAddr("user");
 
     address public validator = makeAddr("validator");
     address public validator2 = makeAddr("validator2");
-    address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
     uint64 public constant HYPE_TOKEN_ID = 150; // Mainnet HYPE token ID
     uint256 public constant MINIMUM_STAKE_BALANCE = 500_000 * 1e18; // 500k HYPE
     uint256 public constant MINIMUM_DEPOSIT_AMOUNT = 1e18; // 1 HYPE
@@ -101,7 +98,7 @@ contract StakingVaultManagerTest is Test {
         // _mockSpotBalance(0);
         // _mockDelegatorSummary(0);
 
-        HyperCoreSimulator.init();
+        super.init();
 
         mockHyperCoreState = MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS);
 
@@ -3244,11 +3241,11 @@ contract StakingVaultManagerTest is Test {
         for (uint256 i = 0; i < encodedAction.length; i++) {
             data[4 + i] = encodedAction[i];
         }
-        vm.mockCall(
-            CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-            abi.encode()
-        );
+        // vm.mockCall(
+        //     CoreWriterLibrary.CORE_WRITER,
+        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+        //     abi.encode()
+        // );
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 
@@ -3262,11 +3259,11 @@ contract StakingVaultManagerTest is Test {
         for (uint256 i = 0; i < encodedAction.length; i++) {
             data[4 + i] = encodedAction[i];
         }
-        vm.mockCall(
-            CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-            abi.encode()
-        );
+        // vm.mockCall(
+        //     CoreWriterLibrary.CORE_WRITER,
+        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+        //     abi.encode()
+        // );
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 
@@ -3280,11 +3277,11 @@ contract StakingVaultManagerTest is Test {
         for (uint256 i = 0; i < encodedAction.length; i++) {
             data[4 + i] = encodedAction[i];
         }
-        vm.mockCall(
-            CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-            abi.encode()
-        );
+        // vm.mockCall(
+        //     CoreWriterLibrary.CORE_WRITER,
+        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+        //     abi.encode()
+        // );
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 

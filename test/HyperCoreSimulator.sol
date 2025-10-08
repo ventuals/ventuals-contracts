@@ -10,13 +10,10 @@ import {MockPrecompileSpotBalance} from "./MockPrecompileSpotBalance.sol";
 import {MockPrecompileDelegatorSummary} from "./MockPrecompileDelegatorSummary.sol";
 import {MockCoreWriter} from "./MockCoreWriter.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
+import {CommonBase} from "forge-std/Base.sol";
 
-library HyperCoreSimulator {
+contract HyperCoreSimulator is CommonBase {
     address internal constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
-
-    /// @dev Cheat code address.
-    /// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
-    address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
 
     address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
 
