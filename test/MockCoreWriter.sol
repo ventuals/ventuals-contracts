@@ -10,6 +10,6 @@ contract MockCoreWriter is ICoreWriter {
     address internal constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
 
     function sendRawAction(bytes calldata data) external {
-        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).sendRawAction(data);
+        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).sendRawAction(msg.sender, data);
     }
 }

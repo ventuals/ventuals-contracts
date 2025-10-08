@@ -3306,11 +3306,11 @@ contract StakingVaultManagerTest is Test {
         for (uint256 i = 0; i < encodedAction.length; i++) {
             data[4 + i] = encodedAction[i];
         }
-        vm.mockCall(
-            CoreWriterLibrary.CORE_WRITER,
-            abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-            abi.encode()
-        );
+        // vm.mockCall(
+        //     CoreWriterLibrary.CORE_WRITER,
+        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
+        //     abi.encode()
+        // );
         vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
     }
 }

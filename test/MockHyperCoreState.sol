@@ -95,11 +95,15 @@ contract MockHyperCoreState {
         return spotBalance;
     }
 
+    function delegatorSummary(address user) external view returns (L1ReadLibrary.DelegatorSummary memory) {
+        return delegatorSummaries[user];
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*               Record HyperCore interactions                */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function sendRawAction(bytes calldata data) external {
+    function sendRawAction(address msgSender, bytes calldata data) external {
         // Get the first byte
         bytes1 version = data[0];
         // Get the next 3 bytes
@@ -113,19 +117,18 @@ contract MockHyperCoreState {
         }
 
         if (actionId == CoreWriterLibrary.TOKEN_DELEGATE) {
-            TokenDelegate memory tokenDelegate = abi.decode(encodedAction, (TokenDelegate));
-            recordTokenDelegate(
-                tokenDelegate.msgSender, tokenDelegate.validator, tokenDelegate.amount, tokenDelegate.isUndelegate
-            );
+            (address validator, uint64 weiAmount, bool isUndelegate) =
+                abi.decode(encodedAction, (address, uint64, bool));
+            recordTokenDelegate(msgSender, validator, weiAmount, isUndelegate);
         } else if (actionId == CoreWriterLibrary.STAKING_DEPOSIT) {
-            StakingDeposit memory stakingDeposit = abi.decode(encodedAction, (StakingDeposit));
-            recordStakingDeposit(stakingDeposit.msgSender, stakingDeposit.weiAmount);
+            (uint64 weiAmount) = abi.decode(encodedAction, (uint64));
+            recordStakingDeposit(msgSender, weiAmount);
         } else if (actionId == CoreWriterLibrary.STAKING_WITHDRAW) {
-            StakingWithdraw memory stakingWithdraw = abi.decode(encodedAction, (StakingWithdraw));
-            recordStakingWithdraw(stakingWithdraw.msgSender, stakingWithdraw.weiAmount);
+            (uint64 weiAmount) = abi.decode(encodedAction, (uint64));
+            recordStakingWithdraw(msgSender, weiAmount);
         } else if (actionId == CoreWriterLibrary.SPOT_SEND) {
-            SpotSend memory spotSend = abi.decode(encodedAction, (SpotSend));
-            recordSpotSend(spotSend.msgSender, spotSend.destination, spotSend.token, spotSend.weiAmount);
+            (address destination, uint64 token, uint64 weiAmount) = abi.decode(encodedAction, (address, uint64, uint64));
+            recordSpotSend(msgSender, destination, token, weiAmount);
         } else {
             console.log("[warn] Unsupported CoreWriter action");
         }
