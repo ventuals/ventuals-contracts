@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {Converters} from "../src/libraries/Converters.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 import {MockHyperCoreState} from "./MockHyperCoreState.sol";
@@ -46,5 +47,34 @@ contract HyperCoreSimulator is CommonBase {
         Vm vm = Vm(VM_ADDRESS);
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + 1);
+    }
+
+    function expectCoreWriterCall(bytes3 actionId, bytes memory encodedAction) public {
+        Vm vm = Vm(VM_ADDRESS);
+        vm.expectCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeCall(ICoreWriter.sendRawAction, coreWriterCallData(actionId, encodedAction))
+        );
+    }
+
+    function expectCoreWriterCall(bytes3 actionId, bytes memory encodedAction, uint64 count) public {
+        Vm vm = Vm(VM_ADDRESS);
+        vm.expectCall(
+            CoreWriterLibrary.CORE_WRITER,
+            abi.encodeCall(ICoreWriter.sendRawAction, coreWriterCallData(actionId, encodedAction)),
+            count
+        );
+    }
+
+    function coreWriterCallData(bytes3 actionId, bytes memory encodedAction) internal pure returns (bytes memory) {
+        bytes memory data = new bytes(4 + encodedAction.length);
+        data[0] = CoreWriterLibrary.CORE_WRITER_VERSION;
+        for (uint256 i = 0; i < 3; i++) {
+            data[1 + i] = actionId[i];
+        }
+        for (uint256 i = 0; i < encodedAction.length; i++) {
+            data[4 + i] = encodedAction[i];
+        }
+        return data;
     }
 }

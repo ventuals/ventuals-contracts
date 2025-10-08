@@ -3232,57 +3232,15 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     function _mockAndExpectStakingDepositCall(uint64 weiAmount) internal {
-        bytes memory encodedAction = abi.encode(weiAmount);
-        bytes memory data = new bytes(4 + encodedAction.length);
-        data[0] = 0x01;
-        data[1] = 0x00;
-        data[2] = 0x00;
-        data[3] = 0x04; // Staking deposit action ID
-        for (uint256 i = 0; i < encodedAction.length; i++) {
-            data[4 + i] = encodedAction[i];
-        }
-        // vm.mockCall(
-        //     CoreWriterLibrary.CORE_WRITER,
-        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-        //     abi.encode()
-        // );
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(weiAmount));
     }
 
     function _mockAndExpectStakingWithdrawCall(uint64 weiAmount) internal {
-        bytes memory encodedAction = abi.encode(weiAmount);
-        bytes memory data = new bytes(4 + encodedAction.length);
-        data[0] = 0x01;
-        data[1] = 0x00;
-        data[2] = 0x00;
-        data[3] = 0x05; // Staking withdraw action ID
-        for (uint256 i = 0; i < encodedAction.length; i++) {
-            data[4 + i] = encodedAction[i];
-        }
-        // vm.mockCall(
-        //     CoreWriterLibrary.CORE_WRITER,
-        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-        //     abi.encode()
-        // );
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(weiAmount));
     }
 
     function _mockAndExpectTokenDelegateCall(address _validator, uint64 weiAmount, bool isUndelegate) internal {
-        bytes memory encodedAction = abi.encode(_validator, weiAmount, isUndelegate);
-        bytes memory data = new bytes(4 + encodedAction.length);
-        data[0] = 0x01;
-        data[1] = 0x00;
-        data[2] = 0x00;
-        data[3] = 0x03; // Token delegate action ID
-        for (uint256 i = 0; i < encodedAction.length; i++) {
-            data[4 + i] = encodedAction[i];
-        }
-        // vm.mockCall(
-        //     CoreWriterLibrary.CORE_WRITER,
-        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-        //     abi.encode()
-        // );
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(_validator, weiAmount, isUndelegate));
     }
 
     function _expectNoStakeCall() internal {
@@ -3294,21 +3252,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     function _mockAndExpectSpotSendCall(address destination, uint64 tokenId, uint64 weiAmount) internal {
-        bytes memory encodedAction = abi.encode(destination, tokenId, weiAmount);
-        bytes memory data = new bytes(4 + encodedAction.length);
-        data[0] = 0x01;
-        data[1] = 0x00;
-        data[2] = 0x00;
-        data[3] = 0x06; // Spot send action ID
-        for (uint256 i = 0; i < encodedAction.length; i++) {
-            data[4 + i] = encodedAction[i];
-        }
-        // vm.mockCall(
-        //     CoreWriterLibrary.CORE_WRITER,
-        //     abi.encodeWithSelector(ICoreWriter.sendRawAction.selector, data),
-        //     abi.encode()
-        // );
-        vm.expectCall(CoreWriterLibrary.CORE_WRITER, abi.encodeCall(ICoreWriter.sendRawAction, data));
+        expectCoreWriterCall(CoreWriterLibrary.SPOT_SEND, abi.encode(destination, tokenId, weiAmount));
     }
 }
 
