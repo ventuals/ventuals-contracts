@@ -93,12 +93,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
 
-        // Mock HYPE system contract
-        // MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
-        // vm.etch(HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
-        // _mockSpotBalance(0);
-        // _mockDelegatorSummary(0);
-
+        // Initialize HyperCoreSimulator
         super.init();
 
         mockHyperCoreState = MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS);
@@ -701,7 +696,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock insufficient spot balance (only half of what's needed)
-        _mockSpotBalance((vhypeAmount / 2).to8Decimals());
+        mockHyperCoreState.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, (vhypeAmount / 2).to8Decimals());
 
         // User tries to claim but vault has insufficient balance
         vm.prank(user);
@@ -3097,7 +3092,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock delegations and spot balance
         _mockDelegatorSummary(delegatedBalance);
         _mockDelegations(validator, delegatedBalance);
-        _mockSpotBalance(0);
 
         // Mint vHYPE supply to owner
         if (totalSupply > 0) {
@@ -3137,12 +3131,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
                 lockedUntilTimestamp: lockedUntilTimestamp
             })
         );
-    }
-
-    /// @dev Helper function to mock spot balance for testing staking deposit calls
-    /// @param total The total balance to mock (in 8 decimals)
-    function _mockSpotBalance(uint64 total) internal {
-        mockHyperCoreState.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, total);
     }
 
     function _mockAndExpectStakingDepositCall(uint64 weiAmount) internal {
