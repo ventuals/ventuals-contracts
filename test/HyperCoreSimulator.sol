@@ -9,6 +9,7 @@ import {MockHypeSystemContract} from "./MockHypeSystemContract.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {MockPrecompileSpotBalance} from "./MockPrecompileSpotBalance.sol";
 import {MockPrecompileDelegatorSummary} from "./MockPrecompileDelegatorSummary.sol";
+import {MockPrecompileDelegations} from "./MockPrecompileDelegations.sol";
 import {MockCoreWriter} from "./MockCoreWriter.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {CommonBase} from "forge-std/Base.sol";
@@ -39,6 +40,8 @@ contract HyperCoreSimulator is CommonBase {
         vm.etch(L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS, address(mockPrecompileSpotBalance).code);
         MockPrecompileDelegatorSummary mockPrecompileDelegatorSummary = new MockPrecompileDelegatorSummary();
         vm.etch(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, address(mockPrecompileDelegatorSummary).code);
+        MockPrecompileDelegations mockPrecompileDelegations = new MockPrecompileDelegations();
+        vm.etch(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, address(mockPrecompileDelegations).code);
     }
 
     function nextBlock() public {

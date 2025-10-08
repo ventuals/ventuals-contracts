@@ -3191,17 +3191,14 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /// @dev Helper function to mock delegator summary for testing staking deposit calls
     /// @param delegated The delegated balance to mock (in 8 decimals)
     function _mockDelegatorSummary(uint64 delegated) internal {
-        vm.mockCall(
-            L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
-            abi.encode(address(stakingVault)),
-            abi.encode(
-                L1ReadLibrary.DelegatorSummary({
-                    delegated: delegated,
-                    undelegated: 0,
-                    totalPendingWithdrawal: 0,
-                    nPendingWithdrawals: 0
-                })
-            )
+        mockHyperCoreState.mockDelegatorSummary(
+            address(stakingVault),
+            L1ReadLibrary.DelegatorSummary({
+                delegated: delegated,
+                undelegated: 0,
+                totalPendingWithdrawal: 0,
+                nPendingWithdrawals: 0
+            })
         );
     }
 
@@ -3214,15 +3211,14 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     function _mockDelegationsWithLock(address _validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
-        L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](1);
-        mockDelegations[0] = L1ReadLibrary.Delegation({
-            validator: _validator,
-            amount: weiAmount,
-            lockedUntilTimestamp: lockedUntilTimestamp
-        });
-
-        bytes memory encodedDelegations = abi.encode(mockDelegations);
-        vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
+        mockHyperCoreState.mockDelegation(
+            address(stakingVault),
+            L1ReadLibrary.Delegation({
+                validator: _validator,
+                amount: weiAmount,
+                lockedUntilTimestamp: lockedUntilTimestamp
+            })
+        );
     }
 
     /// @dev Helper function to mock spot balance for testing staking deposit calls

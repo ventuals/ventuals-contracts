@@ -4,11 +4,13 @@ pragma solidity ^0.8.27;
 import {Converters} from "../src/libraries/Converters.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console} from "forge-std/console.sol";
 
 contract MockHyperCoreState {
     using Converters for *;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                         Constants                          */
@@ -69,6 +71,8 @@ contract MockHyperCoreState {
     mapping(address => L1ReadLibrary.DelegatorSummary) public delegatorSummaries;
     /// @dev User -> Validator -> Delegation
     mapping(address => mapping(address => L1ReadLibrary.Delegation)) public validatorDelegations;
+    /// @dev User -> Validators
+    mapping(address => EnumerableSet.AddressSet) private userToValidators;
 
     function init() external {
         systemAddressToTokenId[HYPE_SYSTEM_ADDRESS] = HYPE_TOKEN_ID;
@@ -81,6 +85,15 @@ contract MockHyperCoreState {
 
     function mockSpotBalance(address user, uint64 token, uint64 weiAmount) external {
         spotBalances[user][token] = weiAmount;
+    }
+
+    function mockDelegatorSummary(address user, L1ReadLibrary.DelegatorSummary memory delegatorSummary) external {
+        delegatorSummaries[user] = delegatorSummary;
+    }
+
+    function mockDelegation(address user, L1ReadLibrary.Delegation memory delegation) external {
+        validatorDelegations[user][delegation.validator] = delegation;
+        userToValidators[user].add(delegation.validator);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -97,6 +110,15 @@ contract MockHyperCoreState {
 
     function delegatorSummary(address user) external view returns (L1ReadLibrary.DelegatorSummary memory) {
         return delegatorSummaries[user];
+    }
+
+    function delegations(address user) external view returns (L1ReadLibrary.Delegation[] memory) {
+        EnumerableSet.AddressSet storage validators = userToValidators[user];
+        L1ReadLibrary.Delegation[] memory delegations = new L1ReadLibrary.Delegation[](validators.length());
+        for (uint256 i = 0; i < validators.length(); i++) {
+            delegations[i] = validatorDelegations[user][validators.at(i)];
+        }
+        return delegations;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -234,21 +256,34 @@ contract MockHyperCoreState {
             } else if (delegation.amount < delegate.amount) {
                 console.log("[warn] Delegation amount is less than delegate amount");
             } else {
-                delegation.amount -= delegate.amount;
+                // Update delegator summary
                 delegatorSummary.delegated -= delegate.amount;
                 delegatorSummary.totalPendingWithdrawal += delegate.amount;
                 delegatorSummary.nPendingWithdrawals += 1;
+
+                // Update delegation
+                delegation.amount -= delegate.amount;
+
+                // Remove delegation if amount is 0
+                if (delegation.amount == 0) {
+                    delete validatorDelegations[delegate.msgSender][delegate.validator];
+                    userToValidators[delegate.msgSender].remove(delegate.validator);
+                }
             }
         } else {
             if (delegatorSummary.undelegated < delegate.amount) {
                 console.log("[warn] Undelegated amount is less than delegate amount");
             } else {
+                // Update delegator summary
                 delegatorSummary.undelegated -= delegate.amount;
                 delegatorSummary.delegated += delegate.amount;
 
                 // Update delegation
                 delegation.amount += delegate.amount;
                 delegation.lockedUntilTimestamp = uint64((block.timestamp + 1 days) * 1000);
+
+                // Update userToValidators
+                userToValidators[delegate.msgSender].add(delegate.validator);
             }
         }
     }
