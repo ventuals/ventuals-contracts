@@ -7,6 +7,8 @@ import {MockHyperCoreState} from "./MockHyperCoreState.sol";
 import {MockHypeSystemContract} from "./MockHypeSystemContract.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {MockPrecompileSpotBalance} from "./MockPrecompileSpotBalance.sol";
+import {MockCoreWriter} from "./MockCoreWriter.sol";
+import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 
 library HyperCoreSimulator {
     address internal constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
@@ -28,6 +30,10 @@ library HyperCoreSimulator {
         // Mock HYPE system contract
         MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract(MOCK_HYPERCORE_STATE_ADDRESS);
         vm.etch(HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
+
+        // Mock CoreWriter
+        MockCoreWriter mockCoreWriter = new MockCoreWriter();
+        vm.etch(CoreWriterLibrary.CORE_WRITER, address(mockCoreWriter).code);
 
         // Mock precompiles
         MockPrecompileSpotBalance mockPrecompileSpotBalance = new MockPrecompileSpotBalance();

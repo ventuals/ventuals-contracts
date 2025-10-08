@@ -99,6 +99,38 @@ contract MockHyperCoreState {
     /*               Record HyperCore interactions                */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    function sendRawAction(bytes calldata data) external {
+        // Get the first byte
+        bytes1 version = data[0];
+        // Get the next 3 bytes
+        bytes3 actionId = bytes3(data[1:4]);
+        // Get the rest of the data
+        bytes memory encodedAction = data[4:];
+
+        if (version != CoreWriterLibrary.CORE_WRITER_VERSION) {
+            console.log("[warn] Invalid CoreWriter version");
+            return;
+        }
+
+        if (actionId == CoreWriterLibrary.TOKEN_DELEGATE) {
+            TokenDelegate memory tokenDelegate = abi.decode(encodedAction, (TokenDelegate));
+            recordTokenDelegate(
+                tokenDelegate.msgSender, tokenDelegate.validator, tokenDelegate.amount, tokenDelegate.isUndelegate
+            );
+        } else if (actionId == CoreWriterLibrary.STAKING_DEPOSIT) {
+            StakingDeposit memory stakingDeposit = abi.decode(encodedAction, (StakingDeposit));
+            recordStakingDeposit(stakingDeposit.msgSender, stakingDeposit.weiAmount);
+        } else if (actionId == CoreWriterLibrary.STAKING_WITHDRAW) {
+            StakingWithdraw memory stakingWithdraw = abi.decode(encodedAction, (StakingWithdraw));
+            recordStakingWithdraw(stakingWithdraw.msgSender, stakingWithdraw.weiAmount);
+        } else if (actionId == CoreWriterLibrary.SPOT_SEND) {
+            SpotSend memory spotSend = abi.decode(encodedAction, (SpotSend));
+            recordSpotSend(spotSend.msgSender, spotSend.destination, spotSend.token, spotSend.weiAmount);
+        } else {
+            console.log("[warn] Unsupported CoreWriter action");
+        }
+    }
+
     /// @dev EVM -> HyperCore transfer
     function recordSystemTransfer(address msgSender, address systemAddress, uint256 amount) external {
         pendingSystemTransfers.push(
@@ -107,7 +139,7 @@ contract MockHyperCoreState {
     }
 
     /// @dev HyperCore -> EVM transfer
-    function recordSpotSend(address msgSender, address destination, uint64 token, uint64 weiAmount) external {
+    function recordSpotSend(address msgSender, address destination, uint64 token, uint64 weiAmount) internal {
         pendingCoreWriterActions.push(
             CoreWriterAction({
                 action: CoreWriterLibrary.SPOT_SEND,
@@ -118,7 +150,7 @@ contract MockHyperCoreState {
         );
     }
 
-    function recordStakingDeposit(address msgSender, uint64 weiAmount) external {
+    function recordStakingDeposit(address msgSender, uint64 weiAmount) internal {
         pendingCoreWriterActions.push(
             CoreWriterAction({
                 action: CoreWriterLibrary.STAKING_DEPOSIT,
@@ -127,7 +159,7 @@ contract MockHyperCoreState {
         );
     }
 
-    function recordStakingWithdraw(address msgSender, uint64 weiAmount) external {
+    function recordStakingWithdraw(address msgSender, uint64 weiAmount) internal {
         pendingCoreWriterActions.push(
             CoreWriterAction({
                 action: CoreWriterLibrary.STAKING_WITHDRAW,
@@ -136,7 +168,7 @@ contract MockHyperCoreState {
         );
     }
 
-    function recordTokenDelegate(address msgSender, address validator, uint64 amount, bool isUndelegate) external {
+    function recordTokenDelegate(address msgSender, address validator, uint64 amount, bool isUndelegate) internal {
         pendingCoreWriterActions.push(
             CoreWriterAction({
                 action: CoreWriterLibrary.TOKEN_DELEGATE,
