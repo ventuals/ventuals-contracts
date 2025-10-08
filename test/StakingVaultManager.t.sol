@@ -521,18 +521,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
-
-        // Mock spot balance check (vault has enough HYPE)
-        _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
-
-        // Mock spotSend call
-        _mockAndExpectSpotSendCall(user, HYPE_TOKEN_ID, vhypeAmount.to8Decimals());
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // User claims the withdraw
         vm.prank(user);

@@ -45,11 +45,23 @@ contract HyperCoreSimulator is CommonBase {
     }
 
     function nextBlock() public {
-        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).processBlock();
+        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).afterBlock();
 
         Vm vm = Vm(VM_ADDRESS);
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + 1);
+
+        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).beforeBlock();
+    }
+
+    function warp(uint256 timestamp) public {
+        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).afterBlock();
+
+        Vm vm = Vm(VM_ADDRESS);
+        vm.roll(block.number + timestamp - block.timestamp);
+        vm.warp(timestamp);
+
+        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).beforeBlock();
     }
 
     function expectCoreWriterCall(bytes3 actionId, bytes memory encodedAction) public {

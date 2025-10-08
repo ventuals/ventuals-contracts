@@ -60,12 +60,20 @@ contract MockHyperCoreState {
         uint256 amount;
     }
 
+    struct PendingStakingWithdraw {
+        address msgSender;
+        uint64 weiAmount;
+        uint256 timestamp; // Timestamp of withdraw (seconds)
+    }
+
     mapping(address => uint64) public systemAddressToTokenId;
     mapping(uint64 => address) public tokenIdToSystemAddress;
     mapping(address => mapping(uint64 => uint64)) public spotBalances;
 
     SystemTransfer[] public pendingSystemTransfers;
     CoreWriterAction[] public pendingCoreWriterActions;
+    PendingStakingWithdraw[] public pendingStakingWithdraws;
+    uint256 nextPendingStakingWithdrawIndex;
 
     /// @dev User -> Delegator Summary
     mapping(address => L1ReadLibrary.DelegatorSummary) public delegatorSummaries;
@@ -208,8 +216,16 @@ contract MockHyperCoreState {
     /*               Process HyperCore interactions               */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function processBlock() external {
+    function beforeBlock() external {
+        // Staking withdraws
+        processPendingStakingWithdraws();
+    }
+
+    function afterBlock() external {
+        // EVM -> HyperCore transfers
         processPendingSystemTransfers();
+
+        // CoreWriter actions
         processPendingCoreWriterActions();
     }
 
@@ -239,7 +255,7 @@ contract MockHyperCoreState {
                 processStakingWithdraw(withdraw);
             } else if (action.action == CoreWriterLibrary.SPOT_SEND) {
                 SpotSend memory send = abi.decode(action.encodedAction, (SpotSend));
-                processPendingSpotSend(send);
+                processSpotSend(send);
             }
         }
 
@@ -258,8 +274,7 @@ contract MockHyperCoreState {
             } else {
                 // Update delegator summary
                 _delegatorSummary.delegated -= delegate.amount;
-                _delegatorSummary.totalPendingWithdrawal += delegate.amount;
-                _delegatorSummary.nPendingWithdrawals += 1;
+                _delegatorSummary.undelegated += delegate.amount;
 
                 // Update delegation
                 delegation.amount -= delegate.amount;
@@ -298,20 +313,44 @@ contract MockHyperCoreState {
     }
 
     function processStakingWithdraw(StakingWithdraw memory withdraw) internal {
-        // TODO: Handle 7-day unstaking queue
-        // Add to spot balance
-        spotBalances[withdraw.msgSender][systemAddressToTokenId[HYPE_SYSTEM_ADDRESS]] += withdraw.weiAmount;
-
         // Update delegator summary
         L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[withdraw.msgSender];
         _delegatorSummary.undelegated -= withdraw.weiAmount;
         _delegatorSummary.totalPendingWithdrawal += withdraw.weiAmount;
         _delegatorSummary.nPendingWithdrawals += 1;
+
+        // Add to pending withdraws
+        pendingStakingWithdraws.push(
+            PendingStakingWithdraw({
+                msgSender: withdraw.msgSender,
+                weiAmount: withdraw.weiAmount,
+                timestamp: block.timestamp
+            })
+        );
     }
 
     /// @dev HyperCore -> EVM transfer
-    function processPendingSpotSend(SpotSend memory send) internal {
+    function processSpotSend(SpotSend memory send) internal {
         spotBalances[send.msgSender][send.token] -= send.weiAmount;
         Vm(VM_ADDRESS).deal(send.msgSender, send.weiAmount.to18Decimals());
+    }
+
+    function processPendingStakingWithdraws() internal {
+        while (nextPendingStakingWithdrawIndex < pendingStakingWithdraws.length) {
+            PendingStakingWithdraw storage withdraw = pendingStakingWithdraws[nextPendingStakingWithdrawIndex];
+            if (block.timestamp >= withdraw.timestamp + 7 days) {
+                // Add to spot balance
+                spotBalances[withdraw.msgSender][systemAddressToTokenId[HYPE_SYSTEM_ADDRESS]] += withdraw.weiAmount;
+
+                // Update delegator summary
+                L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[withdraw.msgSender];
+                _delegatorSummary.totalPendingWithdrawal -= withdraw.weiAmount;
+                _delegatorSummary.nPendingWithdrawals -= 1;
+
+                nextPendingStakingWithdrawIndex++;
+            } else {
+                break;
+            }
+        }
     }
 }
