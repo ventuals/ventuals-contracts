@@ -1294,7 +1294,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Initial balance: minimumStakeBalance (500k) + 100k (for withdraw) = 600k
         uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1320,7 +1319,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1348,7 +1346,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1376,7 +1373,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1391,9 +1387,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // First call: transfer all deposits to HyperCore
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode((hypeDeposits - vhypeAmount).to8Decimals()));
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(
-            validator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */
-        ));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE,
+            abi.encode(validator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */ )
+        );
 
         // No undelegate call or staking withdraw call expected
         _expectNoUnstakeCall();
@@ -1411,7 +1408,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1427,7 +1423,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
 
         // Second call: undelegate shortfall amount (use CoreWriter helper)
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, (vhypeAmount - hypeDeposits).to8Decimals(), true /* isUndelegate */));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE,
+            abi.encode(validator, (vhypeAmount - hypeDeposits).to8Decimals(), true /* isUndelegate */ )
+        );
 
         // Third call: withdraw shortfall from staking (use CoreWriter helper)
         expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode((vhypeAmount - hypeDeposits).to8Decimals()));
@@ -1446,9 +1445,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
+
         expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, totalBalance.to8Decimals(), true));
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator2, totalBalance.to8Decimals(), false));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator2, totalBalance.to8Decimals(), false)
+        );
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1471,9 +1472,12 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock balances
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(totalBalance.to8Decimals());
+
         expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(totalBalance.to8Decimals()));
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(stakingVaultManager.validator(), totalBalance.to8Decimals(), true));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE,
+            abi.encode(stakingVaultManager.validator(), totalBalance.to8Decimals(), true)
+        );
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1551,7 +1555,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock and expect calls for for the deposit
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(hypeDeposits.to8Decimals()));
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE,
+            abi.encode(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ )
+        );
 
         // Finalize the batch
         stakingVaultManager.finalizeBatch();
@@ -1563,7 +1570,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1571,7 +1577,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock and expect calls for zero deposits scenario
 
         // Should undelegate the full withdraw amount
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, vhypeAmount.to8Decimals(), true /* isUndelegate */));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, vhypeAmount.to8Decimals(), true /* isUndelegate */ )
+        );
 
         // Should withdraw the full amount from staking
         expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(vhypeAmount.to8Decimals()));
@@ -1590,7 +1598,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Setup: Mock vault balance with deposits but no withdraws
         vm.deal(address(stakingVault), hypeDeposits);
@@ -1604,7 +1611,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(hypeDeposits.to8Decimals()));
 
         // Third call: delegate all deposits
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE,
+            abi.encode(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ )
+        );
 
         // No undelegate call or staking withdraw call expected
         _expectNoUnstakeCall();
@@ -1618,7 +1628,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing
         uint256 totalBalance = MINIMUM_STAKE_BALANCE;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // No HyperCore deposit expected
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
@@ -2594,7 +2603,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2721,7 +2729,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         _mockDelegations(withdrawWeiAmount);
         expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(withdrawWeiAmount));
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(stakingVaultManager.validator(), withdrawWeiAmount, true));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(stakingVaultManager.validator(), withdrawWeiAmount, true)
+        );
 
         vm.prank(owner);
         vm.expectEmit(true, true, true, true);
@@ -2800,7 +2810,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 depositAmount = 100_000 * 1e18; // 100k HYPE (in 18 decimals)
         uint64 depositWeiAmount = depositAmount.to8Decimals();
 
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(stakingVaultManager.validator(), depositWeiAmount, false));
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(stakingVaultManager.validator(), depositWeiAmount, false)
+        );
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(depositWeiAmount));
 
         vm.prank(owner);
