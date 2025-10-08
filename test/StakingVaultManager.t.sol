@@ -478,12 +478,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*                    Tests: Claim Withdraw                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_ClaimWithdraw_Success() public {
+    function test_ClaimWithdraw_Success() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -508,13 +504,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
-    function test_ClaimWithdraw_NotAuthorized() public {
+    function test_ClaimWithdraw_NotAuthorized() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         address otherUser = makeAddr("otherUser");
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -552,12 +544,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
-    function test_ClaimWithdraw_AlreadyClaimed() public {
+    function test_ClaimWithdraw_AlreadyClaimed() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -579,12 +567,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
-    function test_ClaimWithdraw_TooEarly() public {
+    function test_ClaimWithdraw_TooEarly() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -602,12 +586,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
-    function test_ClaimWithdraw_ExactlySevenDays() public {
+    function test_ClaimWithdraw_ExactlySevenDays() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -625,12 +605,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
-    function test_ClaimWithdraw_CoreUserDoesNotExist() public {
+    function test_ClaimWithdraw_CoreUserDoesNotExist() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -649,12 +625,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, destination);
     }
 
-    function test_ClaimWithdraw_InsufficientBalance() public {
+    function test_ClaimWithdraw_InsufficientBalance() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -675,12 +647,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
-    function test_ClaimWithdraw_WhenContractPaused() public {
+    function test_ClaimWithdraw_WhenContractPaused() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -702,12 +670,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
-    function test_ClaimWithdraw_WithSlashedBatch() public {
+    function test_ClaimWithdraw_WithSlashedBatch() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing (1:1 exchange rate)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -810,12 +774,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.cancelWithdraw(withdrawId);
     }
 
-    function test_CancelWithdraw_AlreadyProcessed() public withMinimumStakeBalance {
+    function test_CancelWithdraw_AlreadyProcessed() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -863,12 +823,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*                    Tests: Process Batch                    */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_ProcessBatch_FirstBatch() public {
+    function test_ProcessBatch_FirstBatch() public withExcessStakeBalance {
         uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        uint256 totalSupply = vHYPE.totalSupply();
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -885,7 +842,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(batch.slashed, false, "Batch should not have been slashed");
         assertEq(stakingVaultManager.getBatchesLength(), 1, "Batch length should be 1");
         assertEq(stakingVaultManager.currentBatchIndex(), 0, "Current batch index should still be 0");
-        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
+        assertEq(vHYPE.totalSupply(), totalSupply, "vHYPE supply should not change until batch is finalized");
 
         // Verify withdraw state
         assertEq(stakingVaultManager.lastProcessedWithdrawId(), 1, "Last processed withdraw ID should be 1");
@@ -904,12 +861,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0, "Total HYPE claimed should be 0");
     }
 
-    function test_ProcessBatch_UnderMinimumStakeBalance() public {
+    function test_ProcessBatch_UnderMinimumStakeBalance() public underMinimumStakeBalance {
         uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+        uint256 totalSupply = vHYPE.totalSupply();
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -926,7 +880,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(batch.slashed, false, "Batch should not have been slashed");
         assertEq(stakingVaultManager.getBatchesLength(), 1, "Batch length should be 1");
         assertEq(stakingVaultManager.currentBatchIndex(), 0, "Current batch index should still be 0");
-        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
+        assertEq(vHYPE.totalSupply(), totalSupply, "vHYPE supply should not change until batch is finalized");
 
         // Verify withdraw state
         assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
@@ -945,13 +899,12 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0, "Total HYPE claimed should be 0");
     }
 
-    function test_ProcessBatch_WithOneDayLockedStake() public {
+    function test_ProcessBatch_WithOneDayLockedStake() public withExcessStakeBalance {
         uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
 
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64((block.timestamp + 1 days) * 1000));
+        _mockDelegationsWithLock(
+            validator, vHYPE.totalSupply().to8Decimals(), uint64((block.timestamp + 1 days) * 1000)
+        );
 
         // User queues the first withdraw
         _setupWithdraw(user, vhypeAmount / 2);
@@ -1004,12 +957,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
-    function test_ProcessBatch_WithOneDayLockedStakeAndExtraTime() public {
+    function test_ProcessBatch_WithOneDayLockedStakeAndExtraTime() public withExcessStakeBalance {
         uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // User queues the first withdraw
         _setupWithdraw(user, vhypeAmount / 2);
@@ -1026,7 +975,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Simulate a delay in the 1-day stake lock
         // forge-lint: disable-next-line(unsafe-typecast)
-        _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64(lockTime * 1000));
+        _mockDelegationsWithLock(validator, vHYPE.totalSupply().to8Decimals(), uint64(lockTime * 1000));
 
         // User queues the second withdraw
         _setupWithdraw(user, vhypeAmount / 2);
@@ -1036,16 +985,12 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
     }
 
-    function test_ProcessBatch_WhenBatchProcessingPaused() public {
+    function test_ProcessBatch_WhenBatchProcessingPaused() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // Setup: Set batch processing to paused
         vm.prank(owner);
         stakingVaultManager.setBatchProcessingPaused(true);
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1055,12 +1000,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
     }
 
-    function test_ProcessBatch_WhenContractPaused() public {
+    function test_ProcessBatch_WhenContractPaused() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1143,10 +1084,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
-    function test_ProcessBatch_EmptyQueue() public {
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
+    function test_ProcessBatch_EmptyQueue() public withExcessStakeBalance {
+        uint256 totalSupply = vHYPE.totalSupply();
 
         // Process batch with no withdraws in queue
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1160,20 +1099,17 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
 
         // Verify vHYPE state
-        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not have changed");
+        assertEq(vHYPE.totalSupply(), totalSupply, "vHYPE supply should not have changed");
 
         // Verify process state
         assertEq(stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0");
     }
 
-    function test_ProcessBatch_CancelledWithdrawsSkipped() public {
+    function test_ProcessBatch_CancelledWithdrawsSkipped() public withExcessStakeBalance {
+        uint256 totalSupply = vHYPE.totalSupply();
         uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
         uint256 vhypeAmount2 = 7_000 * 1e18; // 7k vHYPE
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Two users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
@@ -1194,7 +1130,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.nextWithdrawId(), 3, "Next withdraw ID should be 3");
 
         // Verify vHYPE state
-        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
+        assertEq(vHYPE.totalSupply(), totalSupply, "vHYPE supply should not change until batch is finalized");
 
         // Verify process state
         assertEq(
@@ -1202,16 +1138,13 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
-    function test_ProcessBatch_MultipleWithdraws() public {
+    function test_ProcessBatch_MultipleWithdraws() public withExcessStakeBalance {
+        uint256 totalSupply = vHYPE.totalSupply();
         uint256 vhypeAmount1 = 2_000 * 1e18; // 2k vHYPE
         uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
         uint256 vhypeAmount3 = 4_000 * 1e18; // 4k vHYPE
         address user2 = makeAddr("user2");
         address user3 = makeAddr("user3");
-
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Three users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
@@ -1232,7 +1165,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Last processed withdraw ID should be 3");
 
         // Verify vHYPE state
-        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
+        assertEq(vHYPE.totalSupply(), totalSupply, "vHYPE supply should not change until batch is finalized");
         assertEq(
             vHYPE.balanceOf(address(stakingVaultManager)),
             vhypeAmount1 + vhypeAmount2 + vhypeAmount3,
@@ -1249,13 +1182,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*                    Tests: Finalize Batch                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_FinalizeBatch_CanFinalizeWhenUnderMinimumStakeBalance() public {
+    function test_FinalizeBatch_CanFinalizeWhenUnderMinimumStakeBalance() public underMinimumStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE withdraw
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        // Initial balance: minimumStakeBalance (500k) + 100k (for withdraw) = 600k
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1272,15 +1200,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
     }
 
-    function test_FinalizeBatch_DustHypeAmountNotTransferred() public {
+    function test_FinalizeBatch_DustHypeAmountNotTransferred() public withMinimumStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         uint256 dustHypeAmount = 0.5e10; // dust
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1300,14 +1224,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_DepositsEqualWithdraws() public {
+    function test_FinalizeBatch_DepositsEqualWithdraws() public withMinimumStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1327,14 +1247,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_DepositsGreaterThanWithdraws() public {
+    function test_FinalizeBatch_DepositsGreaterThanWithdraws() public withMinimumStakeBalance {
         uint256 vhypeAmount = 3_000 * 1e18; // 3k vHYPE withdraw
         uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1362,14 +1278,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_DepositsLessThanWithdraws() public {
+    function test_FinalizeBatch_DepositsLessThanWithdraws() public withExcessStakeBalance {
         uint256 vhypeAmount = 70_000 * 1e18; // 70k vHYPE withdraw
         uint256 hypeDeposits = 30_000 * 1e18; // 30k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1401,17 +1313,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_CannotFinalizeAfterSwitchValidatorInSameBlock() public {
+    function test_FinalizeBatch_CannotFinalizeAfterSwitchValidatorInSameBlock() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        expectCoreWriterCall(CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, totalBalance.to8Decimals(), true));
-        expectCoreWriterCall(
-            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator2, totalBalance.to8Decimals(), false)
-        );
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1428,18 +1331,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_CannotFinalizeAfterEmergencyStakingWithdrawInSameBlock() public {
+    function test_FinalizeBatch_CannotFinalizeAfterEmergencyStakingWithdrawInSameBlock()
+        public
+        withExcessStakeBalance
+    {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-
-        // Setup: Mock balances
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(totalBalance.to8Decimals()));
-        expectCoreWriterCall(
-            CoreWriterLibrary.TOKEN_DELEGATE,
-            abi.encode(stakingVaultManager.validator(), totalBalance.to8Decimals(), true)
-        );
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1448,22 +1344,18 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Emergency withdraw
-        vm.prank(owner);
-        stakingVaultManager.emergencyStakingWithdraw(totalBalance, "Emergency withdraw");
+        vm.startPrank(owner);
+        stakingVaultManager.emergencyStakingWithdraw(vHYPE.totalSupply(), "Emergency withdraw");
 
         // Finalize the batch
         vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_CannotFinalizeAfterSlash() public {
+    function test_FinalizeBatch_CannotFinalizeAfterSlash() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1477,21 +1369,17 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Apply slash to the batch (50% slash)
-        _mockDelegations(validator, (totalBalance / 2).to8Decimals());
+        _mockDelegations(validator, (vHYPE.totalSupply() / 2).to8Decimals());
 
         // Attempt to finalize should revert due to insufficient balance
         vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_CanFinalizeAfterSlashIsApplied() public {
+    function test_FinalizeBatch_CanFinalizeAfterSlashIsApplied() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         uint256 hypeDeposits = 5_000 * 1e18; // 5k HYPE deposits (exchange rate = 1)
         address user2 = makeAddr("user2");
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1505,7 +1393,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Apply slash to the batch (50% slash)
-        _mockDelegations(validator, (totalBalance / 2).to8Decimals());
+        _mockDelegations(validator, (vHYPE.totalSupply() / 2).to8Decimals());
 
         // Reset the batch
         vm.prank(owner);
@@ -1526,12 +1414,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_ZeroDeposits() public {
+    function test_FinalizeBatch_ZeroDeposits() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE withdraw
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1615,12 +1499,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(withdrawAmount, 3_000 * 1e18);
     }
 
-    function test_GetWithdrawAmount_ProcessedWithdraw() public {
+    function test_GetWithdrawAmount_ProcessedWithdraw() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Mock exchange rate = 1 at time of processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1636,12 +1516,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(withdrawAmount, vhypeAmount);
     }
 
-    function test_GetWithdrawAmount_SlashedBatch() public {
+    function test_GetWithdrawAmount_SlashedBatch() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Mock exchange rate = 1 at time of processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1659,12 +1535,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(withdrawAmount, 4_000 * 1e18);
     }
 
-    function test_GetWithdrawClaimableAt_UnprocessedWithdraw() public {
+    function test_GetWithdrawClaimableAt_UnprocessedWithdraw() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Mock exchange rate = 1 at time of processing
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue a withdraw (not processed yet)
         _setupWithdraw(user, vhypeAmount);
@@ -1674,12 +1546,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(claimableAt, type(uint256).max);
     }
 
-    function test_GetWithdrawClaimableAt_NotFinalized() public {
+    function test_GetWithdrawClaimableAt_NotFinalized() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18;
-
-        // Mock balances
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdraw (but don't finalize)
         _setupWithdraw(user, vhypeAmount);
@@ -1690,12 +1558,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(claimableAt, type(uint256).max);
     }
 
-    function test_GetWithdrawClaimableAt_Finalized() public {
+    function test_GetWithdrawClaimableAt_Finalized() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18;
-
-        // Mock balances
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue, process, and finalize withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1712,17 +1576,13 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(claimableAt, expectedClaimableAt);
     }
 
-    function test_GetWithdrawClaimableAt_WithCustomClaimWindowBuffer() public {
+    function test_GetWithdrawClaimableAt_WithCustomClaimWindowBuffer() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18;
         uint256 customBuffer = 3 days;
 
         // Set custom claim window buffer
         vm.prank(owner);
         stakingVaultManager.setClaimWindowBuffer(customBuffer);
-
-        // Mock balances
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue, process, and finalize withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1812,11 +1672,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(totalBalance, 4e18);
     }
 
-    function test_TotalBalance_WithReservedHypeForWithdraws() public {
+    function test_TotalBalance_WithReservedHypeForWithdraws() public withExcessStakeBalance {
+        uint256 vhypeSupply = vHYPE.totalSupply();
         uint256 vhypeWithdrawAmount = 100_000 * 1e18;
-
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeWithdrawAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeWithdrawAmount);
@@ -1835,7 +1693,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0);
 
         // Mock a 50% slash
-        _mockDelegations(validator, (totalBalance / 2).to8Decimals());
+        _mockDelegations(validator, (vhypeSupply / 2).to8Decimals());
 
         // Apply the slash
         vm.prank(owner);
@@ -1848,11 +1706,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalBalance(), 250_000 * 1e18);
     }
 
-    function test_TotalBalance_ReservedHypeForWithdrawsGreaterThanAccountBalance() public {
+    function test_TotalBalance_ReservedHypeForWithdrawsGreaterThanAccountBalance() public withExcessStakeBalance {
         uint256 vhypeWithdrawAmount = 100_000 * 1e18;
-
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeWithdrawAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeWithdrawAmount);
@@ -2128,12 +1983,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.setMinimumStakeBalance(newMinimumStakeBalance);
     }
 
-    function test_SetMinimumStakeBalance_TooLowDuringBatchProcessing() public {
+    function test_SetMinimumStakeBalance_TooLowDuringBatchProcessing() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-
-        // Setup: Mock sufficient balance (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -2144,7 +1995,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Calculate the new minimum stake balance that would be too high
         // Total balance is 600k, batch processed 100k, so we need at least 500k minimum stake balance
         // Setting it to 500k + 1 should fail
-        uint256 newMinimumStakeBalanceTooLarge = totalBalance - vhypeAmount + 1;
+        uint256 newMinimumStakeBalanceTooLarge = vHYPE.totalSupply() - vhypeAmount + 1;
 
         vm.prank(owner);
         vm.expectRevert(StakingVaultManager.MinimumStakeBalanceTooLarge.selector);
@@ -2265,12 +2116,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.setClaimWindowBuffer(newClaimWindowBuffer);
     }
 
-    function test_SetClaimWithdrawBuffer_UpdatesClaimWithdrawValidation() public {
+    function test_SetClaimWithdrawBuffer_UpdatesClaimWithdrawValidation() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mock sufficient balance for processing (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -2314,16 +2161,12 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*              Tests: Reset Batch (Only Owner)               */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_ResetBatch_Success() public {
+    function test_ResetBatch_Success() public withExcessStakeBalance {
         uint256 vhypeAmount1 = 5_000 * 1e18; // 50k vHYPE
         uint256 vhypeAmount2 = 3_000 * 1e18; // 30k vHYPE
         uint256 vhypeAmount3 = 2_000 * 1e18; // 20k vHYPE
         address user2 = makeAddr("user2");
         address user3 = makeAddr("user3");
-
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Three users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
@@ -2378,16 +2221,12 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.getBatchesLength(), 1, "Batch should not be removed until finalized");
     }
 
-    function test_ResetBatch_WithCancelledWithdrawals() public {
+    function test_ResetBatch_WithCancelledWithdrawals() public withExcessStakeBalance {
         uint256 vhypeAmount1 = 5_000 * 1e18; // 50k vHYPE
         uint256 vhypeAmount2 = 3_000 * 1e18; // 30k vHYPE (will be cancelled)
         uint256 vhypeAmount3 = 2_000 * 1e18; // 20k vHYPE
         address user2 = makeAddr("user2");
         address user3 = makeAddr("user3");
-
-        // Setup: Mock sufficient balance
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Three users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
@@ -2435,12 +2274,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.resetBatch(type(uint256).max);
     }
 
-    function test_ResetBatch_CannotResetFinalizedBatch() public {
+    function test_ResetBatch_CannotResetFinalizedBatch() public withExcessStakeBalance {
         uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2453,12 +2288,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.resetBatch(type(uint256).max);
     }
 
-    function test_ResetBatch_NotOwner() public {
+    function test_ResetBatch_NotOwner() public withExcessStakeBalance {
         uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2474,12 +2305,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*          Tests: Finalize Reset Batch (Only Owner)          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_FinalizeResetBatch_Success() public {
+    function test_FinalizeResetBatch_Success() public withExcessStakeBalance {
         uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2504,13 +2331,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.getBatchesLength(), 0);
     }
 
-    function test_FinalizeResetBatch_FailsWithPartialReset() public {
+    function test_FinalizeResetBatch_FailsWithPartialReset() public withExcessStakeBalance {
         uint256 vhypeAmount1 = 3_000 * 1e18;
         uint256 vhypeAmount2 = 2_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount1 + vhypeAmount2;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process two withdrawals
         _setupWithdraw(user, vhypeAmount1);
@@ -2541,12 +2364,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeResetBatch();
     }
 
-    function test_FinalizeResetBatch_FailsWithFinalizedBatch() public {
+    function test_FinalizeResetBatch_FailsWithFinalizedBatch() public withExcessStakeBalance {
         uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2566,12 +2385,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeResetBatch();
     }
 
-    function test_FinalizeResetBatch_NotOwner() public {
+    function test_FinalizeResetBatch_NotOwner() public withExcessStakeBalance {
         uint256 vhypeAmount = 50_000 * 1e18;
-
-        // Setup
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2822,10 +2637,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*              Tests: Apply Slash (Only Owner)               */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_ApplySlash_ValidBatch() public {
+    function test_ApplySlash_ValidBatch() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -2861,10 +2674,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.applySlash(999, 5e17);
     }
 
-    function test_ApplySlash_NotOwner() public {
+    function test_ApplySlash_NotOwner() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -2878,10 +2689,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.applySlash(0, 5e17);
     }
 
-    function test_ApplySlash_ZeroSlashedExchangeRate() public {
+    function test_ApplySlash_ZeroSlashedExchangeRate() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -2905,10 +2714,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeProcessed(), 0);
     }
 
-    function test_ApplySlash_MultipleBatches() public {
+    function test_ApplySlash_MultipleBatches() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + (vhypeAmount * 2);
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Create first batch
         _setupWithdraw(user, vhypeAmount);
@@ -2946,10 +2753,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeProcessed(), 2_500 * 1e18 + 1_000 * 1e18);
     }
 
-    function test_ApplySlash_ReapplySlash() public {
+    function test_ApplySlash_ReapplySlash() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -3015,10 +2820,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         }
     }
 
-    function _mockDelegations(uint64 weiAmount) internal {
-        _mockDelegations(validator, weiAmount);
-    }
-
     function _mockDelegations(address _validator, uint64 weiAmount) internal {
         _mockDelegationsWithLock(_validator, weiAmount, 0);
     }
@@ -3044,6 +2845,18 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     modifier withMinimumStakeBalance() {
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE, MINIMUM_STAKE_BALANCE);
+        _;
+    }
+
+    modifier withExcessStakeBalance() {
+        uint256 excess = 100_000 * 1e18;
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE + excess, MINIMUM_STAKE_BALANCE + excess);
+        _;
+    }
+
+    modifier underMinimumStakeBalance() {
+        uint256 excess = 100_000 * 1e18;
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE - excess, MINIMUM_STAKE_BALANCE - excess);
         _;
     }
 }
