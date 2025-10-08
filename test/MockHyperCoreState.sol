@@ -108,6 +108,13 @@ contract MockHyperCoreState {
     function mockDelegation(address user, L1ReadLibrary.Delegation memory delegation) external {
         validatorDelegations[user][delegation.validator] = delegation;
         userToValidators[user].add(delegation.validator);
+
+        // Update delegator summary
+        uint64 delegated = 0;
+        for (uint256 i = 0; i < userToValidators[user].length(); i++) {
+            delegated += validatorDelegations[user][userToValidators[user].at(i)].amount;
+        }
+        delegatorSummaries[user].delegated = delegated;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/

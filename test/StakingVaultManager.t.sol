@@ -1498,7 +1498,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // User 1 queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1512,7 +1511,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Apply slash to the batch (50% slash)
-        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+        _mockDelegations(validator, (totalBalance / 2).to8Decimals());
 
         // Attempt to finalize should revert due to insufficient balance
         vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
@@ -1527,7 +1526,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockDelegations(validator, totalBalance.to8Decimals());
 
         // User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1541,7 +1539,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Apply slash to the batch (50% slash)
-        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+        _mockDelegations(validator, (totalBalance / 2).to8Decimals());
 
         // Reset the batch
         vm.prank(owner);
@@ -1874,7 +1872,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0);
 
         // Mock a 50% slash
-        _mockDelegatorSummary((totalBalance / 2).to8Decimals());
+        _mockDelegations(validator, (totalBalance / 2).to8Decimals());
 
         // Apply the slash
         vm.prank(owner);
@@ -1910,7 +1908,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeClaimed(), 0);
 
         // Mock a 100% slash
-        _mockDelegatorSummary(0);
+        _mockDelegations(validator, 0);
 
         // Test totalBalance after slash
         // 600k HYPE slashed to 300k HYPE
@@ -2647,7 +2645,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Current validator should be defaultValidator
         assertEq(stakingVaultManager.validator(), validator);
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegations(validator, amount.to8Decimals());
 
         // Mock the undelegate call (from current validator)
@@ -2666,7 +2663,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_SwitchValidator_NotOwner() public {
         uint256 amount = 100_000 * 1e18;
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegations(validator, amount.to8Decimals());
 
         vm.startPrank(user);
@@ -2677,7 +2673,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_SwitchValidator_SameValidator() public {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegations(validator, amount.to8Decimals());
 
         vm.startPrank(owner);
@@ -2689,7 +2684,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegationsWithLock(validator, amount.to8Decimals(), futureTimestamp);
 
         vm.startPrank(owner);
@@ -2703,7 +2697,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegationsWithLock(validator, amount.to8Decimals(), currentTimestamp);
 
         // Mock the undelegate call (from current validator)
@@ -2726,7 +2719,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint64 withdrawWeiAmount = 100_000 * 1e8; // 100k HYPE (in 8 decimals)
         uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE (in 18 decimals)
 
-        _mockDelegatorSummary(withdrawWeiAmount);
         _mockDelegations(withdrawWeiAmount);
         _mockAndExpectStakingWithdrawCall(withdrawWeiAmount);
         _mockAndExpectTokenDelegateCall(stakingVaultManager.validator(), withdrawWeiAmount, true);
@@ -2746,7 +2738,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_EmergencyStakingWithdraw_InsufficientBalance() public {
         uint256 withdrawAmount = 100_000 * 1e18; // 100k HYPE (in 18 decimals)
 
-        _mockDelegatorSummary(50_000 * 1e8); // 50k HYPE delegated (in 8 decimals)
         _mockDelegations(50_000 * 1e8);
 
         vm.startPrank(owner);
@@ -2755,7 +2746,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     function test_EmergencyStakingWithdraw_ZeroAmount() public {
-        _mockDelegatorSummary(uint64(1_000_000 * 1e8)); // 1M HYPE delegated
         _mockDelegations(uint64(1_000_000 * 1e8));
 
         vm.startPrank(owner);
@@ -2767,7 +2757,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 requestedAmount = 100_000 * 1e18; // 100k HYPE
         uint256 delegatedAmount = 50_000 * 1e18; // Only 50k HYPE delegated
 
-        _mockDelegatorSummary(delegatedAmount.to8Decimals());
         _mockDelegations(validator, delegatedAmount.to8Decimals());
 
         vm.startPrank(owner);
@@ -2779,7 +2768,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegationsWithLock(validator, amount.to8Decimals(), futureTimestamp);
 
         vm.startPrank(owner);
@@ -2793,7 +2781,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
         uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
 
-        _mockDelegatorSummary(amount.to8Decimals());
         _mockDelegationsWithLock(validator, amount.to8Decimals(), currentTimestamp);
 
         _mockAndExpectTokenDelegateCall(validator, amount.to8Decimals(), true);
@@ -3089,8 +3076,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
 
-        // Mock delegations and spot balance
-        _mockDelegatorSummary(delegatedBalance);
+        // Mock delegations
         _mockDelegations(validator, delegatedBalance);
 
         // Mint vHYPE supply to owner
@@ -3098,20 +3084,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
             vm.prank(address(stakingVaultManager));
             vHYPE.mint(owner, totalSupply);
         }
-    }
-
-    /// @dev Helper function to mock delegator summary for testing staking deposit calls
-    /// @param delegated The delegated balance to mock (in 8 decimals)
-    function _mockDelegatorSummary(uint64 delegated) internal {
-        mockHyperCoreState.mockDelegatorSummary(
-            address(stakingVault),
-            L1ReadLibrary.DelegatorSummary({
-                delegated: delegated,
-                undelegated: 0,
-                totalPendingWithdrawal: 0,
-                nPendingWithdrawals: 0
-            })
-        );
     }
 
     function _mockDelegations(uint64 weiAmount) internal {
