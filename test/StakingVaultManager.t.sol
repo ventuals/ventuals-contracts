@@ -3053,31 +3053,3 @@ contract StakingVaultManagerWithExtraFunction is StakingVaultManager {
         return true;
     }
 }
-
-contract MockHypeSystemContract {
-    using Converters for *;
-
-    /// @dev Cheat code address.
-    /// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
-    address internal constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
-
-    uint64 public constant HYPE_TOKEN_ID = 150;
-
-    receive() external payable {
-        uint64 amount = msg.value.to8Decimals();
-
-        // When we receive HYPE, we want to add it to the spot balance to simulate a "transfer" to the address's
-        // spot account
-        L1ReadLibrary.SpotBalance memory spotBalance = L1ReadLibrary.spotBalance(msg.sender, HYPE_TOKEN_ID);
-        L1ReadLibrary.SpotBalance memory newSpotBalance = L1ReadLibrary.SpotBalance({
-            total: spotBalance.total + amount,
-            hold: spotBalance.hold,
-            entryNtl: spotBalance.entryNtl
-        });
-        Vm(VM_ADDRESS).mockCall(
-            L1ReadLibrary.SPOT_BALANCE_PRECOMPILE_ADDRESS,
-            abi.encode(msg.sender, HYPE_TOKEN_ID),
-            abi.encode(newSpotBalance)
-        );
-    }
-}
