@@ -10,6 +10,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {MockPrecompileSpotBalance} from "./MockPrecompileSpotBalance.sol";
 import {MockPrecompileDelegatorSummary} from "./MockPrecompileDelegatorSummary.sol";
 import {MockPrecompileDelegations} from "./MockPrecompileDelegations.sol";
+import {MockPrecompileCoreUserExists} from "./MockPrecompileCoreUserExists.sol";
 import {MockCoreWriter} from "./MockCoreWriter.sol";
 import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {CommonBase} from "forge-std/Base.sol";
@@ -42,6 +43,8 @@ contract HyperCoreSimulator is CommonBase {
         vm.etch(L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS, address(mockPrecompileDelegatorSummary).code);
         MockPrecompileDelegations mockPrecompileDelegations = new MockPrecompileDelegations();
         vm.etch(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, address(mockPrecompileDelegations).code);
+        MockPrecompileCoreUserExists mockPrecompileCoreUserExists = new MockPrecompileCoreUserExists();
+        vm.etch(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, address(mockPrecompileCoreUserExists).code);
     }
 
     function nextBlock() public {

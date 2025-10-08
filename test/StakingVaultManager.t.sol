@@ -19,6 +19,7 @@ import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 import {HyperCoreSimulator} from "./HyperCoreSimulator.sol";
 import {MockHyperCoreState} from "./MockHyperCoreState.sol";
+import {console} from "forge-std/console.sol";
 
 contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     using Converters for *;
@@ -103,8 +104,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         mockHyperCoreState = MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS);
 
         // Mock the core user exists check to return true
-        _mockCoreUserExists(address(stakingVault), true);
-        _mockCoreUserExists(user, true);
+        mockHyperCoreState.mockCoreUserExists(address(stakingVault), true);
+        mockHyperCoreState.mockCoreUserExists(user, true);
 
         // Set batch processing to enabled
         vm.prank(owner);
@@ -552,12 +553,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Another user tries to claim the withdraw
         vm.prank(otherUser);
@@ -597,18 +597,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
-
-        // Mock spot balance check (vault has enough HYPE)
-        _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
-
-        // Mock spotSend call
-        _mockAndExpectSpotSendCall(user, HYPE_TOKEN_ID, vhypeAmount.to8Decimals());
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // User claims the withdraw
         vm.prank(user);
@@ -631,12 +624,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 6 days);
+        warp(block.timestamp + 6 days);
 
         // User tries to claim too early
         vm.prank(user);
@@ -655,12 +647,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days);
+        warp(block.timestamp + 7 days);
 
         // User tries to claim too early
         vm.prank(user);
@@ -679,19 +670,14 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
-
-        // Mock spot balance check (vault has enough HYPE)
-        _mockSpotBalance(uint64(vhypeAmount.to8Decimals()));
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Core user does not exist
         address destination = makeAddr("destination");
-        _mockCoreUserExists(destination, false);
         vm.prank(user);
         vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.CoreUserDoesNotExist.selector, destination));
         stakingVaultManager.claimWithdraw(withdrawId, destination);
@@ -708,12 +694,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock insufficient spot balance (only half of what's needed)
         _mockSpotBalance((vhypeAmount / 2).to8Decimals());
@@ -735,15 +720,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + 1);
-
-        // Mock spot balance check (vault has enough HYPE)
-        _mockSpotBalance(vhypeAmount.to8Decimals());
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Pause the contract
         vm.prank(owner);
@@ -766,7 +747,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
@@ -775,13 +755,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
 
         // Fast-forward time
-        vm.warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
-
-        // Mock spot balance check (vault has enough HYPE)
-        _mockSpotBalance(vhypeAmount.to8Decimals());
-
-        // Mock spotSend call (should send half of the amount)
-        _mockAndExpectSpotSendCall(user, HYPE_TOKEN_ID, vhypeAmount.to8Decimals() / 2);
+        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // User claims the slashed withdraw
         vm.prank(user);
@@ -884,9 +858,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
-        // Mock batch processing calls
-        _mockBatchProcessingCalls();
-
         // Process the batch
         stakingVaultManager.processBatch(type(uint256).max);
 
@@ -938,9 +909,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
-
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
 
@@ -981,9 +949,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance for processing (exchange rate = 1)
         uint256 totalBalance = MINIMUM_STAKE_BALANCE - vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
 
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1027,13 +992,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
         _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64((block.timestamp + 1 days) * 1000));
 
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
-
         // User queues the first withdraw
         _setupWithdraw(user, vhypeAmount / 2);
 
         // Process the first batch (should work without timing restrictions)
+        warp(block.timestamp + 1 days + 1 seconds);
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the first batch
@@ -1047,7 +1010,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Advance time by 1 day + 1 second and try again (should succeed)
-        vm.warp(block.timestamp + 1 days + 1 seconds);
+        warp(block.timestamp + 1 days + 1 seconds);
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Verify batch state
@@ -1087,9 +1050,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
-
         // User queues the first withdraw
         _setupWithdraw(user, vhypeAmount / 2);
 
@@ -1099,15 +1059,18 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Finalize the first batch
         stakingVaultManager.finalizeBatch();
 
+        // Advance time by 1 day + 1 second
         uint256 lockTime = block.timestamp + 1 days + 1 seconds;
+        warp(lockTime);
+
+        // Simulate a delay in the 1-day stake lock
         // forge-lint: disable-next-line(unsafe-typecast)
         _mockDelegationsWithLock(validator, totalBalance.to8Decimals(), uint64(lockTime * 1000));
 
         // User queues the second withdraw
         _setupWithdraw(user, vhypeAmount / 2);
 
-        // Advance time by 1 day + 1 second (should fail)
-        vm.warp(lockTime);
+        // Should fail because the batch is not ready
         vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, lockTime));
         stakingVaultManager.processBatch(type(uint256).max);
     }
@@ -1194,9 +1157,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount1);
         _setupWithdraw(user2, vhypeAmount2);
 
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
-
         // Process batch
         stakingVaultManager.processBatch(type(uint256).max);
 
@@ -1258,9 +1218,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
-
         // Setup: Two users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
         _setupWithdraw(user2, vhypeAmount2);
@@ -1298,9 +1255,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: Mock sufficient balance
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + 200_000 * 1e18;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-
-        // Setup: Mock the calls that batch processing makes
-        _mockBatchProcessingCalls();
 
         // Setup: Three users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
@@ -1786,7 +1740,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock balances
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockBatchProcessingCalls();
 
         // Queue, process, and finalize withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1814,7 +1767,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock balances
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockBatchProcessingCalls();
 
         // Queue, process, and finalize withdraw
         _setupWithdraw(user, vhypeAmount);
@@ -1914,7 +1866,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeWithdrawAmount);
 
         // Process the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the batch
@@ -1951,7 +1902,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeWithdrawAmount);
 
         // Process the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the batch
@@ -2380,12 +2330,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
         // Process and finalize the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        vm.warp(block.timestamp + 7 days + 1);
+        warp(block.timestamp + 7 days + 1);
 
         // User claims the withdraw
         vm.startPrank(user);
@@ -2546,7 +2495,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup
         uint256 totalBalance = MINIMUM_STAKE_BALANCE + vhypeAmount;
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
-        _mockBatchProcessingCalls();
 
         // Queue and process withdrawal
         _setupWithdraw(user, vhypeAmount);
@@ -2972,7 +2920,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
 
         // Setup: Process the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the batch
@@ -3012,7 +2959,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
 
         // Setup: Process the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Try to apply slash as non-owner
@@ -3030,7 +2976,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
 
         // Setup: Process the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the batch
@@ -3055,7 +3000,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Create first batch
-        _mockBatchProcessingCalls();
         _setupWithdraw(user, vhypeAmount);
         stakingVaultManager.processBatch(type(uint256).max);
 
@@ -3063,10 +3007,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast forward by 1 day
-        vm.warp(block.timestamp + 1 days + 1);
+        warp(block.timestamp + 1 days + 1);
 
         // Setup: Create second batch
-        _mockBatchProcessingCalls();
         _setupWithdraw(user, vhypeAmount);
         stakingVaultManager.processBatch(type(uint256).max);
 
@@ -3101,7 +3044,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
 
         // Setup: Process the batch
-        _mockBatchProcessingCalls();
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the batch
@@ -3125,15 +3067,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*                    Helper Functions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @dev Helper function to mock the core user exists check for a specific destination
-    /// @param destination The destination address to check
-    /// @param exists Whether the core user should exist on HyperCore
-    function _mockCoreUserExists(address destination, bool exists) internal {
-        L1ReadLibrary.CoreUserExists memory mockCoreUserExists = L1ReadLibrary.CoreUserExists({exists: exists});
-        bytes memory encodedCoreUserExists = abi.encode(mockCoreUserExists);
-        vm.mockCall(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, abi.encode(destination), encodedCoreUserExists);
-    }
-
     /// @dev Helper function to setup a user with vHYPE and queue a withdraw
     /// @param withdrawUser The user to setup
     /// @param vhypeAmount The amount of vHYPE to mint and queue for withdrawal
@@ -3151,14 +3084,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         vm.stopPrank();
 
         return withdrawIds[0];
-    }
-
-    /// @dev Helper function to mock the calls that batch processing makes
-    function _mockBatchProcessingCalls() internal {
-        // Mock the calls that finalizeBatch makes
-        vm.mockCall(address(stakingVault), abi.encodeWithSignature("transferHypeToCore(uint256)"), abi.encode());
-        vm.mockCall(address(stakingVault), abi.encodeWithSignature("stake(address,uint64)"), abi.encode());
-        vm.mockCall(address(stakingVault), abi.encodeWithSignature("unstake(address,uint64)"), abi.encode());
     }
 
     /// @dev Helper function to mock balances for testing exchange rate calculations

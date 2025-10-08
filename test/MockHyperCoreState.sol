@@ -75,6 +75,8 @@ contract MockHyperCoreState {
     PendingStakingWithdraw[] public pendingStakingWithdraws;
     uint256 nextPendingStakingWithdrawIndex;
 
+    /// @dev User -> Core User Exists
+    mapping(address => bool) public _coreUserExists;
     /// @dev User -> Delegator Summary
     mapping(address => L1ReadLibrary.DelegatorSummary) public delegatorSummaries;
     /// @dev User -> Validator -> Delegation
@@ -90,6 +92,10 @@ contract MockHyperCoreState {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     Mock HyperCore state                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function mockCoreUserExists(address user, bool exists) external {
+        _coreUserExists[user] = exists;
+    }
 
     function mockSpotBalance(address user, uint64 token, uint64 weiAmount) external {
         spotBalances[user][token] = weiAmount;
@@ -107,6 +113,10 @@ contract MockHyperCoreState {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     Read HyperCore state                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function coreUserExists(address user) external view returns (L1ReadLibrary.CoreUserExists memory) {
+        return L1ReadLibrary.CoreUserExists({exists: _coreUserExists[user]});
+    }
 
     function spotBalance(address user, uint64 token) external view returns (L1ReadLibrary.SpotBalance memory) {
         L1ReadLibrary.SpotBalance memory result = L1ReadLibrary.SpotBalance({total: 0, hold: 0, entryNtl: 0});
