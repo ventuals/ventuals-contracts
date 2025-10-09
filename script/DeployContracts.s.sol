@@ -10,6 +10,13 @@ import {StakingVaultManager} from "../src/StakingVaultManager.sol";
 import {console} from "forge-std/console.sol";
 
 contract DeployContracts is Script {
+    struct VaultConfig {
+        uint256 minimumStakeBalance;
+        uint256 minimumDepositAmount;
+        uint256 minimumWithdrawAmount;
+        uint256 maximumWithdrawAmount;
+    }
+
     // Mainnet validators
     address public immutable VALIDATOR_MAINNET_HYPER_FOUNDATION_1 = 0x5aC99df645F3414876C816Caa18b2d234024b487;
     address public immutable VALIDATOR_MAINNET_HYPER_FOUNDATION_2 = 0xA82FE73bBD768bC15D1eF2F6142a21fF8bD762AD;
@@ -87,23 +94,27 @@ contract DeployContracts is Script {
         address stakingVaultProxy
     ) internal returns (address) {
         console.log("Deploying StakingVaultManager...");
-        StakingVaultManager stakingVaultManagerImplementation = new StakingVaultManager();
-        bytes memory stakingVaultManagerInitData = abi.encodeWithSelector(
-            StakingVaultManager.initialize.selector,
-            address(roleRegistryProxy), /* RoleRegistry */
-            address(vhypeProxy), /* VHYPE */
-            address(stakingVaultProxy), /* StakingVault */
-            getValidator(isTestnet), /* Default validator */
-            getMinimumStakeBalance(isTestnet, isTestVault), /* Minimum stake balance */
-            getMinimumDepositAmount(isTestnet, isTestVault), /* Minimum deposit amount */
-            getMinimumWithdrawAmount(isTestnet, isTestVault), /* Minimum withdraw amount */
-            getMaximumWithdrawAmount(isTestnet, isTestVault) /* Maximum withdraw amount */
+        VaultConfig memory config = getVaultConfig(isTestnet, isTestVault);
+        address implementation = address(new StakingVaultManager());
+        address proxy = address(
+            new ERC1967Proxy(
+                implementation,
+                abi.encodeWithSelector(
+                    StakingVaultManager.initialize.selector,
+                    roleRegistryProxy,
+                    vhypeProxy,
+                    stakingVaultProxy,
+                    getValidator(isTestnet),
+                    config.minimumStakeBalance,
+                    config.minimumDepositAmount,
+                    config.minimumWithdrawAmount,
+                    config.maximumWithdrawAmount
+                )
+            )
         );
-        ERC1967Proxy stakingVaultManagerProxy =
-            new ERC1967Proxy(address(stakingVaultManagerImplementation), stakingVaultManagerInitData);
-        console.log("StakingVaultManager (proxy) deployed to:", address(stakingVaultManagerProxy));
-        console.log("StakingVaultManager (implementation) deployed to:", address(stakingVaultManagerImplementation));
-        return address(stakingVaultManagerProxy);
+        console.log("StakingVaultManager (proxy) deployed to:", proxy);
+        console.log("StakingVaultManager (implementation) deployed to:", implementation);
+        return proxy;
     }
 
     function getHypeTokenId(bool isTestnet) internal pure returns (uint64) {
@@ -145,6 +156,15 @@ contract DeployContracts is Script {
         } else {
             return 10_000 * 1e18; // 10k HYPE
         }
+    }
+
+    function getVaultConfig(bool isTestnet, bool isTestVault) internal pure returns (VaultConfig memory) {
+        return VaultConfig({
+            minimumStakeBalance: getMinimumStakeBalance(isTestnet, isTestVault),
+            minimumDepositAmount: getMinimumDepositAmount(isTestnet, isTestVault),
+            minimumWithdrawAmount: getMinimumWithdrawAmount(isTestnet, isTestVault),
+            maximumWithdrawAmount: getMaximumWithdrawAmount(isTestnet, isTestVault)
+        });
     }
 
     function getValidator(bool isTestnet) internal view returns (address) {
