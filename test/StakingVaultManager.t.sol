@@ -1177,8 +1177,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: User queues a withdraw
         _setupWithdraw(user, vhypeAmount);
 
-        _expectNoStakeCall();
-        _expectNoUnstakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1205,8 +1205,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Expect a transfer to HyperCore call with the dust amount removed
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
-        _expectNoStakeCall();
-        _expectNoUnstakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1228,8 +1228,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Only expect a transfer to HyperCore call
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
-        _expectNoStakeCall();
-        _expectNoUnstakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1260,7 +1260,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
 
         // No undelegate call or staking withdraw call expected
-        _expectNoUnstakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1295,7 +1295,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode((vhypeAmount - hypeDeposits).to8Decimals()));
 
         // No staking deposit or delegate call expected
-        _expectNoStakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1420,7 +1420,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(vhypeAmount.to8Decimals()));
 
         // No staking deposit or delegate call expected
-        _expectNoStakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1448,7 +1448,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
 
         // No undelegate call or staking withdraw call expected
-        _expectNoUnstakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -1459,8 +1459,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // No HyperCore deposit expected
         vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
 
-        _expectNoStakeCall();
-        _expectNoUnstakeCall();
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
+        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
@@ -2740,14 +2740,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
                 lockedUntilTimestamp: lockedUntilTimestamp
             })
         );
-    }
-
-    function _expectNoStakeCall() internal {
-        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
-    }
-
-    function _expectNoUnstakeCall() internal {
-        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
     }
 
     modifier withMinimumStakeBalance() {
