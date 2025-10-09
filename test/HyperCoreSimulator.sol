@@ -22,11 +22,9 @@ contract HyperCoreSimulator is CommonBase {
     constructor() {
         // Mock HyperCore state
         vm.etch(Constants.MOCK_HYPERCORE_STATE_ADDRESS, address(new MockHyperCoreState()).code);
-        MockHyperCoreState(Constants.MOCK_HYPERCORE_STATE_ADDRESS).init();
 
         // Mock HYPE system contract
-        MockHypeSystemContract mockHypeSystemContract =
-            new MockHypeSystemContract(Constants.MOCK_HYPERCORE_STATE_ADDRESS);
+        MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract();
         vm.etch(Constants.HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
 
         // Mock CoreWriter
@@ -44,6 +42,7 @@ contract HyperCoreSimulator is CommonBase {
         vm.etch(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, address(mockPrecompileCoreUserExists).code);
 
         hl = MockHyperCoreState(Constants.MOCK_HYPERCORE_STATE_ADDRESS);
+        hl.init();
     }
 
     function warp(uint256 timestamp) public {

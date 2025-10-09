@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
-import {MockHyperCoreState} from "./MockHyperCoreState.sol";
 import {Constants} from "./Constants.sol";
+import {MockHyperCoreState} from "./MockHyperCoreState.sol";
 
 contract MockPrecompileCoreUserExists {
     fallback(bytes calldata data) external returns (bytes memory) {
