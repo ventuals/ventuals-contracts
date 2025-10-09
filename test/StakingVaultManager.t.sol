@@ -18,6 +18,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 import {HyperCoreSimulator} from "./HyperCoreSimulator.sol";
+import {Constants} from "./mocks/Constants.sol";
 
 contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     using Converters for *;
@@ -91,7 +92,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
 
-        // Mock the core user exists check to return true
+        // Mock the core user exists
         hl.mockCoreUserExists(address(stakingVault), true);
         hl.mockCoreUserExists(user, true);
 
@@ -1197,7 +1198,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.deposit{value: hypeDeposits + dustHypeAmount}();
 
         // Expect a transfer to HyperCore call with the dust amount removed
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
@@ -1220,7 +1221,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.deposit{value: hypeDeposits}();
 
         // Only expect a transfer to HyperCore call
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);
 
@@ -1245,7 +1246,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock and expect calls for deposits > withdraws scenario
 
         // First call: transfer all deposits to HyperCore
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode((hypeDeposits - vhypeAmount).to8Decimals()));
         expectCoreWriterCall(
             CoreWriterLibrary.TOKEN_DELEGATE,
@@ -1276,7 +1277,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock and expect calls for deposits < withdraws scenario
 
         // First call: transfer all deposits to core
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
 
         // Second call: undelegate shortfall amount (use CoreWriter helper)
         expectCoreWriterCall(
@@ -1385,7 +1386,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Mock and expect calls for for the deposit
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(hypeDeposits.to8Decimals()));
         expectCoreWriterCall(
             CoreWriterLibrary.TOKEN_DELEGATE,
@@ -1429,7 +1430,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Mock and expect calls for zero withdraws scenario
 
         // First call: transfer all deposits to core
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), hypeDeposits, abi.encode());
 
         // Second call: stake all deposits
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(hypeDeposits.to8Decimals()));
@@ -1450,7 +1451,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_FinalizeBatch_ZeroDepositsZeroWithdraws() public withMinimumStakeBalance {
         // No HyperCore deposit expected
-        vm.expectCall(address(HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
+        vm.expectCall(address(Constants.HYPE_SYSTEM_ADDRESS), abi.encode(), 0);
 
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
         vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.unstake.selector), 0);

@@ -7,20 +7,11 @@ import {CoreWriterLibrary} from "../../src/libraries/CoreWriterLibrary.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {console} from "forge-std/console.sol";
+import {Constants} from "./Constants.sol";
 
 contract MockHyperCoreState {
     using Converters for *;
     using EnumerableSet for EnumerableSet.AddressSet;
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                         Constants                          */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /// @dev Cheat code address.
-    /// Calculated as `address(uint160(uint256(keccak256("hevm cheat code"))))`.
-    address public constant VM_ADDRESS = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D;
-    address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
-    uint64 public constant HYPE_TOKEN_ID = 150;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    CoreWriter Actions                      */
@@ -85,8 +76,8 @@ contract MockHyperCoreState {
     mapping(address => EnumerableSet.AddressSet) private userToValidators;
 
     function init() external {
-        systemAddressToTokenId[HYPE_SYSTEM_ADDRESS] = HYPE_TOKEN_ID;
-        tokenIdToSystemAddress[HYPE_TOKEN_ID] = HYPE_SYSTEM_ADDRESS;
+        systemAddressToTokenId[Constants.HYPE_SYSTEM_ADDRESS] = Constants.HYPE_TOKEN_ID;
+        tokenIdToSystemAddress[Constants.HYPE_TOKEN_ID] = Constants.HYPE_SYSTEM_ADDRESS;
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -127,7 +118,7 @@ contract MockHyperCoreState {
 
     function spotBalance(address user, uint64 token) external view returns (L1ReadLibrary.SpotBalance memory) {
         L1ReadLibrary.SpotBalance memory result = L1ReadLibrary.SpotBalance({total: 0, hold: 0, entryNtl: 0});
-        if (token == HYPE_TOKEN_ID) {
+        if (token == Constants.HYPE_TOKEN_ID) {
             result.total = spotBalances[user][token];
         }
         return result;
@@ -322,7 +313,7 @@ contract MockHyperCoreState {
 
     function processStakingDeposit(StakingDeposit memory deposit) internal {
         // Deduct from spot balance
-        spotBalances[deposit.msgSender][systemAddressToTokenId[HYPE_SYSTEM_ADDRESS]] -= deposit.weiAmount;
+        spotBalances[deposit.msgSender][systemAddressToTokenId[Constants.HYPE_SYSTEM_ADDRESS]] -= deposit.weiAmount;
 
         // Update delegator summary
         L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[deposit.msgSender];
@@ -349,7 +340,7 @@ contract MockHyperCoreState {
     /// @dev HyperCore -> EVM transfer
     function processSpotSend(SpotSend memory send) internal {
         spotBalances[send.msgSender][send.token] -= send.weiAmount;
-        Vm(VM_ADDRESS).deal(send.msgSender, send.weiAmount.to18Decimals());
+        Vm(Constants.VM_ADDRESS).deal(send.msgSender, send.weiAmount.to18Decimals());
     }
 
     function processPendingStakingWithdraws() internal {
@@ -357,7 +348,8 @@ contract MockHyperCoreState {
             PendingStakingWithdraw storage withdraw = pendingStakingWithdraws[nextPendingStakingWithdrawIndex];
             if (block.timestamp >= withdraw.timestamp + 7 days) {
                 // Add to spot balance
-                spotBalances[withdraw.msgSender][systemAddressToTokenId[HYPE_SYSTEM_ADDRESS]] += withdraw.weiAmount;
+                spotBalances[withdraw.msgSender][systemAddressToTokenId[Constants.HYPE_SYSTEM_ADDRESS]] +=
+                    withdraw.weiAmount;
 
                 // Update delegator summary
                 L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[withdraw.msgSender];

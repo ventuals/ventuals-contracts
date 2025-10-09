@@ -1,35 +1,33 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.27;
 
+import {Vm} from "forge-std/Vm.sol";
+import {CommonBase} from "forge-std/Base.sol";
 import {ICoreWriter} from "../src/interfaces/ICoreWriter.sol";
 import {Converters} from "../src/libraries/Converters.sol";
 import {L1ReadLibrary} from "../src/libraries/L1ReadLibrary.sol";
+import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
 import {MockHyperCoreState} from "./mocks/MockHyperCoreState.sol";
 import {MockHypeSystemContract} from "./mocks/MockHypeSystemContract.sol";
-import {Vm} from "forge-std/Vm.sol";
 import {MockPrecompileSpotBalance} from "./mocks/MockPrecompileSpotBalance.sol";
 import {MockPrecompileDelegatorSummary} from "./mocks/MockPrecompileDelegatorSummary.sol";
 import {MockPrecompileDelegations} from "./mocks/MockPrecompileDelegations.sol";
 import {MockPrecompileCoreUserExists} from "./mocks/MockPrecompileCoreUserExists.sol";
 import {MockCoreWriter} from "./mocks/MockCoreWriter.sol";
-import {CoreWriterLibrary} from "../src/libraries/CoreWriterLibrary.sol";
-import {CommonBase} from "forge-std/Base.sol";
+import {Constants} from "./mocks/Constants.sol";
 
 contract HyperCoreSimulator is CommonBase {
-    address public constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
-
-    address public constant HYPE_SYSTEM_ADDRESS = 0x2222222222222222222222222222222222222222;
-
     MockHyperCoreState hl;
 
     constructor() {
         // Mock HyperCore state
-        vm.etch(MOCK_HYPERCORE_STATE_ADDRESS, address(new MockHyperCoreState()).code);
-        MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).init();
+        vm.etch(Constants.MOCK_HYPERCORE_STATE_ADDRESS, address(new MockHyperCoreState()).code);
+        MockHyperCoreState(Constants.MOCK_HYPERCORE_STATE_ADDRESS).init();
 
         // Mock HYPE system contract
-        MockHypeSystemContract mockHypeSystemContract = new MockHypeSystemContract(MOCK_HYPERCORE_STATE_ADDRESS);
-        vm.etch(HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
+        MockHypeSystemContract mockHypeSystemContract =
+            new MockHypeSystemContract(Constants.MOCK_HYPERCORE_STATE_ADDRESS);
+        vm.etch(Constants.HYPE_SYSTEM_ADDRESS, address(mockHypeSystemContract).code);
 
         // Mock CoreWriter
         MockCoreWriter mockCoreWriter = new MockCoreWriter();
@@ -45,7 +43,7 @@ contract HyperCoreSimulator is CommonBase {
         MockPrecompileCoreUserExists mockPrecompileCoreUserExists = new MockPrecompileCoreUserExists();
         vm.etch(L1ReadLibrary.CORE_USER_EXISTS_PRECOMPILE_ADDRESS, address(mockPrecompileCoreUserExists).code);
 
-        hl = MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS);
+        hl = MockHyperCoreState(Constants.MOCK_HYPERCORE_STATE_ADDRESS);
     }
 
     function nextBlock() public {

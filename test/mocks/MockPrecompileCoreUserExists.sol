@@ -2,12 +2,11 @@
 pragma solidity ^0.8.27;
 
 import {MockHyperCoreState} from "./MockHyperCoreState.sol";
+import {Constants} from "./Constants.sol";
 
 contract MockPrecompileCoreUserExists {
-    address internal constant MOCK_HYPERCORE_STATE_ADDRESS = address(uint160(uint256(keccak256("MockHyperCoreState"))));
-
     fallback(bytes calldata data) external returns (bytes memory) {
         (address user) = abi.decode(data, (address));
-        return abi.encode(MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS).coreUserExists(user));
+        return abi.encode(MockHyperCoreState(Constants.MOCK_HYPERCORE_STATE_ADDRESS).coreUserExists(user));
     }
 }
