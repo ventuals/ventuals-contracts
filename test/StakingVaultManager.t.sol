@@ -141,9 +141,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Check that we minted 1:1 vHYPE when vault is empty
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
-
         assertEq(userVHYPEBalance, depositAmount);
-        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount);
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -162,7 +161,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Check vHYPE was minted at 1:1 exchange rate
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
         assertEq(userVHYPEBalance, depositAmount);
-        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount);
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -178,9 +177,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         vm.startPrank(user);
         stakingVaultManager.deposit{value: depositAmount}();
 
+        // Check vHYPE was minted at 2:1 exchange rate
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
         assertEq(userVHYPEBalance, depositAmount / 2);
-        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount);
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -196,9 +196,10 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         vm.startPrank(user);
         stakingVaultManager.deposit{value: depositAmount}();
 
+        // Check vHYPE was minted at 1:2 exchange rate
         uint256 userVHYPEBalance = vHYPE.balanceOf(user);
         assertEq(userVHYPEBalance, depositAmount * 2);
-        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount); // Should be exactly equal
+        assertEq(stakingVaultManager.vHYPEtoHYPE(userVHYPEBalance), depositAmount);
 
         // Check staking vault balance was updated
         assertEq(address(stakingVault).balance, depositAmount);
@@ -221,7 +222,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_Deposit_BelowMinimumAmount() public withMinimumStakeBalance {
         uint256 belowMinimumAmount = MINIMUM_DEPOSIT_AMOUNT - 1; // 1 wei below minimum
-
         vm.deal(user, belowMinimumAmount);
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
@@ -261,8 +261,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
 
         // Setup: User has vHYPE balance
-        vm.prank(address(stakingVaultManager));
-        vHYPE.mint(user, vhypeAmount);
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
 
         // User approves the staking vault manager to spend vHYPE
         vm.startPrank(user);
@@ -290,8 +290,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: User has vHYPE balance
         vm.prank(owner);
         vHYPE.transfer(user, vhypeAmount);
-
-        assertEq(stakingVaultManager.exchangeRate(), 1e18);
 
         // User approves the staking vault manager to spend vHYPE
         vm.startPrank(user);
@@ -325,8 +323,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Setup: User has vHYPE balance
         vm.prank(owner);
         vHYPE.transfer(user, vhypeAmount);
-
-        assertEq(stakingVaultManager.exchangeRate(), 1e18);
 
         // User approves the staking vault manager to spend vHYPE
         vm.startPrank(user);
@@ -513,10 +509,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_ClaimWithdraw_WithdrawCancelled() public withMinimumStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
-        // Setup: Mint vHYPE to owner and setup withdraw
-        vm.prank(address(stakingVaultManager));
-        vHYPE.mint(owner, vhypeAmount);
-
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
@@ -699,10 +691,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_CancelWithdraw_Success() public withMinimumStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
-        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
-        vm.prank(address(stakingVaultManager));
-        vHYPE.mint(owner, vhypeAmount);
-
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
@@ -727,10 +715,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
         address otherUser = makeAddr("otherUser");
 
-        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
-        vm.prank(address(stakingVaultManager));
-        vHYPE.mint(owner, vhypeAmount);
-
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
 
@@ -742,10 +726,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_CancelWithdraw_AlreadyCancelled() public withMinimumStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
-        vm.prank(address(stakingVaultManager));
-        vHYPE.mint(owner, vhypeAmount);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
@@ -780,10 +760,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_CancelWithdraw_WhenContractPaused() public withMinimumStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
-
-        // Setup: Mint vHYPE to owner so _setupWithdraw can transfer it
-        vm.prank(address(stakingVaultManager));
-        vHYPE.mint(owner, vhypeAmount);
 
         // Setup: User queues a withdraw
         uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
