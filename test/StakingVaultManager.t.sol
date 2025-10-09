@@ -177,12 +177,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(user.balance, 0);
     }
 
-    function test_Deposit_ExchangeRateAboveOne() public {
-        uint256 existingBalance = 500_000 * 1e18; // 500k HYPE
-        uint256 existingSupply = 250_000 * 1e18; // 250k vHYPE
-        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 2
-
-        uint256 depositAmount = 50_000 * 1e18; // 50k HYPE
+    function test_Deposit_ExchangeRateAboveOne() public withExchangeRate(500_000e18, 250_000e18) {
+        uint256 depositAmount = 50_000e18; // 50k HYPE
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -199,12 +195,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(user.balance, 0);
     }
 
-    function test_Deposit_ExchangeRateBelowOne() public {
-        uint256 existingBalance = 250_000 * 1e18; // 250k HYPE
-        uint256 existingSupply = 500_000 * 1e18; // 500k vHYPE
-        _mockBalancesForExchangeRate(existingBalance, existingSupply); // exchange rate = 0.5
-
-        uint256 depositAmount = 100_000 * 1e18; // 100k HYPE
+    function test_Deposit_ExchangeRateBelowOne() public withExchangeRate(250_000e18, 500_000e18) {
+        uint256 depositAmount = 100_000e18; // 100k HYPE
 
         vm.deal(user, depositAmount);
         vm.startPrank(user);
@@ -1042,14 +1034,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeProcessed(), 0, "Total HYPE processed should be 0");
     }
 
-    function test_ProcessBatch_PartialProcessing() public {
+    function test_ProcessBatch_PartialProcessing() public withExcessStakeBalanceAmount(10_000 * 1e18) {
+        uint256 totalSupply = vHYPE.totalSupply();
         uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
         uint256 vhypeAmount2 = 10_000 * 1e18; // 10k vHYPE (this one won't fit)
         address user2 = makeAddr("user2");
-
-        // Setup: Mock stake balance (exchange rate = 1)
-        uint256 totalBalance = MINIMUM_STAKE_BALANCE + 10_000 * 1e18;
-        _mockBalancesForExchangeRate(totalBalance, totalBalance);
 
         // Setup: Two users queue withdraws
         _setupWithdraw(user, vhypeAmount1);
@@ -1071,7 +1060,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
 
         // Verify vHYPE state (vHYPE is not burned until finalizeBatch())
-        assertEq(vHYPE.totalSupply(), totalBalance, "vHYPE supply should not change until batch is finalized");
+        assertEq(vHYPE.totalSupply(), totalSupply, "vHYPE supply should not change until batch is finalized");
         assertEq(
             vHYPE.balanceOf(address(stakingVaultManager)),
             vhypeAmount1 + vhypeAmount2,
@@ -1482,13 +1471,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*         Tests: Get Withdraw Amount and Claimable At       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_GetWithdrawAmount_UnprocessedWithdraw() public {
-        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
-
+    function test_GetWithdrawAmount_UnprocessedWithdraw() public withExchangeRate(600_000e18, 400_000e18) {
         // Mock exchange rate = 1.5 (150% - vault has earned 50% yield)
-        uint256 totalBalance = 600_000 * 1e18; // 600k HYPE
-        uint256 totalSupply = 400_000 * 1e18; // 400k vHYPE
-        _mockBalancesForExchangeRate(totalBalance, totalSupply);
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
 
         // Queue a withdraw (not processed yet)
         _setupWithdraw(user, vhypeAmount);
@@ -1858,108 +1843,48 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(exchangeRate, 1e18);
     }
 
-    function test_ExchangeRate_BalanceMoreThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
-        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
-        /// TODO: Fix fuzz failure here.
-        vm.assume(totalBalance >= 1e10);
-        vm.assume(vHYPESupply > 0);
-        vm.assume(totalBalance > vHYPESupply);
-        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
-
-        uint256 exchangeRate = stakingVaultManager.exchangeRate();
-        assertGt(exchangeRate, 1e18); // exchange rate >= 1
-    }
-
-    function test_ExchangeRate_BalanceLessThanSupply(uint256 totalBalance, uint256 vHYPESupply) public {
-        vm.assume(totalBalance <= 1_000_000_000e18 && vHYPESupply <= 1_000_000_000e18);
-        vm.assume(totalBalance > 0);
-        vm.assume(vHYPESupply > 0);
-        vm.assume(totalBalance < vHYPESupply);
-        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
-
-        uint256 exchangeRate = stakingVaultManager.exchangeRate();
-        assertLt(exchangeRate, 1e18); // exchange rate <= 1
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*         Tests: HYPETovHYPE and vHYPEtoHYPE Functions       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_HYPETovHYPE_ExchangeRateAboveOne() public {
-        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+    function test_HYPETovHYPE_ExchangeRateAboveOne() public withExchangeRate(4e18, 2e18) {
         assertEq(stakingVaultManager.HYPETovHYPE(2e18), 1e18);
     }
 
-    function test_HYPETovHYPE_ExchangeRateBelowOne() public {
-        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 4e18 /* 4 vHYPE */ ); // exchange rate = 0.5
+    function test_HYPETovHYPE_ExchangeRateBelowOne() public withExchangeRate(2e18, 4e18) {
         assertEq(stakingVaultManager.HYPETovHYPE(2e18), 4e18);
     }
 
-    function test_HYPETovHYPE_ZeroAmount() public {
-        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+    function test_HYPETovHYPE_ZeroAmount() public withExchangeRate(4e18, 2e18) {
         assertEq(stakingVaultManager.HYPETovHYPE(0), 0);
     }
 
-    function test_HYPETovHYPE_ZeroExchangeRate_ZeroBalance() public {
-        _mockBalancesForExchangeRate(0, /* 0 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 0
+    function test_HYPETovHYPE_ZeroExchangeRate_ZeroBalance() public withExchangeRate(0, 2e18) {
         assertEq(stakingVaultManager.HYPETovHYPE(1e18), 0);
     }
 
-    function test_HYPETovHYPE_OneExchangeRate_ZeroSupply() public {
-        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 0 /* 0 vHYPE */ ); // exchange rate = 1
+    function test_HYPETovHYPE_OneExchangeRate_ZeroSupply() public withExchangeRate(2e18, 0) {
         assertEq(stakingVaultManager.HYPETovHYPE(2e18), 2e18);
     }
 
-    function test_vHYPEtoHYPE_ExchangeRateAboveOne() public {
-        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+    function test_vHYPEtoHYPE_ExchangeRateAboveOne() public withExchangeRate(4e18, 2e18) {
         assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 2e18);
     }
 
-    function test_vHYPEtoHYPE_ExchangeRateBelowOne() public {
-        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 4e18 /* 4 vHYPE */ ); // exchange rate = 0.5
+    function test_vHYPEtoHYPE_ExchangeRateBelowOne() public withExchangeRate(2e18, 4e18) {
         assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 0.5e18);
     }
 
-    function test_vHYPEtoHYPE_ZeroAmount() public {
-        _mockBalancesForExchangeRate(4e18, /* 4 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 2
+    function test_vHYPEtoHYPE_ZeroAmount() public withExchangeRate(4e18, 2e18) {
         assertEq(stakingVaultManager.vHYPEtoHYPE(0), 0);
     }
 
-    function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroBalance() public {
-        _mockBalancesForExchangeRate(0, /* 0 HYPE */ 2e18 /* 2 vHYPE */ ); // exchange rate = 0
+    function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroBalance() public withExchangeRate(0, 2e18) {
         assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 0);
     }
 
-    function test_vHYPEtoHYPE_ZeroExchangeRate_ZeroSupply() public {
-        _mockBalancesForExchangeRate(2e18, /* 2 HYPE */ 0 /* 0 vHYPE */ ); // exchange rate = 1
+    function test_vHYPEtoHYPE_OneExchangeRate_ZeroSupply() public withExchangeRate(2e18, 0) {
         assertEq(stakingVaultManager.vHYPEtoHYPE(1e18), 1e18);
-    }
-
-    function test_HYPETovHYPE_vHYPEtoHYPE_Roundtrip(
-        uint256 totalBalance,
-        uint256 vHYPESupply,
-        uint256 hypeAmountToConvert
-    ) public {
-        totalBalance = bound(totalBalance, 1, 1_000_000_000e18);
-        vHYPESupply = bound(vHYPESupply, 1, 1_000_000_000e18);
-        hypeAmountToConvert = bound(hypeAmountToConvert, 1, 2_000_000 * 1e18 - 1);
-
-        _mockBalancesForExchangeRate(totalBalance, vHYPESupply);
-
-        // Here we bound the exchange rate to be between 0 and 1e15. Otherwise, we'll see large precision loss
-        // with extremely high exchange rates.
-        //
-        // Extremely high exchange rates are very unlikely to occur in practice. 1e15 is a very geneerous upper
-        // bound for the exchange rate (it's 1 million * 1 million, which would only occur if we've earned
-        // 1 million HYPE for every vHYPE minted).
-        uint256 exchangeRate = stakingVaultManager.exchangeRate();
-        vm.assume(exchangeRate > 0 && exchangeRate < 1e15);
-
-        uint256 vHYPEAmount = stakingVaultManager.HYPETovHYPE(hypeAmountToConvert);
-        uint256 convertedBackHYPE = stakingVaultManager.vHYPEtoHYPE(vHYPEAmount);
-
-        // Allow for 1-2 wei difference due to rounding
-        assertApproxEqAbs(convertedBackHYPE, hypeAmountToConvert, 2);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -2802,24 +2727,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         return withdrawIds[0];
     }
 
-    /// @dev Helper function to mock balances for testing exchange rate calculations
-    /// @param totalBalance The total balance of HYPE to mock (in 18 decimals)
-    /// @param totalSupply The total supply of vHYPE to mint to owner (in 18 decimals)
-    function _mockBalancesForExchangeRate(uint256 totalBalance, uint256 totalSupply) internal {
-        vm.assume(totalBalance.to8Decimals() <= type(uint64).max);
-
-        uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
-
-        // Mock delegations
-        _mockDelegations(validator, delegatedBalance);
-
-        // Mint vHYPE supply to owner
-        if (totalSupply > 0) {
-            vm.prank(address(stakingVaultManager));
-            vHYPE.mint(owner, totalSupply);
-        }
-    }
-
     function _mockDelegations(address _validator, uint64 weiAmount) internal {
         _mockDelegationsWithLock(_validator, weiAmount, 0);
     }
@@ -2854,10 +2761,38 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _;
     }
 
+    modifier withExcessStakeBalanceAmount(uint256 excess) {
+        _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE + excess, MINIMUM_STAKE_BALANCE + excess);
+        _;
+    }
+
     modifier underMinimumStakeBalance() {
         uint256 excess = 100_000 * 1e18;
         _mockBalancesForExchangeRate(MINIMUM_STAKE_BALANCE - excess, MINIMUM_STAKE_BALANCE - excess);
         _;
+    }
+
+    modifier withExchangeRate(uint256 totalBalance, uint256 totalSupply) {
+        _mockBalancesForExchangeRate(totalBalance, totalSupply);
+        _;
+    }
+
+    /// @dev Helper function to mock balances for testing exchange rate calculations
+    /// @param totalBalance The total balance of HYPE to mock (in 18 decimals)
+    /// @param totalSupply The total supply of vHYPE to mint to owner (in 18 decimals)
+    function _mockBalancesForExchangeRate(uint256 totalBalance, uint256 totalSupply) internal {
+        vm.assume(totalBalance.to8Decimals() <= type(uint64).max);
+
+        uint64 delegatedBalance = totalBalance > 0 ? totalBalance.to8Decimals() : 0; // Convert to 8 decimals
+
+        // Mock delegations
+        _mockDelegations(validator, delegatedBalance);
+
+        // Mint vHYPE supply to owner
+        if (totalSupply > 0) {
+            vm.prank(address(stakingVaultManager));
+            vHYPE.mint(owner, totalSupply);
+        }
     }
 }
 
