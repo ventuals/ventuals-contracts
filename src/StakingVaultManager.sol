@@ -768,7 +768,7 @@ contract StakingVaultManager is Base {
 
     /// @notice Sets the minimum stake balance (in 18 decimals)
     /// @dev Minimum stake balance is the total amount of HYPE that must remain staked in the vault
-    function setMinimumStakeBalance(uint256 _minimumStakeBalance) external onlyOwner {
+    function setMinimumStakeBalance(uint256 _minimumStakeBalance) public onlyOwner {
         // If we're in the middle of processing a batch, check that we haven't processed more HYPE
         // than what we'd have left after setting the minimum stake balance
         if (currentBatchIndex < batches.length) {
@@ -923,6 +923,12 @@ contract StakingVaultManager is Base {
         // will just fail silently, and no HYPE will be lost.
         stakingVault.stake(validator, amount.to8Decimals());
         emit EmergencyStakingDeposit(msg.sender, amount, purpose);
+    }
+
+    /// @notice Enables full withdrawal by setting the minimum stake balance to 0
+    /// @dev This is used in the event the LST is wind down
+    function windDown() external onlyOwner {
+        setMinimumStakeBalance(0);
     }
 
     modifier canDeposit() {
