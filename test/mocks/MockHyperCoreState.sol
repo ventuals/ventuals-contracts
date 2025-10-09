@@ -275,7 +275,7 @@ contract MockHyperCoreState {
         L1ReadLibrary.Delegation storage delegation = validatorDelegations[delegate.msgSender][delegate.validator];
         L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[delegate.msgSender];
         if (delegate.isUndelegate) {
-            if (block.timestamp < delegation.lockedUntilTimestamp / 1000) {
+            if (Vm(Constants.VM_ADDRESS).getBlockTimestamp() < delegation.lockedUntilTimestamp / 1000) {
                 console.log("[warn] Delegation is locked");
             } else if (delegation.amount < delegate.amount) {
                 console.log("[warn] Delegation amount is less than delegate amount");
@@ -303,7 +303,7 @@ contract MockHyperCoreState {
 
                 // Update delegation
                 delegation.amount += delegate.amount;
-                delegation.lockedUntilTimestamp = uint64((block.timestamp + 1 days) * 1000);
+                delegation.lockedUntilTimestamp = uint64((Vm(Constants.VM_ADDRESS).getBlockTimestamp() + 1 days) * 1000);
 
                 // Update userToValidators
                 userToValidators[delegate.msgSender].add(delegate.validator);
@@ -332,7 +332,7 @@ contract MockHyperCoreState {
             PendingStakingWithdraw({
                 msgSender: withdraw.msgSender,
                 weiAmount: withdraw.weiAmount,
-                timestamp: block.timestamp
+                timestamp: Vm(Constants.VM_ADDRESS).getBlockTimestamp()
             })
         );
     }
@@ -346,7 +346,7 @@ contract MockHyperCoreState {
     function processPendingStakingWithdraws() internal {
         while (nextPendingStakingWithdrawIndex < pendingStakingWithdraws.length) {
             PendingStakingWithdraw storage withdraw = pendingStakingWithdraws[nextPendingStakingWithdrawIndex];
-            if (block.timestamp >= withdraw.timestamp + 7 days) {
+            if (Vm(Constants.VM_ADDRESS).getBlockTimestamp() >= withdraw.timestamp + 7 days) {
                 // Add to spot balance
                 spotBalances[withdraw.msgSender][systemAddressToTokenId[Constants.HYPE_SYSTEM_ADDRESS]] +=
                     withdraw.weiAmount;

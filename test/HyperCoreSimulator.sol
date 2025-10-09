@@ -48,7 +48,7 @@ contract HyperCoreSimulator is CommonBase {
     function warp(uint256 timestamp) public {
         hl.afterBlock();
 
-        vm.roll(block.number + timestamp - block.timestamp);
+        vm.roll(vm.getBlockNumber() + timestamp - vm.getBlockTimestamp());
         vm.warp(timestamp);
 
         hl.beforeBlock();

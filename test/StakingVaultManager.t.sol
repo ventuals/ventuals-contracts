@@ -471,7 +471,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // User claims the withdraw
         vm.prank(user);
@@ -498,7 +498,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Another user tries to claim the withdraw
         vm.prank(otherUser);
@@ -533,7 +533,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // User claims the withdraw
         vm.prank(user);
@@ -556,7 +556,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        warp(block.timestamp + 6 days);
+        warp(vm.getBlockTimestamp() + 6 days);
 
         // User tries to claim too early
         vm.prank(user);
@@ -575,7 +575,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        warp(block.timestamp + 7 days);
+        warp(vm.getBlockTimestamp() + 7 days);
 
         // User tries to claim too early
         vm.prank(user);
@@ -594,7 +594,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Core user does not exist
         address destination = makeAddr("destination");
@@ -614,7 +614,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock insufficient spot balance (only half of what's needed)
         hl.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, (vhypeAmount / 2).to8Decimals());
@@ -636,7 +636,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Pause the contract
         vm.prank(owner);
@@ -663,7 +663,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
 
         // Fast-forward time
-        warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // User claims the slashed withdraw
         vm.prank(user);
@@ -865,14 +865,14 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 vhypeAmount = 10_000 * 1e18; // 10k vHYPE
 
         _mockDelegationsWithLock(
-            validator, vHYPE.totalSupply().to8Decimals(), uint64((block.timestamp + 1 days) * 1000)
+            validator, vHYPE.totalSupply().to8Decimals(), uint64((vm.getBlockTimestamp() + 1 days) * 1000)
         );
 
         // User queues the first withdraw
         _setupWithdraw(user, vhypeAmount / 2);
 
         // Process the first batch (should work without timing restrictions)
-        warp(block.timestamp + 1 days + 1 seconds);
+        warp(vm.getBlockTimestamp() + 1 days + 1 seconds);
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Finalize the first batch
@@ -882,11 +882,13 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount / 2);
 
         // Try to process immediately (should fail due to timing restriction)
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, block.timestamp + 1 days));
+        vm.expectRevert(
+            abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, vm.getBlockTimestamp() + 1 days)
+        );
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Advance time by 1 day + 1 second and try again (should succeed)
-        warp(block.timestamp + 1 days + 1 seconds);
+        warp(vm.getBlockTimestamp() + 1 days + 1 seconds);
         stakingVaultManager.processBatch(type(uint256).max);
 
         // Verify batch state
@@ -932,7 +934,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Advance time by 1 day + 1 second
-        uint256 lockTime = block.timestamp + 1 days + 1 seconds;
+        uint256 lockTime = vm.getBlockTimestamp() + 1 days + 1 seconds;
         warp(lockTime);
 
         // Simulate a delay in the 1-day stake lock
@@ -1520,7 +1522,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
         stakingVaultManager.processBatch(type(uint256).max);
 
-        uint256 finalizeTime = block.timestamp;
+        uint256 finalizeTime = vm.getBlockTimestamp();
         stakingVaultManager.finalizeBatch();
 
         // Get claimable time
@@ -1543,7 +1545,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
         stakingVaultManager.processBatch(type(uint256).max);
 
-        uint256 finalizeTime = block.timestamp;
+        uint256 finalizeTime = vm.getBlockTimestamp();
         stakingVaultManager.finalizeBatch();
 
         // Get claimable time
@@ -2022,7 +2024,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast-forward time to make withdraw claimable (7 days + 1 second)
-        warp(block.timestamp + 7 days + 1);
+        warp(vm.getBlockTimestamp() + 7 days + 1);
 
         // User claims the withdraw
         vm.startPrank(user);
@@ -2333,7 +2335,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_SwitchValidator_StakeLockedUntilFuture() public {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
-        uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
+        uint64 futureTimestamp = uint64(vm.getBlockTimestamp() + 1000); // 1000 seconds in the future
 
         _mockDelegationsWithLock(validator, amount.to8Decimals(), futureTimestamp);
 
@@ -2346,7 +2348,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_SwitchValidator_StakeUnlockedAtExactTimestamp() public {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
-        uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
+        uint64 currentTimestamp = uint64(vm.getBlockTimestamp()); // Exact current timestamp
 
         _mockDelegationsWithLock(validator, amount.to8Decimals(), currentTimestamp);
 
@@ -2403,7 +2405,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_EmergencyStakingWithdraw_StakeLockedUntilFuture() public {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
-        uint64 futureTimestamp = uint64(block.timestamp + 1000); // 1000 seconds in the future
+        uint64 futureTimestamp = uint64(vm.getBlockTimestamp() + 1000); // 1000 seconds in the future
 
         _mockDelegationsWithLock(validator, amount.to8Decimals(), futureTimestamp);
 
@@ -2416,7 +2418,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_EmergencyStakingWithdraw_StakeUnlockedAtExactTimestamp() public {
         uint256 amount = 100_000 * 1e18; // 100k HYPE
-        uint64 currentTimestamp = uint64(block.timestamp); // Exact current timestamp
+        uint64 currentTimestamp = uint64(vm.getBlockTimestamp()); // Exact current timestamp
 
         _mockDelegationsWithLock(validator, amount.to8Decimals(), currentTimestamp);
 
@@ -2620,7 +2622,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
 
         // Fast forward by 1 day
-        warp(block.timestamp + 1 days + 1);
+        warp(vm.getBlockTimestamp() + 1 days + 1);
 
         // Setup: Create second batch
         _setupWithdraw(user, vhypeAmount);
