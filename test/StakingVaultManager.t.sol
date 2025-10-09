@@ -18,13 +18,9 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {Converters} from "../src/libraries/Converters.sol";
 import {IStakingVault} from "../src/interfaces/IStakingVault.sol";
 import {HyperCoreSimulator} from "./HyperCoreSimulator.sol";
-import {MockHyperCoreState} from "./MockHyperCoreState.sol";
-import {console} from "forge-std/console.sol";
 
 contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     using Converters for *;
-
-    MockHyperCoreState mockHyperCoreState;
 
     StakingVaultManager stakingVaultManager;
     RoleRegistry roleRegistry;
@@ -46,6 +42,8 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     // Events
     event EmergencyStakingWithdraw(address indexed sender, uint256 amount, string purpose);
     event EmergencyStakingDeposit(address indexed sender, uint256 amount, string purpose);
+
+    constructor() HyperCoreSimulator() {}
 
     function setUp() public {
         // Deploy RoleRegistry
@@ -93,14 +91,9 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         roleRegistry.grantRole(roleRegistry.OPERATOR_ROLE(), operator);
         vm.stopPrank();
 
-        // Initialize HyperCoreSimulator
-        super.init();
-
-        mockHyperCoreState = MockHyperCoreState(MOCK_HYPERCORE_STATE_ADDRESS);
-
         // Mock the core user exists check to return true
-        mockHyperCoreState.mockCoreUserExists(address(stakingVault), true);
-        mockHyperCoreState.mockCoreUserExists(user, true);
+        hl.mockCoreUserExists(address(stakingVault), true);
+        hl.mockCoreUserExists(user, true);
 
         // Set batch processing to enabled
         vm.prank(owner);
@@ -631,7 +624,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         warp(block.timestamp + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
 
         // Mock insufficient spot balance (only half of what's needed)
-        mockHyperCoreState.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, (vhypeAmount / 2).to8Decimals());
+        hl.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, (vhypeAmount / 2).to8Decimals());
 
         // User tries to claim but vault has insufficient balance
         vm.prank(user);
@@ -2732,7 +2725,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     function _mockDelegationsWithLock(address _validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
-        mockHyperCoreState.mockDelegation(
+        hl.mockDelegation(
             address(stakingVault),
             L1ReadLibrary.Delegation({
                 validator: _validator,
