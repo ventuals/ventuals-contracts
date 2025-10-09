@@ -46,15 +46,6 @@ contract HyperCoreSimulator is CommonBase {
         hl = MockHyperCoreState(Constants.MOCK_HYPERCORE_STATE_ADDRESS);
     }
 
-    function nextBlock() public {
-        hl.afterBlock();
-
-        vm.roll(block.number + 1);
-        vm.warp(block.timestamp + 1);
-
-        hl.beforeBlock();
-    }
-
     function warp(uint256 timestamp) public {
         hl.afterBlock();
 
