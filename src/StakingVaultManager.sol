@@ -49,6 +49,9 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if the batch is invalid.
     error InvalidBatch(uint256 batch);
 
+    /// @notice Thrown if the batch cannot be slashed.
+    error CannotSlashBatchOutsideSlashWindow(uint256 batch);
+
     /// @notice Thrown if batch processing is paused.
     error BatchProcessingPaused();
 
@@ -877,6 +880,12 @@ contract StakingVaultManager is Base {
     function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) external onlyOwner {
         require(batchIndex < batches.length, InvalidBatch(batchIndex));
         Batch storage batch = batches[batchIndex];
+
+        // Only allow slashing batches that are within the slash window
+        require(
+            block.timestamp <= batch.finalizedAt + 7 days + claimWindowBuffer,
+            CannotSlashBatchOutsideSlashWindow(batchIndex)
+        );
 
         uint256 oldExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
 
