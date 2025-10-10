@@ -777,7 +777,9 @@ contract StakingVaultManager is Base {
     /// @param newValidator The new validator
     function switchValidator(address newValidator) external onlyOwner {
         L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
-        stakingVault.tokenRedelegate(validator, newValidator, delegatorSummary.delegated);
+        if (delegatorSummary.delegated > 0) {
+            stakingVault.tokenRedelegate(validator, newValidator, delegatorSummary.delegated);
+        }
 
         validator = newValidator;
     }
