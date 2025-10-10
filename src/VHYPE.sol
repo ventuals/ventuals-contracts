@@ -22,11 +22,11 @@ contract VHYPE is Base, ERC20Upgradeable, ERC20BurnableUpgradeable {
         _mint(to, amount);
     }
 
-    function burn(uint256 amount) public override whenNotPaused {
+    function burn(uint256 amount) public override onlyManager whenNotPaused {
         _burn(msg.sender, amount);
     }
 
-    function burnFrom(address account, uint256 amount) public override whenNotPaused {
+    function burnFrom(address account, uint256 amount) public override onlyManager whenNotPaused {
         super.burnFrom(account, amount);
     }
 }
