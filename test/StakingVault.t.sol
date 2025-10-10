@@ -452,61 +452,6 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
         assertEq(address(stakingVault).balance, amount);
     }
 
-    function test_Deposit_CannotDepositInSameBlockAsTransfer() public {
-        uint256 transferAmount = 1e18;
-        uint256 depositAmount = 5e17;
-        vm.deal(address(stakingVault), transferAmount);
-        vm.deal(manager, depositAmount);
-
-        vm.startPrank(manager);
-
-        // First, make a transfer to core which updates lastEvmToCoreTransferBlockNumber
-        stakingVault.transferHypeToCore(transferAmount);
-
-        // Try to deposit in the same block - should fail
-        vm.expectRevert(IStakingVault.CannotDepositUntilNextBlock.selector);
-        stakingVault.deposit{value: depositAmount}();
-
-        vm.stopPrank();
-    }
-
-    function test_Deposit_CanDepositWhenNoTransfersMade() public {
-        uint256 amount = 1e18;
-        vm.deal(manager, amount);
-
-        // Initial state - no transfers made, lastEvmToCoreTransferBlockNumber is 0
-        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), 0);
-
-        // Deposit should succeed since block.number > 0
-        vm.prank(manager);
-        stakingVault.deposit{value: amount}();
-
-        assertEq(address(stakingVault).balance, amount);
-    }
-
-    function test_Deposit_CanDepositInNextBlockAfterTransfer() public {
-        uint256 transferAmount = 1e18;
-        uint256 depositAmount = 5e17;
-        vm.deal(address(stakingVault), transferAmount);
-        vm.deal(manager, depositAmount);
-
-        vm.startPrank(manager);
-
-        // First, make a transfer to core
-        stakingVault.transferHypeToCore(transferAmount);
-
-        // Move to next block
-        vm.roll(block.number + 1);
-
-        // Now deposit should succeed
-        vm.expectEmit(true, true, true, true);
-        emit IStakingVault.Deposit(manager, depositAmount);
-        stakingVault.deposit{value: depositAmount}();
-
-        assertEq(address(stakingVault).balance, depositAmount);
-        vm.stopPrank();
-    }
-
     function test_Deposit_NotManager(address notManager) public {
         vm.assume(notManager != manager);
         uint256 amount = 1e18;
@@ -556,60 +501,21 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
 
         assertEq(address(stakingVault).balance, vaultBalanceBefore - amount);
         assertEq(stakingVault.HYPE_SYSTEM_ADDRESS().balance, systemAddressBalanceBefore + amount);
-        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
+        assertEq(stakingVault.lastSpotBalanceChangeBlockNumber(), block.number);
     }
 
-    function test_TransferHypeToCore_UpdatesLastTransferBlockNumber() public {
-        uint256 amount = 1e18;
-        vm.deal(address(stakingVault), amount);
-
-        // Initial state - lastEvmToCoreTransferBlockNumber should be 0
-        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), 0);
-
-        vm.prank(manager);
-        stakingVault.transferHypeToCore(amount);
-
-        // Should update to current block number
-        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), block.number);
-    }
-
-    function test_TransferHypeToCore_CannotTransferInSameBlock() public {
+    function test_TransferHypeToCore_CanTransferInSameBlock() public {
         uint256 amount = 1e18;
         vm.deal(address(stakingVault), amount * 2);
 
         vm.startPrank(manager);
 
-        // First transfer should succeed
         stakingVault.transferHypeToCore(amount);
-
-        // Second transfer in same block should fail
-        vm.expectRevert(IStakingVault.CannotTransferToCoreUntilNextBlock.selector);
-        stakingVault.transferHypeToCore(amount);
-
-        vm.stopPrank();
-    }
-
-    function test_TransferHypeToCore_CanTransferInNextBlock() public {
-        uint256 amount = 1e18;
-        vm.deal(address(stakingVault), amount * 2);
-
-        vm.startPrank(manager);
-
-        // First transfer
-        stakingVault.transferHypeToCore(amount);
-        uint256 firstTransferBlock = block.number;
-
-        // Move to next block
-        vm.roll(block.number + 1);
-
-        // Second transfer should succeed
         stakingVault.transferHypeToCore(amount);
 
         // Verify both transfers succeeded and block number updated
         assertEq(address(stakingVault).balance, 0);
-        assertEq(stakingVault.lastEvmToCoreTransferBlockNumber(), firstTransferBlock + 1);
-
-        vm.stopPrank();
+        assertEq(stakingVault.lastSpotBalanceChangeBlockNumber(), block.number);
     }
 
     function test_TransferHypeToCore_ZeroAmount() public {
