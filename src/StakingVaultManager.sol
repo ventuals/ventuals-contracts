@@ -887,6 +887,12 @@ contract StakingVaultManager is Base {
             CannotSlashBatchOutsideSlashWindow(batchIndex)
         );
 
+        // Only allow slashing batches that have been finalized. If there's currently a batch processing, and
+        // that batch has an incorrect snapshot exchange rate, we should first call resetBatch and finalizeResetBatch.
+        // This will reset the withdrawals in the current batch, and remove the batch from the array. Then we can
+        // call processBatch to use the live, slashed exchange rate.
+        require(batch.finalizedAt > 0, InvalidBatch(batchIndex));
+
         uint256 oldExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
 
         // Only adjust totalHypeProcessed if the batch has been finalized

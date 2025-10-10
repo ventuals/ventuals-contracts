@@ -1599,6 +1599,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Queue and process withdraw
         _setupWithdraw(user, vhypeAmount);
         stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
 
         // Slash the batch to 0.8 exchange rate (80% of original)
         uint256 slashedExchangeRate = 0.8e18;
@@ -2830,6 +2831,38 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.CannotSlashBatchOutsideSlashWindow.selector, 0));
         stakingVaultManager.applySlash(0, 5e17);
+    }
+
+    function test_ApplySlash_UnfinalizedBatch() public withExcessStakeBalance {
+        uint256 originalBalance = vHYPE.totalSupply();
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Slash occurs
+        _mockDelegations(validator, (originalBalance / 2).to8Decimals());
+
+        // The batch has the original exchange rate
+        StakingVaultManager.Batch memory batch = stakingVaultManager.getBatch(0);
+        assertEq(batch.snapshotExchangeRate, 1e18);
+
+        // Try to apply a slash to an unfinalized batch
+        vm.startPrank(owner);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.InvalidBatch.selector, 0));
+        stakingVaultManager.applySlash(0, 5e17);
+
+        // Reset the batch
+        stakingVaultManager.resetBatch(type(uint256).max);
+        stakingVaultManager.finalizeResetBatch();
+
+        // Now process the batch - should be slashed
+        stakingVaultManager.processBatch(type(uint256).max);
+        batch = stakingVaultManager.getBatch(0);
+        assertEq(batch.snapshotExchangeRate, 5e17);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
