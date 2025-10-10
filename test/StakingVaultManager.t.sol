@@ -2811,6 +2811,27 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.totalHypeProcessed(), 30_000 * 1e18);
     }
 
+    function test_ApplySlash_CannotSlashOutsideSlashWindow() public withExcessStakeBalance {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Setup: Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Finalize the batch
+        stakingVaultManager.finalizeBatch();
+
+        // Move time forward past the slash window
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // Try to apply a slash outside the slash window
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.CannotSlashBatchOutsideSlashWindow.selector, 0));
+        stakingVaultManager.applySlash(0, 5e17);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Helper Functions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
