@@ -50,7 +50,7 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function stake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
-        require(weiAmount > 0, ZeroAmount());
+        if (weiAmount == 0) return;
         require(whitelistedValidators[validator], ValidatorNotWhitelisted(validator));
         CoreWriterLibrary.stakingDeposit(weiAmount);
         _delegate(validator, weiAmount);
@@ -60,7 +60,7 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function unstake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
-        require(weiAmount > 0, ZeroAmount());
+        if (weiAmount == 0) return;
         require(whitelistedValidators[validator], ValidatorNotWhitelisted(validator));
         // Hyperliquid limits the number of pending withdrawals to 5
         // https://hyperliquid.gitbook.io/hyperliquid-docs/hypercore/staking#basics
