@@ -699,7 +699,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Core user does not exist
         address destination = makeAddr("destination");
         vm.prank(user);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.CoreUserDoesNotExist.selector, destination));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CoreUserDoesNotExist.selector, destination));
         stakingVaultManager.claimWithdraw(withdrawId, destination);
     }
 
