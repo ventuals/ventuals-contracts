@@ -22,6 +22,10 @@ interface IStakingVault {
     /// @notice Cannot read delegations until the next block
     error CannotReadDelegationUntilNextBlock();
 
+    /// @notice Thrown if the vault has too many pending withdrawals (5 is the max)
+    /// @dev https://hyperliquid.gitbook.io/hyperliquid-docs/hypercore/staking#basics
+    error MaxPendingWithdrawals();
+
     /// @notice Thrown if the validator is locked until a timestamp in the future.
     error StakeLockedUntilTimestamp(address validator, uint64 lockedUntilTimestamp);
 

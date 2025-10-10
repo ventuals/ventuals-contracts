@@ -64,6 +64,11 @@ contract StakingVault is IStakingVault, Base {
     function unstake(address validator, uint64 weiAmount) external onlyManager whenNotPaused {
         require(weiAmount > 0, ZeroAmount());
         require(whitelistedValidators[validator], ValidatorNotWhitelisted(validator));
+        // Hyperliquid limits the number of pending withdrawals to 5
+        // https://hyperliquid.gitbook.io/hyperliquid-docs/hypercore/staking#basics
+        L1ReadLibrary.DelegatorSummary memory _delegatorSummary = L1ReadLibrary.delegatorSummary(address(this));
+        require(_delegatorSummary.nPendingWithdrawals < 5, MaxPendingWithdrawals());
+
         _undelegate(validator, weiAmount);
         CoreWriterLibrary.stakingWithdraw(weiAmount);
     }
