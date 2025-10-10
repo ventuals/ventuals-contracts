@@ -765,9 +765,9 @@ contract StakingVaultManager is Base {
         if (currentBatchIndex < batches.length) {
             uint256 newWithdrawCapacity = totalBalance() - _minimumStakeBalance;
             StakingVaultManager.Batch memory batch = batches[currentBatchIndex];
-            uint256 exchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
+            uint256 _exchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
             require(
-                newWithdrawCapacity >= _vHYPEtoHYPE(batch.vhypeProcessed, exchangeRate), MinimumStakeBalanceTooLarge()
+                newWithdrawCapacity >= _vHYPEtoHYPE(batch.vhypeProcessed, _exchangeRate), MinimumStakeBalanceTooLarge()
             );
         }
         minimumStakeBalance = _minimumStakeBalance;
