@@ -62,67 +62,64 @@ contract VHYPETest is Test {
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                       Tests: Burn                          */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    function test_CanBurnOwnTokens(address user, uint256 amount, uint256 burnAmount) public {
-        vm.assume(user != address(0));
+    function test_Burn_OnlyManager(uint256 amount, uint256 burnAmount) public {
         vm.assume(amount > 0);
         vm.assume(amount > burnAmount);
+        vm.assume(burnAmount > 0);
 
         vm.prank(manager);
-        vHYPE.mint(user, amount);
+        vHYPE.mint(manager, amount);
 
-        vm.prank(user);
+        vm.prank(manager);
         vHYPE.burn(burnAmount);
 
-        assertEq(vHYPE.balanceOf(user), amount - burnAmount);
+        assertEq(vHYPE.balanceOf(manager), amount - burnAmount);
         assertEq(vHYPE.totalSupply(), amount - burnAmount);
     }
 
-    function test_CanBurnWithApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
-        vm.assume(user1 != address(0));
-        vm.assume(user2 != address(0));
+    function test_Burn_NotManager(address notManager, uint256 amount, uint256 burnAmount) public {
+        vm.assume(notManager != manager);
+        vm.assume(notManager != address(0));
         vm.assume(amount > 0);
         vm.assume(amount > burnAmount);
+        vm.assume(burnAmount > 0);
 
         vm.prank(manager);
-        vHYPE.mint(user1, amount);
+        vHYPE.mint(notManager, amount);
 
-        vm.prank(user1);
-        vHYPE.approve(user2, burnAmount);
-
-        vm.prank(user2);
-        vHYPE.burnFrom(user1, burnAmount);
-
-        assertEq(vHYPE.balanceOf(user1), amount - burnAmount);
-        assertEq(vHYPE.totalSupply(), amount - burnAmount);
-        assertEq(vHYPE.allowance(user1, user2), 0);
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
+        vHYPE.burn(burnAmount);
     }
 
-    function test_CannotBurnMoreThanBalance(address user, uint256 amount, uint256 burnAmount) public {
-        vm.assume(user != address(0));
+    function test_Burn_CannotBurnMoreThanBalance(uint256 amount, uint256 burnAmount) public {
         vm.assume(amount > 0);
         vm.assume(burnAmount > amount);
 
         vm.prank(manager);
-        vHYPE.mint(user, amount);
+        vHYPE.mint(manager, amount);
 
-        vm.prank(user);
+        vm.prank(manager);
         vm.expectRevert();
         vHYPE.burn(burnAmount);
     }
 
     function test_Burn_WhenPaused() public {
-        address user = makeAddr("user");
         uint256 amount = 1000e18;
         uint256 burnAmount = 500e18;
 
         vm.prank(manager);
-        vHYPE.mint(user, amount);
+        vHYPE.mint(manager, amount);
 
         // Pause the contract
         vm.prank(owner);
         roleRegistry.pause(address(vHYPE));
 
-        vm.prank(user);
+        vm.prank(manager);
         vm.expectRevert();
         vHYPE.burn(burnAmount);
     }
@@ -131,50 +128,56 @@ contract VHYPETest is Test {
     /*                    Tests: Burn From                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    function test_BurnFrom_WithApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
-        vm.assume(user1 != address(0));
-        vm.assume(user2 != address(0));
-        vm.assume(user1 != user2);
+    function test_BurnFrom_OnlyManager(address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user != address(0));
+        vm.assume(user != manager);
         vm.assume(amount > 0);
         vm.assume(amount >= burnAmount);
         vm.assume(burnAmount > 0);
         vm.assume(burnAmount < type(uint256).max); // Exclude max uint256 to avoid infinite approval behavior
 
         vm.prank(manager);
-        vHYPE.mint(user1, amount);
+        vHYPE.mint(user, amount);
 
-        vm.prank(user1);
-        vHYPE.approve(user2, burnAmount);
-
-        vm.prank(user2);
-        vHYPE.burnFrom(user1, burnAmount);
-
-        assertEq(vHYPE.balanceOf(user1), amount - burnAmount);
-        assertEq(vHYPE.totalSupply(), amount - burnAmount);
-        assertEq(vHYPE.allowance(user1, user2), 0);
-    }
-
-    function test_BurnFrom_WithoutApproval(address user1, address user2, uint256 amount, uint256 burnAmount) public {
-        vm.assume(user1 != address(0));
-        vm.assume(user2 != address(0));
-        vm.assume(user1 != user2);
-        vm.assume(amount > 0);
-        vm.assume(burnAmount > 0);
+        vm.prank(user);
+        vHYPE.approve(manager, burnAmount);
 
         vm.prank(manager);
-        vHYPE.mint(user1, amount);
+        vHYPE.burnFrom(user, burnAmount);
 
-        vm.prank(user2);
-        vm.expectRevert();
-        vHYPE.burnFrom(user1, burnAmount);
+        assertEq(vHYPE.balanceOf(user), amount - burnAmount);
+        assertEq(vHYPE.totalSupply(), amount - burnAmount);
+        assertEq(vHYPE.allowance(user, manager), 0);
     }
 
-    function test_BurnFrom_InsufficientAllowance(address user1, address user2, uint256 amount, uint256 burnAmount)
-        public
-    {
-        vm.assume(user1 != address(0));
-        vm.assume(user2 != address(0));
-        vm.assume(user1 != user2);
+    function test_BurnFrom_NotManager(address notManager, address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(notManager != manager);
+        vm.assume(notManager != address(0));
+        vm.assume(user != address(0));
+        vm.assume(user != notManager);
+        vm.assume(user != manager);
+        vm.assume(amount > 0);
+        vm.assume(burnAmount > 0);
+        vm.assume(amount >= burnAmount);
+
+        vm.prank(manager);
+        vHYPE.mint(user, amount);
+
+        vm.prank(user);
+        vHYPE.approve(notManager, burnAmount);
+
+        vm.startPrank(notManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notManager, roleRegistry.MANAGER_ROLE()
+            )
+        );
+        vHYPE.burnFrom(user, burnAmount);
+    }
+
+    function test_BurnFrom_InsufficientAllowance(address user, uint256 amount, uint256 burnAmount) public {
+        vm.assume(user != address(0));
+        vm.assume(user != manager);
         vm.assume(amount > 0);
         vm.assume(burnAmount > 1);
         vm.assume(amount >= burnAmount);
@@ -182,35 +185,34 @@ contract VHYPETest is Test {
         uint256 approval = burnAmount - 1;
 
         vm.prank(manager);
-        vHYPE.mint(user1, amount);
+        vHYPE.mint(user, amount);
 
-        vm.prank(user1);
-        vHYPE.approve(user2, approval);
+        vm.prank(user);
+        vHYPE.approve(manager, approval);
 
-        vm.prank(user2);
+        vm.prank(manager);
         vm.expectRevert();
-        vHYPE.burnFrom(user1, burnAmount);
+        vHYPE.burnFrom(user, burnAmount);
     }
 
     function test_BurnFrom_WhenPaused() public {
-        address user1 = makeAddr("user1");
-        address user2 = makeAddr("user2");
+        address user = makeAddr("user");
         uint256 amount = 1000e18;
         uint256 burnAmount = 500e18;
 
         vm.prank(manager);
-        vHYPE.mint(user1, amount);
+        vHYPE.mint(user, amount);
 
-        vm.prank(user1);
-        vHYPE.approve(user2, burnAmount);
+        vm.prank(user);
+        vHYPE.approve(manager, burnAmount);
 
         // Pause the contract
         vm.prank(owner);
         roleRegistry.pause(address(vHYPE));
 
-        vm.prank(user2);
+        vm.prank(manager);
         vm.expectRevert();
-        vHYPE.burnFrom(user1, burnAmount);
+        vHYPE.burnFrom(user, burnAmount);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
