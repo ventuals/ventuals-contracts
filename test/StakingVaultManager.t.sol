@@ -2441,6 +2441,21 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(stakingVaultManager.validator(), validator2);
     }
 
+    function test_SwitchValidator_ZeroBalance() public {
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, MINIMUM_STAKE_BALANCE.to8Decimals(), true), 0
+        );
+        expectCoreWriterCall(
+            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator2, MINIMUM_STAKE_BALANCE.to8Decimals(), false), 0
+        );
+
+        vm.prank(owner);
+        stakingVaultManager.switchValidator(validator2);
+
+        // Verify validator was updated
+        assertEq(stakingVaultManager.validator(), validator2);
+    }
+
     function test_SwitchValidator_NotOwner() public withMinimumStakeBalance {
         vm.startPrank(user);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
