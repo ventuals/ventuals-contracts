@@ -542,23 +542,33 @@ contract StakingVaultManager is Base {
         // Burn the escrowed vHYPE (burn from this contract's balance)
         vHYPE.burn(batch.vhypeProcessed);
 
+        L1ReadLibrary.DelegatorSummary memory delegatorSummary = stakingVault.delegatorSummary();
+        L1ReadLibrary.SpotBalance memory spotBalance = stakingVault.spotBalance(stakingVault.HYPE_TOKEN_ID());
+
+        uint256 expectedSpotBalance = spotBalance.total.to18Decimals() + depositsInBatch;
+        uint256 pendingWithdrawals = delegatorSummary.totalPendingWithdrawal.to18Decimals();
+        uint256 expectedAvailableForWithdraws = expectedSpotBalance + pendingWithdrawals;
+        uint256 neededForWithdraws = totalHypeProcessed - totalHypeClaimed;
+
         // Always transfer the full deposit amount to HyperCore spot
         if (depositsInBatch > 0) {
             stakingVault.transferHypeToCore(depositsInBatch);
         }
 
-        // Net out the deposits and withdraws in the batch
-        if (depositsInBatch > withdrawsInBatch) {
-            // All withdraws are covered by deposits
+        // Net out the deposits and withdraws
+        if (expectedAvailableForWithdraws > neededForWithdraws) {
+            // If we have more HYPE than needed
+            uint256 totalExcess = expectedAvailableForWithdraws - neededForWithdraws;
 
-            // Stake the excess HYPE
-            uint256 amountToStake = depositsInBatch - withdrawsInBatch;
+            // We can only stake the excess if it's in spot. If there's excess in
+            // pending withdrawals, we can't re-stake it. Once it lands in spot,
+            // the next finalizeBatch will stake it.
+            uint256 amountToStake = Math.min(totalExcess, expectedSpotBalance);
             stakingVault.stake(validator, amountToStake.to8Decimals());
-        } else if (depositsInBatch < withdrawsInBatch) {
-            // Not enough deposits to cover all withdraws; we need to withdraw some HYPE from the staking vault
-
-            // Unstake the amount not covered by deposits from the staking vault
-            uint256 amountToUnstake = withdrawsInBatch - depositsInBatch;
+        } else if (expectedAvailableForWithdraws < neededForWithdraws) {
+            // If we don't have enough HYPE to cover all expected withdraws, we need to
+            // withdraw some HYPE from the staking vault
+            uint256 amountToUnstake = neededForWithdraws - expectedAvailableForWithdraws;
             stakingVault.unstake(validator, amountToUnstake.to8Decimals());
         }
 
