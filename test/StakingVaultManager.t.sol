@@ -2534,7 +2534,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_EmergencyStakingWithdraw_ZeroAmount() public withMinimumStakeBalance {
         vm.startPrank(owner);
-        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(0), 0);
         stakingVaultManager.emergencyStakingWithdraw(0, "Emergency staking withdraw");
     }
 
@@ -2593,7 +2593,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_EmergencyStakingDeposit_ZeroAmount() public {
         vm.startPrank(owner);
-        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(0), 0);
         stakingVaultManager.emergencyStakingDeposit(0, "Emergency staking deposit");
     }
 
