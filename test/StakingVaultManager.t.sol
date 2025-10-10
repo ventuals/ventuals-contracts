@@ -253,6 +253,52 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(vHYPE.balanceOf(user), 0);
     }
 
+    function test_Deposit_RevertsAfterFinalizeBatchWithDeposit() public withExcessStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
+
+        // User does the first deposit
+        vm.deal(user, vhypeAmount);
+        vm.startPrank(user);
+        stakingVaultManager.deposit{value: vhypeAmount}();
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Next deposit should revert
+        vm.deal(user, vhypeAmount);
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CannotReadSpotBalanceUntilNextBlock.selector));
+        stakingVaultManager.deposit{value: vhypeAmount}();
+
+        // Advance time by 1 block, should succeed
+        warp(vm.getBlockTimestamp() + 1);
+        stakingVaultManager.deposit{value: vhypeAmount}();
+    }
+
+    function test_Deposit_RevertsAfterClaimWithdraw() public withExcessStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
+
+        // User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        warp(vm.getBlockTimestamp() + stakingVaultManager.claimWindowBuffer() + 7 days + 1);
+
+        // Claim the withdraw
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // Deposit should revert
+        vm.deal(user, vhypeAmount);
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CannotReadSpotBalanceUntilNextBlock.selector));
+        stakingVaultManager.deposit{value: vhypeAmount}();
+
+        // Advance time by 1 block, should succeed
+        warp(vm.getBlockTimestamp() + 1);
+        stakingVaultManager.deposit{value: vhypeAmount}();
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Queue Withdraw                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -435,6 +481,60 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Verify all vHYPE was transferred to the staking vault manager
         assertEq(vHYPE.balanceOf(user), 0);
         assertEq(vHYPE.balanceOf(address(stakingVaultManager)), totalVhype);
+    }
+
+    function test_QueueWithdraw_RevertsAfterFinalizeBatchWithDeposit() public withMinimumStakeBalance {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        vm.deal(user, vhypeAmount);
+        vm.startPrank(user);
+        stakingVaultManager.deposit{value: vhypeAmount}();
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // User has vHYPE balance
+        vm.startPrank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        // Try to queue withdraw when finalized
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CannotReadSpotBalanceUntilNextBlock.selector));
+        stakingVaultManager.queueWithdraw(vhypeAmount);
+
+        // Advance time by 1 block, should succeed
+        warp(vm.getBlockTimestamp() + 1);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+        stakingVaultManager.queueWithdraw(vhypeAmount);
+    }
+
+    function test_QueueWithdraw_RevertsAfterClaimWithdraw() public withExcessStakeBalance {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make withdraw claimable (7 days + 1 second)
+        warp(vm.getBlockTimestamp() + stakingVaultManager.claimWindowBuffer() + 7 days + 1);
+
+        // Claim the withdraw
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // User has vHYPE balance
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        // Try to queue withdraw when finalized
+        vm.startPrank(user);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CannotReadSpotBalanceUntilNextBlock.selector));
+        stakingVaultManager.queueWithdraw(vhypeAmount);
+
+        // Advance time by 1 block, should succeed
+        warp(vm.getBlockTimestamp() + 1);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+        stakingVaultManager.queueWithdraw(vhypeAmount);
     }
 
     function test_QueueWithdraw_WhenContractPaused() public withMinimumStakeBalance {
@@ -946,6 +1046,30 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Should fail because the batch is not ready
         vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, lockTime));
+        stakingVaultManager.processBatch(type(uint256).max);
+    }
+
+    function test_ProcessBatch_RevertsAfterClaimWithdraw() public withExcessStakeBalance {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make withdraw claimable (7 days + 1 second)
+        warp(vm.getBlockTimestamp() + stakingVaultManager.claimWindowBuffer() + 7 days + 1);
+
+        // Claim the withdraw
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // Try to process batch when finalized
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CannotReadSpotBalanceUntilNextBlock.selector));
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Advance time by 1 second, should succeed
+        warp(vm.getBlockTimestamp() + 1);
         stakingVaultManager.processBatch(type(uint256).max);
     }
 
