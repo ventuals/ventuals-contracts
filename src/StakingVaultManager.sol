@@ -851,9 +851,7 @@ contract StakingVaultManager is Base {
                 }
 
                 numWithdrawals--;
-            } else if (withdraw.batchIndex != type(uint256).max) {
-                // We've reached a withdrawal that's part of an earlier batch
-                // No need to continue since we've reset all withdrawals in the current batch
+            } else {
                 break;
             }
         }
