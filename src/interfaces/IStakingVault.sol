@@ -13,11 +13,8 @@ interface IStakingVault {
     /// @notice Thrown if the StakingVault is not activated on HyperCore.
     error CoreUserDoesNotExist(address account);
 
-    /// @notice Thrown if a deposit cannot be made until the next block.
-    error CannotDepositUntilNextBlock();
-
-    /// @notice Thrown when a transfer to HyperCore cannot be made until the next block
-    error CannotTransferToCoreUntilNextBlock();
+    /// @notice Thrown if a spot balance cannot be read until the next block
+    error CannotReadSpotBalanceUntilNextBlock();
 
     /// @notice Cannot read delegations until the next block
     error CannotReadDelegationUntilNextBlock();
@@ -83,8 +80,10 @@ interface IStakingVault {
     function delegatorSummary() external view returns (L1ReadLibrary.DelegatorSummary memory);
 
     /// @dev Get the spot balance for the given token for the staking vault using HyperCore precompiles
+    /// @dev Reverts if the spot balance is not up-to-date
     /// @param tokenId The token ID to get the spot balance for (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
-    function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory);
+    /// @return spotBalance The spot balance for the given token
+    function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory spotBalance);
 
     /// @dev Get the balance of HYPE in the StakingVault contract (HyperEVM)
     /// @dev Truncates any precision beyond 8 decimals to prevent loss when transferring to HyperCore

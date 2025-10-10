@@ -15,9 +15,10 @@ contract StakingVault is IStakingVault, Base {
     /// @dev The HYPE token ID; differs between mainnet (150) and testnet (1105) (see https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids)
     uint64 public immutable HYPE_TOKEN_ID;
 
-    /// @dev The last block number when HYPE was transferred from HyperEVM to HyperCore
-    /// @dev Used to enforce a one-block delay between HyperEVM -> HyperCore transfers and deposits
-    uint256 public lastEvmToCoreTransferBlockNumber;
+    /// @dev The last block number when HyperCore spot balance was updated
+    /// @dev Used to enforce a one-block delay between spot balance changes, and actions that require
+    ///      the spot balance to be up-to-date
+    uint256 public lastSpotBalanceChangeBlockNumber;
 
     /// @dev The last block number when HYPE was delegated or undelegated to a validator
     /// @dev This is used to enforce a minimum one-block delay between delegating/undelegating to a
@@ -43,11 +44,6 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function deposit() external payable onlyManager whenNotPaused {
-        // IMPORTANT: We enforce a one-block delay after a HyperEVM -> HyperCore transfer. This is to ensure that
-        // the account balances after the transfer are reflected in L1Read precompiles before subsequent deposits
-        // are made. Without this enforcement, subsequent deposits that occur in the same block as the transfer
-        // would be made against an incorrect balance (and thus an incorrect exchange rate).
-        require(block.number > lastEvmToCoreTransferBlockNumber, CannotDepositUntilNextBlock());
         require(msg.value > 0, ZeroAmount());
         emit Deposit(msg.sender, msg.value);
     }
@@ -58,6 +54,8 @@ contract StakingVault is IStakingVault, Base {
         require(whitelistedValidators[validator], ValidatorNotWhitelisted(validator));
         CoreWriterLibrary.stakingDeposit(weiAmount);
         _delegate(validator, weiAmount);
+
+        lastSpotBalanceChangeBlockNumber = block.number;
     }
 
     /// @inheritdoc IStakingVault
@@ -94,16 +92,17 @@ contract StakingVault is IStakingVault, Base {
 
         // Note: We don't expect to run into this case, but we're adding this check for safety. The spotSend call will
         // silently fail if the vault doesn't have enough HYPE, so we check the balance before making the call.
-        L1ReadLibrary.SpotBalance memory _spotBalance = L1ReadLibrary.spotBalance(address(this), HYPE_TOKEN_ID);
-        require(_spotBalance.total >= weiAmount, InsufficientHYPEBalance());
+        uint256 _spotBalance = spotBalance(HYPE_TOKEN_ID).total;
+        require(_spotBalance >= weiAmount, InsufficientHYPEBalance());
 
         CoreWriterLibrary.spotSend(destination, token, weiAmount);
+
+        lastSpotBalanceChangeBlockNumber = block.number;
     }
 
     /// @inheritdoc IStakingVault
     function transferHypeToCore(uint256 amount) external onlyManager whenNotPaused {
         require(amount > 0, ZeroAmount());
-        require(block.number > lastEvmToCoreTransferBlockNumber, CannotTransferToCoreUntilNextBlock());
 
         // This is an important safety check - ensures that the StakingVault account is activated on HyperCore.
         // If the StakingVault is not activated on HyperCore, and a HyperEVM -> HyperCore HYPE transfer is made,
@@ -113,7 +112,7 @@ contract StakingVault is IStakingVault, Base {
 
         _transfer(payable(HYPE_SYSTEM_ADDRESS), amount);
 
-        lastEvmToCoreTransferBlockNumber = block.number;
+        lastSpotBalanceChangeBlockNumber = block.number;
     }
 
     /// @inheritdoc IStakingVault
@@ -132,7 +131,11 @@ contract StakingVault is IStakingVault, Base {
     }
 
     /// @inheritdoc IStakingVault
-    function spotBalance(uint64 tokenId) external view returns (L1ReadLibrary.SpotBalance memory) {
+    function spotBalance(uint64 tokenId) public view returns (L1ReadLibrary.SpotBalance memory) {
+        // IMPORTANT: We enforce a one-block delay for reading the spot balance after any spot
+        // balance changes. After an action occurs that changes the spot balance, the L1Read
+        // precompile will no longer return an up-to-date balance.
+        require(block.number > lastSpotBalanceChangeBlockNumber, CannotReadSpotBalanceUntilNextBlock());
         return L1ReadLibrary.spotBalance(address(this), tokenId);
     }
 
