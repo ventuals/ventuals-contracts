@@ -19,9 +19,6 @@ contract StakingVaultManager is Base {
     /// @notice Thrown if an amount of 0 is provided.
     error ZeroAmount();
 
-    /// @notice Thrown if an amount exceeds the balance.
-    error InsufficientBalance();
-
     /// @notice Thrown if the deposit amount is below the minimum deposit amount.
     error BelowMinimumDepositAmount();
 
@@ -45,9 +42,6 @@ contract StakingVaultManager is Base {
 
     /// @notice Thrown if the withdraw is not claimable yet.
     error WithdrawUnclaimable();
-
-    /// @notice Thrown if the account does not exist on HyperCore.
-    error CoreUserDoesNotExist(address account);
 
     /// @notice Thrown if the batch is not ready to be processed.
     error BatchNotReady(uint256 readyAt);
@@ -75,9 +69,6 @@ contract StakingVaultManager is Base {
 
     /// @notice Thrown if trying to reset a batch that has not been processed.
     error NothingToReset();
-
-    /// @notice Thrown if the number of withdrawals requested is too large
-    error InvalidWithdrawRequest();
 
     /// @notice Emitted when HYPE is deposited into the vault
     /// @param depositor The address that deposited the HYPE
