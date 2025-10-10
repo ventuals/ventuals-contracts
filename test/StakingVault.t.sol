@@ -87,7 +87,7 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
 
     function test_Stake_ZeroAmount() public {
         vm.startPrank(manager);
-        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(0), 0);
         stakingVault.stake(validator, 0);
     }
 
@@ -135,7 +135,7 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
 
     function test_Unstake_ZeroAmount() public {
         vm.startPrank(manager);
-        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(0), 0);
         stakingVault.unstake(validator, 0);
     }
 
