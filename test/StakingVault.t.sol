@@ -220,6 +220,24 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
         stakingVault.unstake(validator, weiAmount);
     }
 
+    function test_Unstake_MaxPendingWithdrawals() public {
+        uint64 weiAmount = 100e8;
+
+        // First stake
+        _mockDelegations(validator, weiAmount);
+
+        // Perform 5 unstakes
+        vm.startPrank(manager);
+        for (uint256 i = 0; i < 5; i++) {
+            stakingVault.unstake(validator, weiAmount / 5);
+            warp(vm.getBlockTimestamp() + 1);
+        }
+
+        // Now try to unstake again, should fail
+        vm.expectRevert(IStakingVault.MaxPendingWithdrawals.selector);
+        stakingVault.unstake(validator, weiAmount);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                  Tests: Token Redelegate                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -911,15 +929,14 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
     }
 
     function _mockDelegationsWithLock(address _validator, uint64 weiAmount, uint64 lockedUntilTimestamp) internal {
-        L1ReadLibrary.Delegation[] memory mockDelegations = new L1ReadLibrary.Delegation[](1);
-        mockDelegations[0] = L1ReadLibrary.Delegation({
-            validator: _validator,
-            amount: weiAmount,
-            lockedUntilTimestamp: lockedUntilTimestamp
-        });
-
-        bytes memory encodedDelegations = abi.encode(mockDelegations);
-        vm.mockCall(L1ReadLibrary.DELEGATIONS_PRECOMPILE_ADDRESS, abi.encode(address(stakingVault)), encodedDelegations);
+        hl.mockDelegation(
+            address(stakingVault),
+            L1ReadLibrary.Delegation({
+                validator: _validator,
+                amount: weiAmount,
+                lockedUntilTimestamp: lockedUntilTimestamp
+            })
+        );
     }
 }
 
