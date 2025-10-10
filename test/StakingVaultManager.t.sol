@@ -1375,27 +1375,23 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_ZeroDeposits() public withExcessStakeBalance {
+    function test_FinalizeBatch_MaxPendingWithdrawals() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE withdraw
 
-        // Setup: User queues a withdraw
+        for (uint256 i = 0; i < 5; i++) {
+            _setupWithdraw(user, vhypeAmount);
+            stakingVaultManager.processBatch(type(uint256).max);
+            stakingVaultManager.finalizeBatch();
+            warp(vm.getBlockTimestamp() + 1 days + 1 seconds);
+        }
+
         _setupWithdraw(user, vhypeAmount);
-
-        // Mock and expect calls for zero deposits scenario
-
-        // Should undelegate the full withdraw amount
-        expectCoreWriterCall(
-            CoreWriterLibrary.TOKEN_DELEGATE, abi.encode(validator, vhypeAmount.to8Decimals(), true /* isUndelegate */ )
-        );
-
-        // Should withdraw the full amount from staking
-        expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(vhypeAmount.to8Decimals()));
-
-        // No staking deposit or delegate call expected
-        vm.expectCall(address(stakingVault), abi.encodeWithSelector(StakingVault.stake.selector), 0);
 
         // Process and finalize the batch
         stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should revert due to max pending withdrawals
+        vm.expectRevert(IStakingVault.MaxPendingWithdrawals.selector);
         stakingVaultManager.finalizeBatch();
     }
 
