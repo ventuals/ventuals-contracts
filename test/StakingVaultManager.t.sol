@@ -1398,6 +1398,131 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
+    function test_FinalizeBatch_StakesExcessAfterSlash() public withExcessStakeBalance {
+        uint256 originalBalance = vHYPE.totalSupply();
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize the batch
+        //
+        // Total: 600k
+        // Delegated: 500k
+        // Pending withdrawal: 100k
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+        warp(vm.getBlockTimestamp() + 1 days + 1);
+
+        // 50% slash, but only on the delegated amount
+        //
+        // Total: 300k
+        // Delegated: 200k
+        // Pending withdrawal: 100k
+        L1ReadLibrary.DelegatorSummary memory originalDelegatorSummary = stakingVault.delegatorSummary();
+        L1ReadLibrary.DelegatorSummary memory slashedDelegatorSummary = L1ReadLibrary.DelegatorSummary({
+            delegated: 0, // Added in the next mockDelegation call
+            undelegated: 0,
+            totalPendingWithdrawal: originalDelegatorSummary.totalPendingWithdrawal,
+            nPendingWithdrawals: originalDelegatorSummary.nPendingWithdrawals
+        });
+        hl.mockDelegatorSummary(address(stakingVault), slashedDelegatorSummary);
+        uint64 remainingDelegatedAmount =
+            (originalBalance.to8Decimals() / 2) - originalDelegatorSummary.totalPendingWithdrawal;
+        hl.mockDelegation(
+            address(stakingVault),
+            L1ReadLibrary.Delegation({
+                validator: validator,
+                amount: remainingDelegatedAmount,
+                lockedUntilTimestamp: uint64(vm.getBlockTimestamp() * 1000)
+            })
+        );
+
+        // Slash the batch to 0.5 exchange rate (50% of original)
+        uint256 slashedExchangeRate = 0.5e18;
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, slashedExchangeRate);
+
+        // Only expect one staking deposit call at the very end
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(50_000 * 1e8), 1);
+
+        // Fast foward one day. We have 50k excess, but it's in pending, so we
+        // don't expect any staking deposit calls.
+        warp(vm.getBlockTimestamp() + 1 days + 1);
+
+        // Process and finalize
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Check that nothing changed
+        L1ReadLibrary.DelegatorSummary memory newDelegatorSummary = stakingVault.delegatorSummary();
+        assertEq(newDelegatorSummary.delegated, remainingDelegatedAmount);
+        assertEq(newDelegatorSummary.undelegated, slashedDelegatorSummary.undelegated);
+        assertEq(newDelegatorSummary.totalPendingWithdrawal, slashedDelegatorSummary.totalPendingWithdrawal);
+        assertEq(newDelegatorSummary.nPendingWithdrawals, slashedDelegatorSummary.nPendingWithdrawals);
+
+        // Now fast forward five days. The 50k excess should now be in spot,
+        // so we expect a staking deposit call.
+        warp(vm.getBlockTimestamp() + 5 days + 1);
+
+        // Process and finalize
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+    }
+
+    function test_FinalizeBatch_WithdrawsExcessAfterSlash() public withExcessStakeBalance {
+        uint64 startTimestamp = uint64(vm.getBlockTimestamp() * 1000);
+        uint256 originalBalance = vHYPE.totalSupply();
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
+
+        // User queues a withdraw
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize the batch
+        //
+        // Total: 600k
+        // Delegated: 500k
+        // Pending withdrawal: 100k
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+        warp(startTimestamp + 1 days + 1);
+
+        // 50% slash, all from pending withdrawal
+        //
+        // Total: 300k
+        // Delegated: 300k
+        // Pending withdrawal: 0k
+        hl.mockDelegatorSummary(
+            address(stakingVault),
+            L1ReadLibrary.DelegatorSummary({
+                delegated: 0, // Added in the next mockDelegation call
+                undelegated: 0,
+                totalPendingWithdrawal: 0,
+                nPendingWithdrawals: 0
+            })
+        );
+        hl.mockDelegation(
+            address(stakingVault),
+            L1ReadLibrary.Delegation({
+                validator: validator,
+                amount: originalBalance.to8Decimals() / 2,
+                lockedUntilTimestamp: startTimestamp
+            })
+        );
+
+        // Slash the batch to 0.5 exchange rate (50% of original)
+        uint256 slashedExchangeRate = 0.5e18;
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, slashedExchangeRate);
+
+        // We need 50k HYPE to cover withdraws, but we don't have any. So we expect a withdraw from staking.
+        expectCoreWriterCall(CoreWriterLibrary.STAKING_WITHDRAW, abi.encode(50_000 * 1e8));
+
+        // Finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+    }
+
     function test_FinalizeBatch_CannotFinalizeAfterSwitchValidatorInSameBlock() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
