@@ -5,6 +5,7 @@ pragma solidity ^0.8.27;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {IStakingVaultManager} from "../src/interfaces/IStakingVaultManager.sol";
 import {StakingVaultManager} from "../src/StakingVaultManager.sol";
 import {RoleRegistry} from "../src/RoleRegistry.sol";
 import {VHYPE} from "../src/VHYPE.sol";
@@ -224,13 +225,13 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 belowMinimumAmount = MINIMUM_DEPOSIT_AMOUNT - 1; // 1 wei below minimum
         vm.deal(user, belowMinimumAmount);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.BelowMinimumDepositAmount.selector));
         stakingVaultManager.deposit{value: belowMinimumAmount}();
     }
 
     function test_Deposit_ZeroAmount() public withMinimumStakeBalance {
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.BelowMinimumDepositAmount.selector));
         stakingVaultManager.deposit{value: 0}();
     }
 
@@ -398,7 +399,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_QueueWithdraw_ZeroAmount() public {
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.ZeroAmount.selector);
+        vm.expectRevert(IStakingVaultManager.ZeroAmount.selector);
         stakingVaultManager.queueWithdraw(0);
     }
 
@@ -408,7 +409,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         vm.startPrank(user);
         vHYPE.approve(address(stakingVaultManager), vhypeAmount);
 
-        vm.expectRevert(StakingVaultManager.BelowMinimumWithdrawAmount.selector);
+        vm.expectRevert(IStakingVaultManager.BelowMinimumWithdrawAmount.selector);
         stakingVaultManager.queueWithdraw(MINIMUM_WITHDRAW_AMOUNT - 1);
     }
 
@@ -602,7 +603,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Another user tries to claim the withdraw
         vm.prank(otherUser);
-        vm.expectRevert(StakingVaultManager.NotAuthorized.selector);
+        vm.expectRevert(IStakingVaultManager.NotAuthorized.selector);
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -618,7 +619,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User tries to claim the cancelled withdraw
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.WithdrawCancelled.selector);
+        vm.expectRevert(IStakingVaultManager.WithdrawCancelled.selector);
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -641,7 +642,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User tries to claim again
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.WithdrawClaimed.selector);
+        vm.expectRevert(IStakingVaultManager.WithdrawClaimed.selector);
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -660,7 +661,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User tries to claim too early
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.WithdrawUnclaimable.selector);
+        vm.expectRevert(IStakingVaultManager.WithdrawUnclaimable.selector);
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -679,7 +680,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User tries to claim too early
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.WithdrawUnclaimable.selector);
+        vm.expectRevert(IStakingVaultManager.WithdrawUnclaimable.selector);
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -820,7 +821,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Another user tries to cancel the withdraw
         vm.prank(otherUser);
-        vm.expectRevert(StakingVaultManager.NotAuthorized.selector);
+        vm.expectRevert(IStakingVaultManager.NotAuthorized.selector);
         stakingVaultManager.cancelWithdraw(withdrawId);
     }
 
@@ -836,7 +837,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User tries to cancel again
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.WithdrawCancelled.selector);
+        vm.expectRevert(IStakingVaultManager.WithdrawCancelled.selector);
         stakingVaultManager.cancelWithdraw(withdrawId);
     }
 
@@ -854,7 +855,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User tries to cancel the processed withdraw
         vm.prank(user);
-        vm.expectRevert(StakingVaultManager.WithdrawProcessed.selector);
+        vm.expectRevert(IStakingVaultManager.WithdrawProcessed.selector);
         stakingVaultManager.cancelWithdraw(withdrawId);
     }
 
@@ -983,7 +984,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Try to process immediately (should fail due to timing restriction)
         vm.expectRevert(
-            abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, vm.getBlockTimestamp() + 1 days)
+            abi.encodeWithSelector(IStakingVaultManager.BatchNotReady.selector, vm.getBlockTimestamp() + 1 days)
         );
         stakingVaultManager.processBatch(type(uint256).max);
 
@@ -1045,7 +1046,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount / 2);
 
         // Should fail because the batch is not ready
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BatchNotReady.selector, lockTime));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.BatchNotReady.selector, lockTime));
         stakingVaultManager.processBatch(type(uint256).max);
     }
 
@@ -1084,7 +1085,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _setupWithdraw(user, vhypeAmount);
 
         // Batch processing is paused by default, so this should fail
-        vm.expectRevert(StakingVaultManager.BatchProcessingPaused.selector);
+        vm.expectRevert(IStakingVaultManager.BatchProcessingPaused.selector);
         stakingVaultManager.processBatch(type(uint256).max);
     }
 
@@ -1582,7 +1583,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         _mockDelegations(validator, (vHYPE.totalSupply() / 2).to8Decimals());
 
         // Attempt to finalize should revert due to insufficient balance
-        vm.expectRevert(StakingVaultManager.NotEnoughBalance.selector);
+        vm.expectRevert(IStakingVaultManager.NotEnoughBalance.selector);
         stakingVaultManager.finalizeBatch();
     }
 
@@ -1936,7 +1937,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // 100k HYPE withdraw reserve slashed to 50k HYPE
         // So we expect 250k HYPE in total balance
         vm.expectRevert(
-            abi.encodeWithSelector(StakingVaultManager.AccountBalanceLessThanReservedHypeForWithdraws.selector)
+            abi.encodeWithSelector(IStakingVaultManager.AccountBalanceLessThanReservedHypeForWithdraws.selector)
         );
         stakingVaultManager.totalBalance();
     }
@@ -2141,7 +2142,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         uint256 newMinimumStakeBalanceTooLarge = vHYPE.totalSupply() - vhypeAmount + 1;
 
         vm.prank(owner);
-        vm.expectRevert(StakingVaultManager.MinimumStakeBalanceTooLarge.selector);
+        vm.expectRevert(IStakingVaultManager.MinimumStakeBalanceTooLarge.selector);
         stakingVaultManager.setMinimumStakeBalance(newMinimumStakeBalanceTooLarge);
     }
 
@@ -2177,7 +2178,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Try to deposit below new minimum - should fail
         vm.deal(user, belowNewMinimum);
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumDepositAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.BelowMinimumDepositAmount.selector));
         stakingVaultManager.deposit{value: belowNewMinimum}();
 
         // Deposit exactly the new minimum - should succeed
@@ -2225,7 +2226,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Try to withdraw below new minimum - should fail
         vm.startPrank(user);
         vHYPE.approve(address(stakingVaultManager), belowNewMinimum);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.BelowMinimumWithdrawAmount.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.BelowMinimumWithdrawAmount.selector));
         stakingVaultManager.queueWithdraw(belowNewMinimum);
 
         // Withdraw exactly the new minimum - should succeed
@@ -2274,7 +2275,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // User claims the withdraw
         vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.WithdrawUnclaimable.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.WithdrawUnclaimable.selector));
         stakingVaultManager.claimWithdraw(withdrawId, user);
     }
 
@@ -2413,7 +2414,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_ResetBatch_NothingToReset() public {
         // Try to reset when no batch exists
         vm.prank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToReset.selector);
+        vm.expectRevert(IStakingVaultManager.NothingToReset.selector);
         stakingVaultManager.resetBatch(type(uint256).max);
     }
 
@@ -2427,7 +2428,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Try to reset - should fail
         vm.startPrank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToReset.selector);
+        vm.expectRevert(IStakingVaultManager.NothingToReset.selector);
         stakingVaultManager.resetBatch(type(uint256).max);
     }
 
@@ -2496,14 +2497,14 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Try to finalize - should fail because vhypeProcessed > 0
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.InvalidBatch.selector, batchIndex));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.InvalidBatch.selector, batchIndex));
         stakingVaultManager.finalizeResetBatch();
     }
 
     function test_FinalizeResetBatch_FailsWithNoBatch() public {
         // Try to finalize when no batch exists
         vm.prank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
+        vm.expectRevert(IStakingVaultManager.NothingToFinalize.selector);
         stakingVaultManager.finalizeResetBatch();
     }
 
@@ -2524,7 +2525,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Try to finalize reset - should fail because currentBatchIndex moved past the finalized batch
         // and there's no current batch to reset
         vm.prank(owner);
-        vm.expectRevert(StakingVaultManager.NothingToFinalize.selector);
+        vm.expectRevert(IStakingVaultManager.NothingToFinalize.selector);
         stakingVaultManager.finalizeResetBatch();
     }
 
@@ -2828,7 +2829,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
     function test_ApplySlash_InvalidBatch() public {
         vm.startPrank(owner);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.InvalidBatch.selector, 999));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.InvalidBatch.selector, 999));
         stakingVaultManager.applySlash(999, 5e17);
     }
 
@@ -2954,7 +2955,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Try to apply a slash outside the slash window
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.CannotSlashBatchOutsideSlashWindow.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.CannotSlashBatchOutsideSlashWindow.selector, 0));
         stakingVaultManager.applySlash(0, 5e17);
     }
 
@@ -2977,7 +2978,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
 
         // Try to apply a slash to an unfinalized batch
         vm.startPrank(owner);
-        vm.expectRevert(abi.encodeWithSelector(StakingVaultManager.InvalidBatch.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(IStakingVaultManager.InvalidBatch.selector, 0));
         stakingVaultManager.applySlash(0, 5e17);
 
         // Reset the batch
