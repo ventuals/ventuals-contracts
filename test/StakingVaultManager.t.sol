@@ -1,5 +1,5 @@
 // forge-lint: disable-start(mixed-case-variable)
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0
 pragma solidity ^0.8.27;
 
 import {Test} from "forge-std/Test.sol";
