@@ -1,7 +1,7 @@
 # Ventuals Contracts
 
-[![Tests](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/test.yml/badge.svg)](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/test.yml)
-[![Lint](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/lint.yml/badge.svg)](https://github.com/metro-xyz/ventuals-contracts/actions/workflows/lint.yml)
+[![Tests](https://github.com/ventuals/ventuals-contracts/actions/workflows/test.yml/badge.svg)](https://github.com/ventuals/ventuals-contracts/actions/workflows/test.yml)
+[![Lint](https://github.com/ventuals/ventuals-contracts/actions/workflows/lint.yml/badge.svg)](https://github.com/ventuals/ventuals-contracts/actions/workflows/lint.yml)
 
 ## Overview
 
@@ -28,7 +28,7 @@ foundryup
 Clone and set up the repository:
 
 ```bash
-git clone https://github.com/metro-xyz/ventuals-contracts.git && cd ventuals-contracts
+git clone https://github.com/ventuals/ventuals-contracts.git && cd ventuals-contracts
 git submodule update --init --recursive
 forge build
 ```
