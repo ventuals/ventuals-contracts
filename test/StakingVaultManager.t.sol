@@ -1399,6 +1399,24 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
+    function test_FinalizeBatch_CanFinalizeWithRemainingWithdraws() public withExcessStakeBalance {
+        // Setup: User queues a withdraw
+        _setupWithdraw(user, 5_000 * 1e18);
+
+        // Process the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Queue another withdraw
+        _setupWithdraw(user, 5_000 * 1e18);
+
+        // Finalize the batch
+        stakingVaultManager.finalizeBatch();
+
+        // Verify state
+        assertEq(stakingVaultManager.totalHypeProcessed(), 10_000 * 1e18, "Total HYPE processed should be 10k");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 2, "Last processed withdraw ID should be 2");
+    }
+
     function test_FinalizeBatch_StakesExcessAfterSlash() public withExcessStakeBalance {
         uint256 originalBalance = vHYPE.totalSupply();
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
