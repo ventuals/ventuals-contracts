@@ -707,11 +707,9 @@ contract StakingVaultManager is Base, IStakingVaultManager {
 
         uint256 oldExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
 
-        // Only adjust totalHypeProcessed if the batch has been finalized
-        if (batch.finalizedAt > 0) {
-            totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, oldExchangeRate);
-            totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, slashedExchangeRate);
-        }
+        // Adjust totalHypeProcessed
+        totalHypeProcessed -= _vHYPEtoHYPE(batch.vhypeProcessed, oldExchangeRate);
+        totalHypeProcessed += _vHYPEtoHYPE(batch.vhypeProcessed, slashedExchangeRate);
 
         batch.slashedExchangeRate = slashedExchangeRate;
         batch.slashed = true;
