@@ -255,7 +255,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
     }
 
     /// @inheritdoc IStakingVaultManager
-    function processBatch(uint256 numWithdrawals) external whenNotPaused whenBatchProcessingNotPaused {
+    function processBatch(uint256 numWithdrawals) public whenNotPaused whenBatchProcessingNotPaused {
         Batch memory batch = _fetchBatch();
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
@@ -358,6 +358,9 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         // Check if we have a batch to finalize
         require(currentBatchIndex < batches.length, NothingToFinalize());
 
+        // Call processBatch to ensure that we've processed all available withdraws in the batch
+        processBatch(type(uint256).max);
+
         Batch memory batch = batches[currentBatchIndex];
 
         // Check if we can finalize the batch. This will revert if we cannot finalize the batch.
@@ -417,26 +420,9 @@ contract StakingVaultManager is Base, IStakingVaultManager {
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
 
-        uint256 balance = totalBalance();
-
         // Make sure we have enough balance to cover the withdraws
         if (hypeProcessed > 0) {
-            require(balance >= minimumStakeBalance + hypeProcessed, NotEnoughBalance());
-        }
-
-        // If we've processed all withdraws, we can finalize the batch
-        if (lastProcessedWithdrawId == withdrawQueue.getTail()) {
-            return;
-        }
-
-        // If we haven't processed all withdraws, make sure we've processed all withdraws that we
-        // have capacity for
-        if (balance >= minimumStakeBalance + hypeProcessed) {
-            uint256 withdrawCapacityRemaining = balance - minimumStakeBalance - hypeProcessed;
-            (, uint256 nextWithdrawIdToProcess) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
-            Withdraw memory withdraw = withdraws[nextWithdrawIdToProcess];
-            uint256 expectedHypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, batch.snapshotExchangeRate);
-            require(expectedHypeAmount > withdrawCapacityRemaining, HasMoreWithdrawCapacity());
+            require(totalBalance() >= minimumStakeBalance + hypeProcessed, NotEnoughBalance());
         }
     }
 
