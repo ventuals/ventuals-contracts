@@ -118,6 +118,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         // otherwise the exchange rate will be incorrect. We want the exchange rate to be calculated based on the total
         // HYPE in the vault _before_ the deposit
         uint256 amountToMint = HYPETovHYPE(amountToDeposit);
+        require(amountToMint > 0, ZeroAmount());
         vHYPE.mint(msg.sender, amountToMint);
 
         // Transfer HYPE to staking vault (HyperEVM -> HyperEVM)
