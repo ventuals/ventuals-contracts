@@ -156,6 +156,9 @@ contract StakingVault is IStakingVault, Base {
 
     /// @inheritdoc IStakingVault
     function removeValidator(address validator) external onlyOperator whenNotPaused {
+        (bool exists, L1ReadLibrary.Delegation memory _delegation) = _getDelegation(validator);
+        require(!exists || _delegation.amount == 0, CannotRemoveValidatorWithStake(validator));
+
         delete whitelistedValidators[validator];
     }
 
