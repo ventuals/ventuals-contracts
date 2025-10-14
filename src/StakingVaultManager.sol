@@ -462,6 +462,11 @@ contract StakingVaultManager is Base, IStakingVaultManager {
     /// @inheritdoc IStakingVaultManager
     function getWithdrawAmount(uint256 withdrawId) external view returns (uint256) {
         Withdraw memory withdraw = withdraws[withdrawId];
+
+        if (withdraw.cancelledAt > 0) {
+            return 0;
+        }
+
         uint256 vhypeAmount = withdraw.vhypeAmount;
 
         // If the withdraw hasn't been processed yet, use the current exchange rate
