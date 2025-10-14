@@ -171,14 +171,16 @@ contract StakingVaultManager is Base, IStakingVaultManager {
     }
 
     function _splitWithdraws(uint256 vhypeAmount) internal view returns (uint256[] memory) {
-        uint256 maximumWithdrawVhypeAmount = HYPETovHYPE(maximumWithdrawAmount);
+        uint256 _exchangeRate = exchangeRate();
+        uint256 maximumWithdrawVhypeAmount = _HYPETovHYPE(maximumWithdrawAmount, _exchangeRate);
 
         // Calculate number of withdraws needed
         uint256 withdrawCount = (vhypeAmount + maximumWithdrawVhypeAmount - 1) / maximumWithdrawVhypeAmount;
 
         // Check if the last chunk would be below threshold
-        uint256 lastChunkAmount = vhypeAmount % maximumWithdrawVhypeAmount;
-        if (lastChunkAmount > 0 && lastChunkAmount < minimumWithdrawAmount && withdrawCount > 1) {
+        uint256 lastChunkVhypeAmount = vhypeAmount % maximumWithdrawVhypeAmount;
+        uint256 lastChunkHypeAmount = _vHYPEtoHYPE(lastChunkVhypeAmount, _exchangeRate);
+        if (lastChunkVhypeAmount > 0 && lastChunkHypeAmount < minimumWithdrawAmount && withdrawCount > 1) {
             withdrawCount--; // Merge last chunk into previous one
         }
 
