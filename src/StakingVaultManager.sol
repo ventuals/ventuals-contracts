@@ -357,9 +357,6 @@ contract StakingVaultManager is Base, IStakingVaultManager {
 
     /// @inheritdoc IStakingVaultManager
     function finalizeBatch() external whenNotPaused whenBatchProcessingNotPaused {
-        // Check if we have a batch to finalize
-        require(currentBatchIndex < batches.length, NothingToFinalize());
-
         // Call processBatch to ensure that we've processed all available withdraws in the batch
         processBatch(type(uint256).max);
 
