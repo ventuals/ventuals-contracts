@@ -34,7 +34,7 @@ The Ventuals protocol uses a centralized role-based access control system (via t
 - `OWNER` – Has the highest level of control. Can upgrade and pause contracts, grant and revoke roles, set
   vault parameters, and execute emergency operations. This role is controlled by the Ventuals multisig.
 - `MANAGER` – Manages the vault. Can deposit, withdraw, delegate, and transfer HYPE on behalf of the vault.
-  This role is assigned to the StakingVaultManager, but can be assigned to another contract in the future.
+  This role is assigned to the StakingVaultManager.
 - `OPERATOR` – Handles automated, day-to-day protocol operations (e.g. transferring HYPE from HyperEVM to
   HyperCore, rotating the StakingVault's API wallets).
 
@@ -98,7 +98,7 @@ function applySlash(uint256 batchIndex, uint256 slashedExchangeRate) external on
 ```solidity
 function totalSupply() public view returns (uint256);
 function mint(address to, uint256 amount) external onlyManager;
-function burn(uint256 amount) external;
+function burn(uint256 amount) external onlyManager;
 ```
 
 ### RoleRegistry
@@ -140,10 +140,13 @@ function unpause(address contractAddress) external onlyOwner
   withdrawal queue (implemented as a linked list).
 - Until processed, escrowed vHYPE continues to accrue native staking yield
   through the vault's exchange rate appreciation.
+- Large withdraw requests are split into multiple smaller withdraws to prevent
+  the global withdrawal queue from being blocked by a single large withdraw.
 
 #### Batch Processing
 
-- A new batch can only be created once per day.
+- A new batch can be created once per day. This ensures that we are able to process
+  withdraws with the 1-day validator staking lockup period.
 - Each batch records:
   - snapshotExchangeRate – the exchange rate when processing begins
   - vhypeProcessed – total vHYPE included in the batch
@@ -201,8 +204,8 @@ For example, when a HyperEVM → HyperCore transfer occurs:
 
 This desynchronization means that immediately after a transfer to HyperCore, the vault's
 `totalBalance()` computation will be incorrect, because it relies on both HyperEVM balances
-and HyperCore spot balances. For instance, if a deposit happens after a transfer in the
-same block, we will mint vHYPE against an inaccurate exchange rate.
+and HyperCore spot balances. For instance, if a deposit happens after a transfer to HyperCore
+in the same block, we would mint vHYPE against an inaccurate exchange rate.
 
 To avoid this, we enforce a **one-block delay** between actions that we expect will change the
 vault's HyperCore spot balance, and any action that requires an up-to-date spot balance value.
