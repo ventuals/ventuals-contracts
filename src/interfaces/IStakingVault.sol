@@ -32,6 +32,9 @@ interface IStakingVault {
     /// @notice Thrown if the from and to validators are the same.
     error RedelegateToSameValidator();
 
+    /// @notice Thrown if the validator has a stake and cannot be removed.
+    error CannotRemoveValidatorWithStake(address validator);
+
     /// @notice Thrown if the amount is 0.
     error ZeroAmount();
 
