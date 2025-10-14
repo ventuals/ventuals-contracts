@@ -827,6 +827,186 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                 Tests: Add Validator                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_AddValidator_Success() public {
+        address newValidator = makeAddr("newValidator");
+
+        // Add validator
+        vm.prank(operator);
+        stakingVault.addValidator(newValidator);
+
+        // Verify validator is now whitelisted
+        assertTrue(stakingVault.whitelistedValidators(newValidator));
+    }
+
+    function test_AddValidator_NotOperator(address notOperator) public {
+        vm.assume(notOperator != operator);
+
+        address newValidator = makeAddr("newValidator");
+
+        vm.startPrank(notOperator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notOperator, roleRegistry.OPERATOR_ROLE()
+            )
+        );
+        stakingVault.addValidator(newValidator);
+    }
+
+    function test_AddValidator_WhenPaused() public {
+        address newValidator = makeAddr("newValidator");
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVault));
+
+        vm.startPrank(operator);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVault)));
+        stakingVault.addValidator(newValidator);
+    }
+
+    function test_AddValidator_CanAddExistingValidator() public {
+        // Validator is already whitelisted in setUp
+        assertTrue(stakingVault.whitelistedValidators(validator));
+
+        // Should be able to add it again (sets to true again)
+        vm.prank(operator);
+        stakingVault.addValidator(validator);
+
+        // Should still be whitelisted
+        assertTrue(stakingVault.whitelistedValidators(validator));
+    }
+
+    function test_AddValidator_CanAddMultipleValidators() public {
+        address newValidator1 = makeAddr("newValidator1");
+        address newValidator2 = makeAddr("newValidator2");
+        address newValidator3 = makeAddr("newValidator3");
+
+        vm.startPrank(operator);
+        stakingVault.addValidator(newValidator1);
+        stakingVault.addValidator(newValidator2);
+        stakingVault.addValidator(newValidator3);
+        vm.stopPrank();
+
+        // Verify all validators are whitelisted
+        assertTrue(stakingVault.whitelistedValidators(newValidator1));
+        assertTrue(stakingVault.whitelistedValidators(newValidator2));
+        assertTrue(stakingVault.whitelistedValidators(newValidator3));
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                Tests: Remove Validator                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_RemoveValidator_Success() public {
+        address validatorToRemove = makeAddr("validatorToRemove");
+
+        // Add validator first
+        vm.prank(operator);
+        stakingVault.addValidator(validatorToRemove);
+        assertTrue(stakingVault.whitelistedValidators(validatorToRemove));
+
+        // Remove validator
+        vm.prank(operator);
+        stakingVault.removeValidator(validatorToRemove);
+
+        // Verify validator is no longer whitelisted
+        assertFalse(stakingVault.whitelistedValidators(validatorToRemove));
+    }
+
+    function test_RemoveValidator_WithZeroStake() public {
+        address validatorToRemove = makeAddr("validatorToRemove");
+
+        // Add validator first
+        vm.prank(operator);
+        stakingVault.addValidator(validatorToRemove);
+
+        // Mock that validator has zero stake
+        _mockDelegations(validatorToRemove, 0);
+
+        // Remove validator should succeed
+        vm.prank(operator);
+        stakingVault.removeValidator(validatorToRemove);
+
+        // Verify validator is no longer whitelisted
+        assertFalse(stakingVault.whitelistedValidators(validatorToRemove));
+    }
+
+    function test_RemoveValidator_CannotRemoveWithStake() public {
+        uint64 weiAmount = 100e8;
+
+        // Mock that validator has stake
+        _mockDelegations(validator, weiAmount);
+
+        // Attempt to remove validator should fail
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CannotRemoveValidatorWithStake.selector, validator));
+        stakingVault.removeValidator(validator);
+
+        // Verify validator is still whitelisted
+        assertTrue(stakingVault.whitelistedValidators(validator));
+    }
+
+    function test_RemoveValidator_NotOperator(address notOperator) public {
+        vm.assume(notOperator != operator);
+
+        vm.startPrank(notOperator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notOperator, roleRegistry.OPERATOR_ROLE()
+            )
+        );
+        stakingVault.removeValidator(validator);
+    }
+
+    function test_RemoveValidator_WhenPaused() public {
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVault));
+
+        vm.startPrank(operator);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVault)));
+        stakingVault.removeValidator(validator);
+    }
+
+    function test_RemoveValidator_CannotRemoveAfterStakeInSameBlock() public {
+        uint64 weiAmount = 100e8;
+
+        vm.startPrank(operator);
+
+        // First stake to the validator (as manager)
+        vm.stopPrank();
+        vm.startPrank(manager);
+        stakingVault.stake(validator, weiAmount);
+        vm.stopPrank();
+
+        // Now try to remove validator in the same block as operator - should fail
+        // because we can't read delegations in the same block
+        vm.startPrank(operator);
+        vm.expectRevert(IStakingVault.CannotReadDelegationUntilNextBlock.selector);
+        stakingVault.removeValidator(validator);
+    }
+
+    function test_RemoveValidator_CannotStakeAfterRemoved() public {
+        address validatorToRemove = makeAddr("validatorToRemove");
+
+        // Add validator
+        vm.prank(operator);
+        stakingVault.addValidator(validatorToRemove);
+
+        // Remove validator
+        vm.prank(operator);
+        stakingVault.removeValidator(validatorToRemove);
+
+        // Verify we cannot stake to removed validator
+        vm.prank(manager);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.ValidatorNotWhitelisted.selector, validatorToRemove));
+        stakingVault.stake(validatorToRemove, 100e8);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Helper Functions                        */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
