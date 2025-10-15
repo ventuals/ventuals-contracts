@@ -3464,10 +3464,6 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
-    /*                     Tests: Ownership                       */
-    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-
-    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                   Tests: Wind Down (Only Owner)            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
@@ -3568,6 +3564,104 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Verify minimum stake balance unchanged
         assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE, "Should still have minimum stake");
     }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*             Tests: Set Maximum Withdraw Amount             */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_SetMaximumWithdrawAmount_OnlyOwner() public {
+        uint256 newMaxAmount = 5_000 * 1e18; // 5k HYPE
+
+        // Owner can set maximum withdraw amount
+        vm.prank(owner);
+        stakingVaultManager.setMaximumWithdrawAmount(newMaxAmount);
+
+        assertEq(stakingVaultManager.maximumWithdrawAmount(), newMaxAmount, "Maximum withdraw amount should be updated");
+    }
+
+    function test_SetMaximumWithdrawAmount_NotOwner() public {
+        uint256 newMaxAmount = 5_000 * 1e18; // 5k HYPE
+
+        // Non-owner cannot set maximum withdraw amount
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.setMaximumWithdrawAmount(newMaxAmount);
+
+        // Verify maximum withdraw amount unchanged
+        assertEq(
+            stakingVaultManager.maximumWithdrawAmount(),
+            MAXIMUM_WITHDRAW_AMOUNT,
+            "Maximum withdraw amount should not change"
+        );
+    }
+
+    function test_SetMaximumWithdrawAmount_AffectsWithdrawalSplitting() public withMinimumStakeBalance {
+        // Set a smaller maximum withdraw amount
+        uint256 newMaxAmount = 2_000 * 1e18; // 2k HYPE (down from 10k)
+
+        vm.prank(owner);
+        stakingVaultManager.setMaximumWithdrawAmount(newMaxAmount);
+
+        // Queue a withdraw that exceeds the new maximum
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Transfer vHYPE to user and approve
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+        uint256[] memory withdrawIds = stakingVaultManager.queueWithdraw(vhypeAmount);
+        vm.stopPrank();
+
+        // Should be split into 3 withdraws: 2k + 2k + 1k
+        assertEq(withdrawIds.length, 3, "Should create 3 withdrawals with new max amount");
+
+        // Verify each withdrawal amount
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(withdrawIds[0]);
+        StakingVaultManager.Withdraw memory withdraw2 = stakingVaultManager.getWithdraw(withdrawIds[1]);
+        StakingVaultManager.Withdraw memory withdraw3 = stakingVaultManager.getWithdraw(withdrawIds[2]);
+
+        uint256 expectedMaxVhype = stakingVaultManager.HYPETovHYPE(newMaxAmount);
+
+        assertEq(withdraw1.vhypeAmount, expectedMaxVhype, "First withdraw should be max amount");
+        assertEq(withdraw2.vhypeAmount, expectedMaxVhype, "Second withdraw should be max amount");
+        assertEq(
+            withdraw1.vhypeAmount + withdraw2.vhypeAmount + withdraw3.vhypeAmount,
+            vhypeAmount,
+            "Total should equal requested amount"
+        );
+    }
+
+    function test_SetMaximumWithdrawAmount_LargerAmount_FewerSplits() public withMinimumStakeBalance {
+        // Set a larger maximum withdraw amount
+        uint256 newMaxAmount = 20_000 * 1e18; // 20k HYPE (up from 10k)
+
+        vm.prank(owner);
+        stakingVaultManager.setMaximumWithdrawAmount(newMaxAmount);
+
+        // Queue a withdraw that would have been split with old limit
+        uint256 vhypeAmount = 15_000 * 1e18; // 15k vHYPE
+
+        // Transfer vHYPE to user and approve
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+        uint256[] memory withdrawIds = stakingVaultManager.queueWithdraw(vhypeAmount);
+        vm.stopPrank();
+
+        // Should create only 1 withdrawal now (vs 2 with old 10k limit)
+        assertEq(withdrawIds.length, 1, "Should create 1 withdrawal with new max amount");
+
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawIds[0]);
+        assertEq(withdraw.vhypeAmount, vhypeAmount, "Single withdraw should be full amount");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     Tests: Ownership                       */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
     function test_TransferOwnership_NewOwnerCanUpgrade() public {
         address originalOwner = owner;
