@@ -13,3 +13,7 @@ node_modules/
 # Dotenv file
 .env
 .env.salts
+
+# Coverage files
+coverage/
+lcov.info
