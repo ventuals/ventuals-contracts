@@ -785,6 +785,34 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
+    function test_ClaimWithdraw_ZeroAmountAfterConversion() public withExcessStakeBalance {
+        // Use a very small vHYPE amount that rounds down to 0 in 8 decimals
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Slash the batch to a very low exchange rate that results in 0 after 8 decimal conversion
+        // Exchange rate that results in amount < 1e10 (which is 0 in 8 decimals)
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 1); // Extremely low exchange rate
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims the withdraw - should succeed even with 0 amount after conversion
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // Verify the withdraw was claimed
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertTrue(withdraw.claimedAt > 0, "Withdraw should be marked as claimed");
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                Tests: Batch Claim Withdraws               */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -1051,6 +1079,41 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
             totalVhype / 2,
             "Total HYPE claimed should match slashed withdraw amounts"
         );
+    }
+
+    function test_BatchClaimWithdraws_ZeroAmountAfterConversion() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Slash the batch to a very low exchange rate that results in 0 after 8 decimal conversion
+        // Exchange rate that results in amount < 1e10 (which is 0 in 8 decimals)
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 1); // Extremely low exchange rate
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims both withdraws - should succeed even with 0 total amount after conversion
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+
+        // Verify both withdraws were claimed
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(withdrawId1);
+        StakingVaultManager.Withdraw memory withdraw2 = stakingVaultManager.getWithdraw(withdrawId2);
+        assertTrue(withdraw1.claimedAt > 0, "Withdraw 1 should be marked as claimed");
+        assertTrue(withdraw2.claimedAt > 0, "Withdraw 2 should be marked as claimed");
     }
 
     function test_BatchClaimWithdraws_WhenContractPaused() public withExcessStakeBalance {
