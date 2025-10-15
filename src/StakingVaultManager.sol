@@ -224,10 +224,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         require(withdraw.claimedAt == 0, WithdrawClaimed());
 
         Batch memory batch = batches[withdraw.batchIndex];
-        require(
-            batch.finalizedAt > 0 && block.timestamp > batch.finalizedAt + 7 days + claimWindowBuffer,
-            WithdrawUnclaimable()
-        );
+        require(batch.finalizedAt > 0, WithdrawUnclaimable());
 
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
@@ -318,23 +315,6 @@ contract StakingVaultManager is Base, IStakingVaultManager {
 
     function _fetchBatch() internal view returns (Batch memory batch) {
         if (currentBatchIndex == batches.length) {
-            // Initialize a new batch at the current index
-            // Only enforce timing restriction if this is not the first batch
-            if (lastFinalizedBatchTime != 0) {
-                // There's a 1 day lockup period after HYPE is staked to a validator, so we enforce a 1 day delay between batches
-                require(
-                    block.timestamp > lastFinalizedBatchTime + 1 days, BatchNotReady(lastFinalizedBatchTime + 1 days)
-                );
-
-                // The documentation states that the validator stake will be unlocked after 1 day. However, the documentation
-                // doesn't specify exactly when the validator stake will be unlocked, so we add an extra safety check here in
-                // case it's not exactly 1 day.
-                (bool exists, L1ReadLibrary.Delegation memory delegation) = stakingVault.delegation(validator);
-                require(
-                    exists && block.timestamp > delegation.lockedUntilTimestamp / 1000, /* convert to seconds for comparison */
-                    BatchNotReady(delegation.lockedUntilTimestamp / 1000 /* convert to seconds */ )
-                );
-            }
             uint256 snapshotExchangeRate = exchangeRate();
 
             batch = Batch({
@@ -394,23 +374,6 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         // Always transfer the full deposit amount to HyperCore spot
         if (depositsInBatch > 0) {
             stakingVault.transferHypeToCore(depositsInBatch);
-        }
-
-        // Net out the deposits and withdraws
-        if (expectedAvailableForWithdraws > neededForWithdraws) {
-            // If we have more HYPE than needed
-            uint256 totalExcess = expectedAvailableForWithdraws - neededForWithdraws;
-
-            // We can only stake the excess if it's in spot. If there's excess in
-            // pending withdrawals, we can't re-stake it. Once it lands in spot,
-            // the next finalizeBatch will stake it.
-            uint256 amountToStake = Math.min(totalExcess, expectedSpotBalance);
-            stakingVault.stake(validator, amountToStake.to8Decimals());
-        } else if (expectedAvailableForWithdraws < neededForWithdraws) {
-            // If we don't have enough HYPE to cover all expected withdraws, we need to
-            // withdraw some HYPE from the staking vault
-            uint256 amountToUnstake = neededForWithdraws - expectedAvailableForWithdraws;
-            stakingVault.unstake(validator, amountToUnstake.to8Decimals());
         }
 
         emit FinalizeBatch(currentBatchIndex, batches[currentBatchIndex]);
@@ -484,7 +447,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         if (batch.finalizedAt == 0) {
             return type(uint256).max;
         }
-        return batch.finalizedAt + 7 days + claimWindowBuffer;
+        return batch.finalizedAt;
     }
 
     /// @inheritdoc IStakingVaultManager
