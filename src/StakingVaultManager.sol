@@ -327,7 +327,9 @@ contract StakingVaultManager is Base, IStakingVaultManager {
                 (bool exists, L1ReadLibrary.Delegation memory delegation) = stakingVault.delegation(validator);
                 require(
                     exists && block.timestamp > delegation.lockedUntilTimestamp / 1000, /* convert to seconds for comparison */
-                    BatchNotReady(delegation.lockedUntilTimestamp / 1000 /* convert to seconds */ )
+                    BatchNotReady(
+                        delegation.lockedUntilTimestamp / 1000 /* convert to seconds */
+                    )
                 );
             }
             uint256 snapshotExchangeRate = exchangeRate();

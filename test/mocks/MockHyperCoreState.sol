@@ -214,7 +214,9 @@ contract MockHyperCoreState {
             CoreWriterAction({
                 action: CoreWriterLibrary.TOKEN_DELEGATE,
                 encodedAction: abi.encode(
-                    TokenDelegate({msgSender: msgSender, validator: validator, amount: amount, isUndelegate: isUndelegate})
+                    TokenDelegate({
+                        msgSender: msgSender, validator: validator, amount: amount, isUndelegate: isUndelegate
+                    })
                 )
             })
         );
@@ -241,8 +243,9 @@ contract MockHyperCoreState {
     function processPendingSystemTransfers() internal {
         for (uint256 i = 0; i < pendingSystemTransfers.length; i++) {
             SystemTransfer storage transfer = pendingSystemTransfers[i];
-            spotBalances[transfer.msgSender][systemAddressToTokenId[transfer.systemAddress]] +=
-                transfer.amount.to8Decimals();
+            spotBalances[
+                transfer.msgSender
+            ][systemAddressToTokenId[transfer.systemAddress]] += transfer.amount.to8Decimals();
         }
 
         // Reset the pending system transfers
@@ -348,8 +351,9 @@ contract MockHyperCoreState {
             PendingStakingWithdraw storage withdraw = pendingStakingWithdraws[nextPendingStakingWithdrawIndex];
             if (Vm(Constants.VM_ADDRESS).getBlockTimestamp() >= withdraw.timestamp + 7 days) {
                 // Add to spot balance
-                spotBalances[withdraw.msgSender][systemAddressToTokenId[Constants.HYPE_SYSTEM_ADDRESS]] +=
-                    withdraw.weiAmount;
+                spotBalances[
+                    withdraw.msgSender
+                ][systemAddressToTokenId[Constants.HYPE_SYSTEM_ADDRESS]] += withdraw.weiAmount;
 
                 // Update delegator summary
                 L1ReadLibrary.DelegatorSummary storage _delegatorSummary = delegatorSummaries[withdraw.msgSender];
