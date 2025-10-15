@@ -204,7 +204,9 @@ contract StakingVaultManager is Base, IStakingVaultManager {
     /// @inheritdoc IStakingVaultManager
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
         uint256 hypeAmount = _claimWithdraw(withdrawId);
-        stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmount.to8Decimals());
+        if (hypeAmount.to8Decimals() > 0) {
+            stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmount.to8Decimals());
+        }
     }
 
     /// @inheritdoc IStakingVaultManager
@@ -214,7 +216,9 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         for (uint256 i = 0; i < withdrawIds.length; i++) {
             hypeAmounts += _claimWithdraw(withdrawIds[i]);
         }
-        stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmounts.to8Decimals());
+        if (hypeAmounts.to8Decimals() > 0) {
+            stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmounts.to8Decimals());
+        }
     }
 
     /// @dev Handles validation and accounting logic to claim a single withdraw, without sending HYPE to the destination.
