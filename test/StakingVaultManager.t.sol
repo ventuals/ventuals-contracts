@@ -2379,6 +2379,26 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         assertEq(withdrawAmount, 4_000 * 1e18);
     }
 
+    function test_GetWithdrawAmount_CancelledWithdraw() public withMinimumStakeBalance {
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Queue a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Cancel the withdraw
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId);
+
+        // Get withdraw amount - should return 0 for cancelled withdraw
+        uint256 withdrawAmount = stakingVaultManager.getWithdrawAmount(withdrawId);
+
+        assertEq(withdrawAmount, 0, "Cancelled withdraw should return 0 amount");
+
+        // Verify the withdraw is actually cancelled
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertGt(withdraw.cancelledAt, 0, "Withdraw should have cancelledAt timestamp");
+    }
+
     function test_GetWithdrawClaimableAt_UnprocessedWithdraw() public withExcessStakeBalance {
         uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
 
