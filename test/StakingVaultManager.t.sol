@@ -785,6 +785,468 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
+    function test_ClaimWithdraw_ZeroAmountAfterConversion() public withExcessStakeBalance {
+        // Use a very small vHYPE amount that rounds down to 0 in 8 decimals
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Setup: User queues a withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Slash the batch to a very low exchange rate that results in 0 after 8 decimal conversion
+        // Exchange rate that results in amount < 1e10 (which is 0 in 8 decimals)
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 1); // Extremely low exchange rate
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims the withdraw - should succeed even with 0 amount after conversion
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        // Verify the withdraw was claimed
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertTrue(withdraw.claimedAt > 0, "Withdraw should be marked as claimed");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                Tests: Batch Claim Withdraws               */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_BatchClaimWithdraws_Success() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+        uint256 vhypeAmount3 = 2_000 * 1e18; // 2k vHYPE
+
+        // Setup: User queues multiple withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+        uint256 withdrawId3 = _setupWithdraw(user, vhypeAmount3);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make withdraws claimable
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims all withdraws in batch
+        uint256[] memory withdrawIds = new uint256[](3);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+        withdrawIds[2] = withdrawId3;
+
+        vm.prank(user);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+
+        // Verify all withdraws were claimed
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(withdrawId1);
+        StakingVaultManager.Withdraw memory withdraw2 = stakingVaultManager.getWithdraw(withdrawId2);
+        StakingVaultManager.Withdraw memory withdraw3 = stakingVaultManager.getWithdraw(withdrawId3);
+        assertTrue(withdraw1.claimedAt > 0, "Withdraw 1 should be marked as claimed");
+        assertTrue(withdraw2.claimedAt > 0, "Withdraw 2 should be marked as claimed");
+        assertTrue(withdraw3.claimedAt > 0, "Withdraw 3 should be marked as claimed");
+
+        uint256 totalVhype = vhypeAmount1 + vhypeAmount2 + vhypeAmount3;
+        assertEq(stakingVaultManager.totalHypeClaimed(), totalVhype, "Total HYPE claimed should match sum of withdraws");
+        assertEq(
+            stakingVaultManager.totalHypeProcessed(), totalVhype, "Total HYPE processed should match sum of withdraws"
+        );
+    }
+
+    function test_BatchClaimWithdraws_SingleWithdraw() public withExcessStakeBalance {
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Setup: User queues a single withdraw
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make withdraw claimable
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims single withdraw using batch function
+        uint256[] memory withdrawIds = new uint256[](1);
+        withdrawIds[0] = withdrawId;
+
+        vm.prank(user);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+
+        // Verify the withdraw was claimed
+        StakingVaultManager.Withdraw memory withdraw = stakingVaultManager.getWithdraw(withdrawId);
+        assertTrue(withdraw.claimedAt > 0, "Withdraw should be marked as claimed");
+        assertEq(stakingVaultManager.totalHypeClaimed(), vhypeAmount, "Total HYPE claimed should match withdraw amount");
+    }
+
+    function test_BatchClaimWithdraws_EmptyArray() public withExcessStakeBalance {
+        // User tries to claim with empty array
+        uint256[] memory withdrawIds = new uint256[](0);
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVault.ZeroAmount.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_OneNotAuthorized() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+        address otherUser = makeAddr("otherUser");
+
+        // Setup: Two users queue withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(otherUser, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User tries to claim both withdraws (including one they don't own)
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVaultManager.NotAuthorized.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_OneCancelled() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Cancel the second withdraw
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId2);
+
+        // Process and finalize the batch (only first withdraw should be included)
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User tries to claim both withdraws
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVaultManager.WithdrawCancelled.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_OneUnprocessed() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+
+        // Process and finalize the batch (only first withdraw)
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Queue another withdraw after batch is finalized
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User tries to claim both withdraws
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVaultManager.WithdrawNotProcessed.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_OneAlreadyClaimed() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims first withdraw individually
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId1, user);
+
+        // User tries to claim both withdraws in batch
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVaultManager.WithdrawClaimed.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_OneTooEarly() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues first withdraw
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+
+        // Process and finalize the first batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+        uint256 firstBatchFinalizedAt = vm.getBlockTimestamp();
+
+        // Fast-forward time past the 1-day delay for next batch
+        warp(vm.getBlockTimestamp() + 1 days + 1);
+
+        // Queue second withdraw
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the second batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make only first withdraw claimable
+        // Set time to 7 days + buffer + 1 second after first batch, but not enough for second batch
+        warp(firstBatchFinalizedAt + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User tries to claim both withdraws
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVaultManager.WithdrawUnclaimable.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_WithSlashedBatch() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Slash the batch
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 5e17); // 0.5 exchange rate
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims both slashed withdraws
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+
+        // Verify both withdraws were claimed with slashed amounts
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(withdrawId1);
+        StakingVaultManager.Withdraw memory withdraw2 = stakingVaultManager.getWithdraw(withdrawId2);
+        assertTrue(withdraw1.claimedAt > 0, "Withdraw 1 should be marked as claimed");
+        assertTrue(withdraw2.claimedAt > 0, "Withdraw 2 should be marked as claimed");
+
+        uint256 totalVhype = vhypeAmount1 + vhypeAmount2;
+        assertEq(
+            stakingVaultManager.totalHypeClaimed(),
+            totalVhype / 2,
+            "Total HYPE claimed should match slashed withdraw amounts"
+        );
+    }
+
+    function test_BatchClaimWithdraws_ZeroAmountAfterConversion() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Slash the batch to a very low exchange rate that results in 0 after 8 decimal conversion
+        // Exchange rate that results in amount < 1e10 (which is 0 in 8 decimals)
+        vm.prank(owner);
+        stakingVaultManager.applySlash(0, 1); // Extremely low exchange rate
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims both withdraws - should succeed even with 0 total amount after conversion
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+
+        // Verify both withdraws were claimed
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(withdrawId1);
+        StakingVaultManager.Withdraw memory withdraw2 = stakingVaultManager.getWithdraw(withdrawId2);
+        assertTrue(withdraw1.claimedAt > 0, "Withdraw 1 should be marked as claimed");
+        assertTrue(withdraw2.claimedAt > 0, "Withdraw 2 should be marked as claimed");
+    }
+
+    function test_BatchClaimWithdraws_WhenContractPaused() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // Pause the contract
+        vm.prank(owner);
+        roleRegistry.pause(address(stakingVaultManager));
+
+        // User tries to claim when contract is paused
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(Base.Paused.selector, address(stakingVaultManager)));
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_CoreUserDoesNotExist() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // Core user does not exist
+        address destination = makeAddr("destination");
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(IStakingVault.CoreUserDoesNotExist.selector, destination));
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, destination);
+    }
+
+    function test_BatchClaimWithdraws_InsufficientBalance() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+
+        // Setup: User queues two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // Mock insufficient spot balance (only half of what's needed)
+        uint256 totalVhype = vhypeAmount1 + vhypeAmount2;
+        hl.mockSpotBalance(address(stakingVault), HYPE_TOKEN_ID, (totalVhype / 2).to8Decimals());
+
+        // User tries to claim but vault has insufficient balance
+        uint256[] memory withdrawIds = new uint256[](2);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+
+        vm.prank(user);
+        vm.expectRevert(IStakingVault.InsufficientHYPEBalance.selector);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+    }
+
+    function test_BatchClaimWithdraws_MixedBatches() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+        uint256 vhypeAmount3 = 2_000 * 1e18; // 2k vHYPE
+
+        // Setup: User queues first two withdraws
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process and finalize the first batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time past the 1-day delay for next batch
+        warp(vm.getBlockTimestamp() + 1 days + 1);
+
+        // Queue third withdraw
+        uint256 withdrawId3 = _setupWithdraw(user, vhypeAmount3);
+
+        // Process and finalize the second batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Fast-forward time to make all withdraws claimable
+        warp(vm.getBlockTimestamp() + 7 days + stakingVaultManager.claimWindowBuffer() + 1);
+
+        // User claims all withdraws from both batches
+        uint256[] memory withdrawIds = new uint256[](3);
+        withdrawIds[0] = withdrawId1;
+        withdrawIds[1] = withdrawId2;
+        withdrawIds[2] = withdrawId3;
+
+        vm.prank(user);
+        stakingVaultManager.batchClaimWithdraws(withdrawIds, user);
+
+        // Verify all withdraws were claimed
+        StakingVaultManager.Withdraw memory withdraw1 = stakingVaultManager.getWithdraw(withdrawId1);
+        StakingVaultManager.Withdraw memory withdraw2 = stakingVaultManager.getWithdraw(withdrawId2);
+        StakingVaultManager.Withdraw memory withdraw3 = stakingVaultManager.getWithdraw(withdrawId3);
+        assertTrue(withdraw1.claimedAt > 0, "Withdraw 1 should be marked as claimed");
+        assertTrue(withdraw2.claimedAt > 0, "Withdraw 2 should be marked as claimed");
+        assertTrue(withdraw3.claimedAt > 0, "Withdraw 3 should be marked as claimed");
+
+        uint256 totalVhype = vhypeAmount1 + vhypeAmount2 + vhypeAmount3;
+        assertEq(stakingVaultManager.totalHypeClaimed(), totalVhype, "Total HYPE claimed should match sum of withdraws");
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Cancel Withdraw                  */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
