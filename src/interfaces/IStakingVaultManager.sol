@@ -186,7 +186,8 @@ interface IStakingVaultManager {
 
     /// @notice Processes a batch of withdraws
     /// @param numWithdrawals The number of withdraws to process
-    function processBatch(uint256 numWithdrawals) external;
+    /// @return The number of withdraws processed
+    function processBatch(uint256 numWithdrawals) external returns (uint256);
 
     /// @notice Finalizes the current batch.
     function finalizeBatch() external;

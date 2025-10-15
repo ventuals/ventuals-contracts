@@ -270,7 +270,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
     }
 
     /// @inheritdoc IStakingVaultManager
-    function processBatch(uint256 numWithdrawals) public whenNotPaused whenBatchProcessingNotPaused {
+    function processBatch(uint256 numWithdrawals) public whenNotPaused whenBatchProcessingNotPaused returns (uint256) {
         Batch memory batch = _fetchBatch();
 
         uint256 hypeProcessed = _vHYPEtoHYPE(batch.vhypeProcessed, batch.snapshotExchangeRate);
@@ -284,7 +284,8 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         // - Hit the withdraw capacity, or
         // - Process the requested number of withdraws, or
         // - Have no more withdraws to process
-        while (withdrawCapacityAvailable > 0 && numWithdrawals > 0) {
+        uint256 numWithdrawalsLeft = numWithdrawals;
+        while (withdrawCapacityAvailable > 0 && numWithdrawalsLeft > 0) {
             // Get the next withdraw to process
             (bool hasNextNode, uint256 nextNodeId) = withdrawQueue.getNextNode(lastProcessedWithdrawId);
             if (!hasNextNode) {
@@ -302,7 +303,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
             withdrawCapacityAvailable -= expectedHypeAmount;
 
             // Count towards the number processed in this call
-            numWithdrawals--;
+            numWithdrawalsLeft--;
 
             // Update batch metrics (in memory)
             if (withdraw.cancelledAt == 0) {
@@ -322,6 +323,8 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         _checkpointBatch(batch);
 
         emit ProcessBatch(currentBatchIndex, batch);
+
+        return numWithdrawals - numWithdrawalsLeft;
     }
 
     function _fetchBatch() internal view returns (Batch memory batch) {
