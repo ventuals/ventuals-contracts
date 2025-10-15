@@ -649,10 +649,7 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
     function test_DelegatorSummary() public {
         // Mock the L1Read call
         L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
-            delegated: 1e18,
-            undelegated: 0,
-            totalPendingWithdrawal: 0,
-            nPendingWithdrawals: 0
+            delegated: 1e18, undelegated: 0, totalPendingWithdrawal: 0, nPendingWithdrawals: 0
         });
         bytes memory encodedDelegatorSummary = abi.encode(mockDelegatorSummary);
         vm.mockCall(
@@ -1018,9 +1015,7 @@ contract StakingVaultTest is Test, HyperCoreSimulator {
         hl.mockDelegation(
             address(stakingVault),
             L1ReadLibrary.Delegation({
-                validator: _validator,
-                amount: weiAmount,
-                lockedUntilTimestamp: lockedUntilTimestamp
+                validator: _validator, amount: weiAmount, lockedUntilTimestamp: lockedUntilTimestamp
             })
         );
     }

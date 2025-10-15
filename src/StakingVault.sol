@@ -164,7 +164,11 @@ contract StakingVault is IStakingVault, Base {
 
     /// @notice Delegates to the validator, and checkpoints this block number as the last delegation change
     function _delegate(address validator, uint64 weiAmount) internal {
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, false /* isUndelegate */ );
+        CoreWriterLibrary.tokenDelegate(
+            validator,
+            weiAmount,
+            false /* isUndelegate */
+        );
         // Update the last delegation change block number
         lastDelegationChangeBlockNumber[validator] = block.number;
     }
@@ -182,7 +186,11 @@ contract StakingVault is IStakingVault, Base {
             StakeLockedUntilTimestamp(validator, _delegation.lockedUntilTimestamp)
         );
 
-        CoreWriterLibrary.tokenDelegate(validator, weiAmount, true /* isUndelegate */ );
+        CoreWriterLibrary.tokenDelegate(
+            validator,
+            weiAmount,
+            true /* isUndelegate */
+        );
 
         // Update the last delegation change block number
         lastDelegationChangeBlockNumber[validator] = block.number;

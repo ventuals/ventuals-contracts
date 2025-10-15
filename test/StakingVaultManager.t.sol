@@ -1353,7 +1353,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode((hypeDeposits - vhypeAmount).to8Decimals()));
         expectCoreWriterCall(
             CoreWriterLibrary.TOKEN_DELEGATE,
-            abi.encode(validator, (hypeDeposits - vhypeAmount).to8Decimals(), false /* isUndelegate */ )
+            abi.encode(
+                validator,
+                (hypeDeposits - vhypeAmount).to8Decimals(),
+                false /* isUndelegate */
+            )
         );
 
         // No undelegate call or staking withdraw call expected
@@ -1385,7 +1389,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Second call: undelegate shortfall amount (use CoreWriter helper)
         expectCoreWriterCall(
             CoreWriterLibrary.TOKEN_DELEGATE,
-            abi.encode(validator, (vhypeAmount - hypeDeposits).to8Decimals(), true /* isUndelegate */ )
+            abi.encode(
+                validator,
+                (vhypeAmount - hypeDeposits).to8Decimals(),
+                true /* isUndelegate */
+            )
         );
 
         // Third call: withdraw shortfall from staking (use CoreWriter helper)
@@ -1523,9 +1531,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         hl.mockDelegation(
             address(stakingVault),
             L1ReadLibrary.Delegation({
-                validator: validator,
-                amount: originalBalance.to8Decimals() / 2,
-                lockedUntilTimestamp: startTimestamp
+                validator: validator, amount: originalBalance.to8Decimals() / 2, lockedUntilTimestamp: startTimestamp
             })
         );
 
@@ -1560,10 +1566,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeBatch();
     }
 
-    function test_FinalizeBatch_CannotFinalizeAfterEmergencyStakingWithdrawInSameBlock()
-        public
-        withExcessStakeBalance
-    {
+    function test_FinalizeBatch_CannotFinalizeAfterEmergencyStakingWithdrawInSameBlock() public withExcessStakeBalance {
         uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE
 
         // User queues a withdraw
@@ -1636,7 +1639,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         expectCoreWriterCall(CoreWriterLibrary.STAKING_DEPOSIT, abi.encode(hypeDeposits.to8Decimals()));
         expectCoreWriterCall(
             CoreWriterLibrary.TOKEN_DELEGATE,
-            abi.encode(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ )
+            abi.encode(
+                validator,
+                hypeDeposits.to8Decimals(),
+                false /* isUndelegate */
+            )
         );
 
         // Finalize the batch
@@ -1680,7 +1687,11 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         // Third call: delegate all deposits
         expectCoreWriterCall(
             CoreWriterLibrary.TOKEN_DELEGATE,
-            abi.encode(validator, hypeDeposits.to8Decimals(), false /* isUndelegate */ )
+            abi.encode(
+                validator,
+                hypeDeposits.to8Decimals(),
+                false /* isUndelegate */
+            )
         );
 
         // No undelegate call or staking withdraw call expected
@@ -2027,10 +2038,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     function test_ExchangeRate_ZeroBalance() public {
         // Mock total balance to be zero
         L1ReadLibrary.DelegatorSummary memory mockDelegatorSummary = L1ReadLibrary.DelegatorSummary({
-            delegated: 0,
-            undelegated: 0,
-            totalPendingWithdrawal: 0,
-            nPendingWithdrawals: 0
+            delegated: 0, undelegated: 0, totalPendingWithdrawal: 0, nPendingWithdrawals: 0
         });
         vm.mockCall(
             L1ReadLibrary.DELEGATOR_SUMMARY_PRECOMPILE_ADDRESS,
@@ -3040,9 +3048,7 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         hl.mockDelegation(
             address(stakingVault),
             L1ReadLibrary.Delegation({
-                validator: _validator,
-                amount: weiAmount,
-                lockedUntilTimestamp: lockedUntilTimestamp
+                validator: _validator, amount: weiAmount, lockedUntilTimestamp: lockedUntilTimestamp
             })
         );
     }

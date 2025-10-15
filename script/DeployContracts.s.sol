@@ -92,9 +92,8 @@ contract DeployContracts is Script {
 
         console.log("");
         console.log("Granting MANAGER_ROLE to StakingVaultManager...");
-        RoleRegistry(roleRegistryProxy).grantRole(
-            RoleRegistry(roleRegistryProxy).MANAGER_ROLE(), stakingVaultManagerProxy
-        );
+        RoleRegistry(roleRegistryProxy)
+            .grantRole(RoleRegistry(roleRegistryProxy).MANAGER_ROLE(), stakingVaultManagerProxy);
         console.log("MANAGER_ROLE granted!");
 
         vm.stopBroadcast();
