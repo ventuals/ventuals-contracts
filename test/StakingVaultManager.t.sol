@@ -3183,6 +3183,60 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         stakingVaultManager.finalizeResetBatch();
     }
 
+    function test_ResetBatch_StopsAtPreviousBatch() public withExcessStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
+
+        // Setup: Queue and process 3 withdrawals in batch 0
+        _setupWithdraw(user, vhypeAmount);
+        _setupWithdraw(user, vhypeAmount);
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Advance time to allow next batch
+        warp(vm.getBlockTimestamp() + 1 days + 1 seconds);
+
+        // Queue and process 2 more withdrawals in batch 1
+        _setupWithdraw(user, vhypeAmount);
+        _setupWithdraw(user, vhypeAmount);
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        // Verify state before reset
+        assertEq(stakingVaultManager.getBatchesLength(), 2, "Should have 2 batches");
+        assertEq(stakingVaultManager.currentBatchIndex(), 1, "Current batch index should be 1");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 5, "Last processed withdraw ID should be 5");
+        assertEq(stakingVaultManager.getBatch(1).vhypeProcessed, vhypeAmount * 2, "Batch 1 should have 2 withdrawals");
+
+        // Verify withdraw batch assignments
+        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "Withdraw 1 should be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(2).batchIndex, 0, "Withdraw 2 should be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(3).batchIndex, 0, "Withdraw 3 should be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(4).batchIndex, 1, "Withdraw 4 should be in batch 1");
+        assertEq(stakingVaultManager.getWithdraw(5).batchIndex, 1, "Withdraw 5 should be in batch 1");
+
+        // Reset batch 1 with a high number of withdrawals (more than in batch 1)
+        // This should reset batch 1 completely but stop when it hits batch 0 withdrawals
+        vm.prank(owner);
+        stakingVaultManager.resetBatch(type(uint256).max);
+
+        // Verify batch 1 was fully reset
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Should stop at last withdraw of batch 0");
+        assertEq(stakingVaultManager.getBatch(1).vhypeProcessed, 0, "Batch 1 should be fully reset");
+
+        // Verify batch 1 withdrawals were unassigned
+        assertEq(stakingVaultManager.getWithdraw(4).batchIndex, type(uint256).max, "Withdraw 4 should be unassigned");
+        assertEq(stakingVaultManager.getWithdraw(5).batchIndex, type(uint256).max, "Withdraw 5 should be unassigned");
+
+        // Verify batch 0 withdrawals are still assigned to batch 0
+        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 0, "Withdraw 1 should still be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(2).batchIndex, 0, "Withdraw 2 should still be in batch 0");
+        assertEq(stakingVaultManager.getWithdraw(3).batchIndex, 0, "Withdraw 3 should still be in batch 0");
+
+        // Verify batch 0 is unchanged
+        assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, vhypeAmount * 3, "Batch 0 should be unchanged");
+        assertGt(stakingVaultManager.getBatch(0).finalizedAt, 0, "Batch 0 should still be finalized");
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*            Tests: Switch Validator (Only Owner)            */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
