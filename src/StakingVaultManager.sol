@@ -209,6 +209,7 @@ contract StakingVaultManager is Base, IStakingVaultManager {
 
     /// @inheritdoc IStakingVaultManager
     function batchClaimWithdraws(uint256[] calldata withdrawIds, address destination) public whenNotPaused {
+        require(withdrawIds.length > 0, ZeroAmount());
         uint256 hypeAmounts = 0;
         for (uint256 i = 0; i < withdrawIds.length; i++) {
             hypeAmounts += _claimWithdraw(withdrawIds[i]);
