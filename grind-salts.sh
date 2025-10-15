@@ -10,6 +10,13 @@ OWNER=
 IS_TESTNET=
 IS_TEST_VAULT=
 
+# Vault config for mainnet production
+# TODO: Check that these match the values in DeployContracts.s.sol
+MIN_STAKE_BALANCE=500000000000000000000000  # 500k HYPE
+MIN_DEPOSIT=1000000000000000000  # 1 HYPE
+MIN_WITHDRAW=500000000000000000  # 0.5 HYPE
+MAX_WITHDRAW=10000000000000000000000  # 10k HYPE
+
 # Mainnet configuration
 VALIDATOR=0x5aC99df645F3414876C816Caa18b2d234024b487
 VALIDATOR_1=0x5aC99df645F3414876C816Caa18b2d234024b487
@@ -18,13 +25,6 @@ VALIDATOR_3=0x80f0CD23DA5BF3a0101110cfD0F89C8a69a1384d
 VALIDATOR_4=0xdF35aee8ef5658686142ACd1E5AB5DBcDF8c51e8
 VALIDATOR_5=0x66Be52ec79F829Cc88E5778A255E2cb9492798fd
 HYPE_TOKEN_ID=150
-
-# Vault config for mainnet production
-# NOTE: These need to match the values in DeployContracts.s.sol
-MIN_STAKE_BALANCE=500000000000000000000000  # 500k HYPE
-MIN_DEPOSIT=1000000000000000000  # 1 HYPE
-MIN_WITHDRAW=500000000000000000  # 0.5 HYPE
-MAX_WITHDRAW=10000000000000000000000  # 10k HYPE
 
 echo "======================================"
 echo "CREATE2 Salt Grinding Script"
@@ -47,7 +47,7 @@ echo ""
 # 1. RoleRegistry Implementation
 echo "1/4 Grinding RoleRegistry Implementation..."
 ROLE_REGISTRY_IMPL_BYTECODE=$(forge inspect RoleRegistry bytecode)
-ROLE_REGISTRY_IMPL_RESULT=$(cast create2 --starts-with 8888888 --init-code $ROLE_REGISTRY_IMPL_BYTECODE)
+ROLE_REGISTRY_IMPL_RESULT=$(cast create2 --starts-with 0000000 --init-code $ROLE_REGISTRY_IMPL_BYTECODE)
 ROLE_REGISTRY_IMPL=$(echo "$ROLE_REGISTRY_IMPL_RESULT" | grep "Address:" | awk '{print $2}')
 ROLE_REGISTRY_IMPL_SALT=$(echo "$ROLE_REGISTRY_IMPL_RESULT" | grep "Salt:" | awk '{print $2}')
 echo "   Address: $ROLE_REGISTRY_IMPL"
@@ -57,7 +57,7 @@ echo ""
 # 2. VHYPE Implementation
 echo "2/4 Grinding VHYPE Implementation..."
 VHYPE_IMPL_BYTECODE=$(forge inspect VHYPE bytecode)
-VHYPE_IMPL_RESULT=$(cast create2 --starts-with 8888888 --init-code $VHYPE_IMPL_BYTECODE)
+VHYPE_IMPL_RESULT=$(cast create2 --starts-with 0000000 --init-code $VHYPE_IMPL_BYTECODE)
 VHYPE_IMPL=$(echo "$VHYPE_IMPL_RESULT" | grep "Address:" | awk '{print $2}')
 VHYPE_IMPL_SALT=$(echo "$VHYPE_IMPL_RESULT" | grep "Salt:" | awk '{print $2}')
 echo "   Address: $VHYPE_IMPL"
@@ -69,7 +69,7 @@ echo "3/4 Grinding StakingVault Implementation..."
 STAKING_VAULT_IMPL_CREATION_CODE=$(forge inspect StakingVault bytecode)
 STAKING_VAULT_IMPL_CONSTRUCTOR_ARGS=$(cast abi-encode "constructor(uint64)" $HYPE_TOKEN_ID)
 STAKING_VAULT_IMPL_INIT_CODE=$(cast concat-hex $STAKING_VAULT_IMPL_CREATION_CODE $STAKING_VAULT_IMPL_CONSTRUCTOR_ARGS)
-STAKING_VAULT_IMPL_RESULT=$(cast create2 --starts-with 8888888 --init-code $STAKING_VAULT_IMPL_INIT_CODE)
+STAKING_VAULT_IMPL_RESULT=$(cast create2 --starts-with 0000000 --init-code $STAKING_VAULT_IMPL_INIT_CODE)
 STAKING_VAULT_IMPL=$(echo "$STAKING_VAULT_IMPL_RESULT" | grep "Address:" | awk '{print $2}')
 STAKING_VAULT_IMPL_SALT=$(echo "$STAKING_VAULT_IMPL_RESULT" | grep "Salt:" | awk '{print $2}')
 echo "   Address: $STAKING_VAULT_IMPL"
@@ -79,7 +79,7 @@ echo ""
 # 4. StakingVaultManager Implementation
 echo "4/4 Grinding StakingVaultManager Implementation..."
 STAKING_VAULT_MANAGER_IMPL_BYTECODE=$(forge inspect StakingVaultManager bytecode)
-STAKING_VAULT_MANAGER_IMPL_RESULT=$(cast create2 --starts-with 8888888 --init-code $STAKING_VAULT_MANAGER_IMPL_BYTECODE)
+STAKING_VAULT_MANAGER_IMPL_RESULT=$(cast create2 --starts-with 0000000 --init-code $STAKING_VAULT_MANAGER_IMPL_BYTECODE)
 STAKING_VAULT_MANAGER_IMPL=$(echo "$STAKING_VAULT_MANAGER_IMPL_RESULT" | grep "Address:" | awk '{print $2}')
 STAKING_VAULT_MANAGER_IMPL_SALT=$(echo "$STAKING_VAULT_MANAGER_IMPL_RESULT" | grep "Salt:" | awk '{print $2}')
 echo "   Address: $STAKING_VAULT_MANAGER_IMPL"
