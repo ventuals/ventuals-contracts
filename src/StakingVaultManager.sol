@@ -327,10 +327,10 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         return numWithdrawals - numWithdrawalsLeft;
     }
 
-    function _fetchBatch() internal view returns (Batch memory batch) {
+    function _fetchBatch() internal view returns (Batch memory) {
+        // Batch hasn't been initialized yet, so we need to initialize a new batch
         if (currentBatchIndex == batches.length) {
-            // Initialize a new batch at the current index
-            // Only enforce timing restriction if this is not the first batch
+            // Enforce the 1 day timing restriction (if this is not the first batch)
             if (lastFinalizedBatchTime != 0) {
                 // There's a 1 day lockup period after HYPE is staked to a validator, so we enforce a 1 day delay between batches
                 require(
@@ -350,18 +350,17 @@ contract StakingVaultManager is Base, IStakingVaultManager {
             }
             uint256 snapshotExchangeRate = exchangeRate();
 
-            batch = Batch({
+            return Batch({
                 vhypeProcessed: 0,
                 snapshotExchangeRate: snapshotExchangeRate,
                 slashedExchangeRate: 0,
                 slashed: false,
                 finalizedAt: 0
             });
-        } else {
-            // Use the current batch
-            batch = batches[currentBatchIndex];
         }
-        return batch;
+
+        // Use the current batch
+        return batches[currentBatchIndex];
     }
 
     /// @dev Stores the batch, either by appending a new one or by overwriting the current batch.
