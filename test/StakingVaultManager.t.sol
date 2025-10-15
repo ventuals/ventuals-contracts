@@ -2464,6 +2464,168 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*               Tests: Get Account Withdraws                 */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_GetAccountWithdraws_NoWithdrawals() public {
+        // Query withdrawals for an account that has never withdrawn
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        assertEq(withdraws.length, 0, "Account with no withdrawals should return empty array");
+    }
+
+    function test_GetAccountWithdraws_SingleWithdrawal() public withMinimumStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18;
+
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        assertEq(withdraws.length, 1, "Should return 1 withdrawal");
+        assertEq(withdraws[0].id, withdrawId, "Withdrawal ID should match");
+        assertEq(withdraws[0].account, user, "Account should match");
+        assertEq(withdraws[0].vhypeAmount, vhypeAmount, "vHYPE amount should match");
+    }
+
+    function test_GetAccountWithdraws_MultipleWithdrawals() public withMinimumStakeBalance {
+        uint256 vhypeAmount1 = 2_000 * 1e18;
+        uint256 vhypeAmount2 = 3_000 * 1e18;
+        uint256 vhypeAmount3 = 1_500 * 1e18;
+
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+        uint256 withdrawId3 = _setupWithdraw(user, vhypeAmount3);
+
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        assertEq(withdraws.length, 3, "Should return 3 withdrawals");
+        assertEq(withdraws[0].id, withdrawId1, "First withdrawal ID should match");
+        assertEq(withdraws[1].id, withdrawId2, "Second withdrawal ID should match");
+        assertEq(withdraws[2].id, withdrawId3, "Third withdrawal ID should match");
+        assertEq(withdraws[0].vhypeAmount, vhypeAmount1, "First withdrawal amount should match");
+        assertEq(withdraws[1].vhypeAmount, vhypeAmount2, "Second withdrawal amount should match");
+        assertEq(withdraws[2].vhypeAmount, vhypeAmount3, "Third withdrawal amount should match");
+    }
+
+    function test_GetAccountWithdraws_WithCancelledWithdrawal() public withMinimumStakeBalance {
+        uint256 vhypeAmount1 = 2_000 * 1e18;
+        uint256 vhypeAmount2 = 3_000 * 1e18;
+
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Cancel the first withdrawal
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId1);
+
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        // Should still return both withdrawals, but first one will have cancelledAt timestamp
+        assertEq(withdraws.length, 2, "Should return 2 withdrawals (including cancelled)");
+        assertEq(withdraws[0].id, withdrawId1, "First withdrawal ID should match");
+        assertEq(withdraws[1].id, withdrawId2, "Second withdrawal ID should match");
+        assertGt(withdraws[0].cancelledAt, 0, "First withdrawal should be cancelled");
+        assertEq(withdraws[1].cancelledAt, 0, "Second withdrawal should not be cancelled");
+    }
+
+    function test_GetAccountWithdraws_WithProcessedWithdrawals() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 2_000 * 1e18;
+        uint256 vhypeAmount2 = 3_000 * 1e18;
+
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // Process both withdrawals
+        stakingVaultManager.processBatch(type(uint256).max);
+
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        assertEq(withdraws.length, 2, "Should return 2 withdrawals");
+        assertEq(withdraws[0].batchIndex, 0, "First withdrawal should be in batch 0");
+        assertEq(withdraws[1].batchIndex, 0, "Second withdrawal should be in batch 0");
+    }
+
+    function test_GetAccountWithdraws_WithClaimedWithdrawals() public withExcessStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18;
+
+        uint256 withdrawId = _setupWithdraw(user, vhypeAmount);
+
+        // Process and finalize batch
+        stakingVaultManager.processBatch(type(uint256).max);
+        stakingVaultManager.finalizeBatch();
+
+        // Warp past the claim window
+        warp(vm.getBlockTimestamp() + 7 days + 12 hours + 1 seconds);
+
+        // Claim the withdrawal
+        vm.prank(user);
+        stakingVaultManager.claimWithdraw(withdrawId, user);
+
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        assertEq(withdraws.length, 1, "Should return 1 withdrawal");
+        assertEq(withdraws[0].id, withdrawId, "Withdrawal ID should match");
+        assertGt(withdraws[0].claimedAt, 0, "Withdrawal should be claimed");
+    }
+
+    function test_GetAccountWithdraws_MultipleAccounts() public withMinimumStakeBalance {
+        address user2 = makeAddr("user2");
+
+        uint256 vhypeAmount1 = 2_000 * 1e18;
+        uint256 vhypeAmount2 = 3_000 * 1e18;
+
+        // User 1 creates 2 withdrawals
+        uint256 withdrawId1 = _setupWithdraw(user, vhypeAmount1);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount2);
+
+        // User 2 creates 1 withdrawal
+        uint256 withdrawId3 = _setupWithdraw(user2, vhypeAmount1);
+
+        // Check user 1's withdrawals
+        StakingVaultManager.Withdraw[] memory withdraws1 = stakingVaultManager.getAccountWithdraws(user);
+        assertEq(withdraws1.length, 2, "User 1 should have 2 withdrawals");
+        assertEq(withdraws1[0].id, withdrawId1, "User 1 first withdrawal ID should match");
+        assertEq(withdraws1[1].id, withdrawId2, "User 1 second withdrawal ID should match");
+        assertEq(withdraws1[0].account, user, "User 1 withdrawals should belong to user 1");
+        assertEq(withdraws1[1].account, user, "User 1 withdrawals should belong to user 1");
+
+        // Check user 2's withdrawals
+        StakingVaultManager.Withdraw[] memory withdraws2 = stakingVaultManager.getAccountWithdraws(user2);
+        assertEq(withdraws2.length, 1, "User 2 should have 1 withdrawal");
+        assertEq(withdraws2[0].id, withdrawId3, "User 2 withdrawal ID should match");
+        assertEq(withdraws2[0].account, user2, "User 2 withdrawal should belong to user 2");
+    }
+
+    function test_GetAccountWithdraws_WithSplitWithdrawals() public withMinimumStakeBalance {
+        // Queue a large withdrawal that will be split
+        uint256 vhypeAmount = 25_000 * 1e18; // 25k vHYPE (will be split into 3 withdrawals: 10k + 10k + 5k)
+
+        // Transfer vHYPE to user and approve
+        vm.prank(owner);
+        vHYPE.transfer(user, vhypeAmount);
+
+        vm.startPrank(user);
+        vHYPE.approve(address(stakingVaultManager), vhypeAmount);
+        uint256[] memory withdrawIds = stakingVaultManager.queueWithdraw(vhypeAmount);
+        vm.stopPrank();
+
+        // Should have created 3 split withdrawals
+        assertEq(withdrawIds.length, 3, "Should create 3 split withdrawals");
+
+        StakingVaultManager.Withdraw[] memory withdraws = stakingVaultManager.getAccountWithdraws(user);
+
+        // All split withdrawals should be returned
+        assertEq(withdraws.length, 3, "Should return all 3 split withdrawals");
+        assertEq(withdraws[0].id, withdrawIds[0], "First withdrawal ID should match");
+        assertEq(withdraws[1].id, withdrawIds[1], "Second withdrawal ID should match");
+        assertEq(withdraws[2].id, withdrawIds[2], "Third withdrawal ID should match");
+
+        // Verify total amount equals original request
+        uint256 totalVhype = withdraws[0].vhypeAmount + withdraws[1].vhypeAmount + withdraws[2].vhypeAmount;
+        assertEq(totalVhype, vhypeAmount, "Total vHYPE should equal original request");
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                Tests: Balance Calculations                 */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
