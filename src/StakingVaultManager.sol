@@ -203,6 +203,20 @@ contract StakingVaultManager is Base, IStakingVaultManager {
 
     /// @inheritdoc IStakingVaultManager
     function claimWithdraw(uint256 withdrawId, address destination) public whenNotPaused {
+        uint256 hypeAmount = _claimWithdraw(withdrawId);
+        stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmount.to8Decimals());
+    }
+
+    /// @inheritdoc IStakingVaultManager
+    function batchClaimWithdraws(uint256[] calldata withdrawIds, address destination) public whenNotPaused {
+        uint256 hypeAmounts = 0;
+        for (uint256 i = 0; i < withdrawIds.length; i++) {
+            hypeAmounts += _claimWithdraw(withdrawIds[i]);
+        }
+        stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmounts.to8Decimals());
+    }
+
+    function _claimWithdraw(uint256 withdrawId) public returns (uint256) {
         Withdraw storage withdraw = withdraws[withdrawId];
         require(msg.sender == withdraw.account, NotAuthorized());
         require(withdraw.cancelledAt == 0, WithdrawCancelled());
@@ -218,21 +232,12 @@ contract StakingVaultManager is Base, IStakingVaultManager {
         uint256 withdrawExchangeRate = batch.slashed ? batch.slashedExchangeRate : batch.snapshotExchangeRate;
         uint256 hypeAmount = _vHYPEtoHYPE(withdraw.vhypeAmount, withdrawExchangeRate);
 
-        // NOTE: We don't need to worry about transfer to Core timings here, because claimable HYPE is excluded
-        // from the total balance (via `totalHypeProcessed`)
-        stakingVault.spotSend(destination, stakingVault.HYPE_TOKEN_ID(), hypeAmount.to8Decimals());
-
         withdraw.claimedAt = block.timestamp;
         totalHypeClaimed += hypeAmount;
 
         emit ClaimWithdraw(msg.sender, withdrawId, withdraw);
-    }
 
-    /// @inheritdoc IStakingVaultManager
-    function batchClaimWithdraws(uint256[] calldata withdrawIds, address destination) public whenNotPaused {
-        for (uint256 i = 0; i < withdrawIds.length; i++) {
-            claimWithdraw(withdrawIds[i], destination);
-        }
+        return hypeAmount;
     }
 
     /// @inheritdoc IStakingVaultManager
