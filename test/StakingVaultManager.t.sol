@@ -3467,6 +3467,108 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
     /*                     Tests: Ownership                       */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                   Tests: Wind Down (Only Owner)            */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function test_WindDown_AllowsAllWithdrawalsToBeProcessed() public withMinimumStakeBalance {
+        // Initial state: minimum stake balance is set
+        assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE, "Should have minimum stake");
+
+        // Total balance available
+        uint256 totalBalance = stakingVaultManager.totalBalance();
+        assertEq(totalBalance, MINIMUM_STAKE_BALANCE, "Total balance should equal minimum stake");
+
+        // Queue withdrawals that would exceed capacity with minimum stake balance
+        // Note: large withdrawals get split into chunks of max 10k each
+        uint256 vhypeAmount = MINIMUM_STAKE_BALANCE; // Queue full balance (500k)
+        _setupWithdraw(user, vhypeAmount);
+
+        // Calculate expected number of withdraw chunks (500k / 10k = 50)
+        uint256 expectedChunks = vhypeAmount / MAXIMUM_WITHDRAW_AMOUNT;
+
+        // Try to process with minimum stake balance - should not process any withdrawals
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+        assertEq(numProcessed, 0, "Should not process withdrawals with minimum stake balance");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "No withdrawals should be processed");
+
+        // Call windDown to set minimum stake balance to 0
+        vm.prank(owner);
+        stakingVaultManager.windDown();
+
+        // Verify minimum stake balance is now 0
+        assertEq(stakingVaultManager.minimumStakeBalance(), 0, "Minimum stake should be 0 after wind down");
+
+        // Now all withdrawals should be processable
+        numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+        assertEq(numProcessed, expectedChunks, "Should process all withdrawal chunks after wind down");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), expectedChunks, "All withdrawals should be processed");
+
+        // Verify the withdrawals were assigned to a batch
+        for (uint256 i = 1; i <= expectedChunks; i++) {
+            assertEq(stakingVaultManager.getWithdraw(i).batchIndex, 0, "Withdrawal should be in batch 0");
+        }
+
+        // Verify batch has all withdrawals
+        assertEq(
+            stakingVaultManager.getBatch(0).vhypeProcessed, vhypeAmount, "Batch should have processed all withdrawals"
+        );
+    }
+
+    function test_WindDown_MultipleWithdrawals() public withMinimumStakeBalance {
+        uint256 totalBalance = stakingVaultManager.totalBalance();
+
+        // Use smaller amounts that won't be split
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 7_000 * 1e18; // 7k vHYPE
+        uint256 vhypeAmount3 = 8_000 * 1e18; // 8k vHYPE (total 20k, more than excess balance)
+
+        // Queue multiple withdrawals that total more than (balance - minimumStake)
+        _setupWithdraw(user, vhypeAmount1);
+        _setupWithdraw(user, vhypeAmount2);
+        _setupWithdraw(user, vhypeAmount3);
+
+        // With minimum stake balance, some withdrawals won't process
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+        uint256 firstBatchProcessed = numProcessed;
+        assertEq(numProcessed, 0, "Should not process any withdrawals with minimum stake");
+        assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, 0, "Batch should have no processed vHYPE");
+        stakingVaultManager.finalizeBatch();
+
+        // Call windDown
+        vm.prank(owner);
+        stakingVaultManager.windDown();
+
+        // Fast forward time to allow withdrawals to process
+        warp(vm.getBlockTimestamp() + 1 days + 1);
+
+        // Now all withdrawals should be processable
+        numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+        assertEq(numProcessed, 3, "Should process all 3 withdrawals after wind down");
+
+        // Verify all withdrawals were assigned to batch
+        assertEq(stakingVaultManager.getWithdraw(1).batchIndex, 1, "Withdrawal 1 should be in batch 1");
+        assertEq(stakingVaultManager.getWithdraw(2).batchIndex, 1, "Withdrawal 2 should be in batch 1");
+        assertEq(stakingVaultManager.getWithdraw(3).batchIndex, 1, "Withdrawal 3 should be in batch 1");
+
+        // Verify batch has all withdrawals
+        assertEq(
+            stakingVaultManager.getBatch(1).vhypeProcessed,
+            vhypeAmount1 + vhypeAmount2 + vhypeAmount3,
+            "Batch should have processed all withdrawals"
+        );
+    }
+
+    function test_WindDown_OnlyOwner() public {
+        // Try to call windDown as non-owner
+        vm.prank(user);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, user));
+        stakingVaultManager.windDown();
+
+        // Verify minimum stake balance unchanged
+        assertEq(stakingVaultManager.minimumStakeBalance(), MINIMUM_STAKE_BALANCE, "Should still have minimum stake");
+    }
+
     function test_TransferOwnership_NewOwnerCanUpgrade() public {
         address originalOwner = owner;
         address newOwner = makeAddr("newOwner");
