@@ -1726,6 +1726,155 @@ contract StakingVaultManagerTest is Test, HyperCoreSimulator {
         );
     }
 
+    function test_ProcessBatch_ReturnValue_ProcessesAllWithdrawals() public withExcessStakeBalance {
+        uint256 vhypeAmount1 = 2_000 * 1e18; // 2k vHYPE
+        uint256 vhypeAmount2 = 3_000 * 1e18; // 3k vHYPE
+        uint256 vhypeAmount3 = 4_000 * 1e18; // 4k vHYPE
+
+        // Setup: Three users queue withdraws
+        _setupWithdraw(user, vhypeAmount1);
+        _setupWithdraw(user, vhypeAmount2);
+        _setupWithdraw(user, vhypeAmount3);
+
+        // Process batch with max uint256 (process all)
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should process all 3 withdrawals
+        assertEq(numProcessed, 3, "Should have processed 3 withdrawals");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Last processed withdraw ID should be 3");
+    }
+
+    function test_ProcessBatch_ReturnValue_LimitedWithdrawals() public withExcessStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
+
+        // Setup: Queue 5 withdraws
+        for (uint256 i = 0; i < 5; i++) {
+            _setupWithdraw(user, vhypeAmount);
+        }
+
+        // Process batch with limit of 3
+        uint256 numProcessed = stakingVaultManager.processBatch(3);
+
+        // Should process exactly 3 withdrawals
+        assertEq(numProcessed, 3, "Should have processed 3 withdrawals");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Last processed withdraw ID should be 3");
+
+        // Process the remaining withdrawals
+        uint256 numProcessed2 = stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should process the remaining 2 withdrawals
+        assertEq(numProcessed2, 2, "Should have processed 2 more withdrawals");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 5, "Last processed withdraw ID should be 5");
+    }
+
+    function test_ProcessBatch_ReturnValue_EmptyQueue() public withExcessStakeBalance {
+        // Process batch with empty queue
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should process 0 withdrawals
+        assertEq(numProcessed, 0, "Should have processed 0 withdrawals");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
+    }
+
+    function test_ProcessBatch_ReturnValue_InsufficientCapacity() public withMinimumStakeBalance {
+        uint256 vhypeAmount = 100_000 * 1e18; // 100k vHYPE (more than available capacity)
+
+        // Setup: User queues a large withdraw that exceeds capacity
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process batch (should process 0 withdraws due to insufficient capacity)
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should process 0 withdrawals
+        assertEq(numProcessed, 0, "Should have processed 0 withdrawals due to insufficient capacity");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
+    }
+
+    function test_ProcessBatch_ReturnValue_PartialCapacity() public withExcessStakeBalanceAmount(10_000 * 1e18) {
+        uint256 vhypeAmount1 = 5_000 * 1e18; // 5k vHYPE
+        uint256 vhypeAmount2 = 10_000 * 1e18; // 10k vHYPE (this one won't fit)
+
+        // Setup: Two users queue withdraws
+        _setupWithdraw(user, vhypeAmount1);
+        _setupWithdraw(user, vhypeAmount2);
+
+        // Process batch (should only process first withdraw due to capacity)
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should process only 1 withdrawal
+        assertEq(numProcessed, 1, "Should have processed only 1 withdrawal due to capacity limits");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 1, "Last processed withdraw ID should be 1");
+    }
+
+    function test_ProcessBatch_ReturnValue_WithCancelledWithdraw() public withExcessStakeBalance {
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Setup: Queue 3 withdraws
+        _setupWithdraw(user, vhypeAmount);
+        uint256 withdrawId2 = _setupWithdraw(user, vhypeAmount);
+        _setupWithdraw(user, vhypeAmount);
+
+        // Cancel the second withdraw
+        vm.prank(user);
+        stakingVaultManager.cancelWithdraw(withdrawId2);
+
+        // Process batch
+        uint256 numProcessed = stakingVaultManager.processBatch(type(uint256).max);
+
+        // Should process all 2 withdrawals (not including the cancelled one)
+        assertEq(numProcessed, 2, "Should have processed 2 withdrawals (excluding cancelled)");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 3, "Last processed withdraw ID should be 3");
+
+        // But batch should only have 2 withdrawals worth of vHYPE (cancelled one is skipped)
+        assertEq(
+            stakingVaultManager.getBatch(0).vhypeProcessed,
+            vhypeAmount * 2,
+            "Batch should have processed 10k vHYPE (2 withdraws)"
+        );
+    }
+
+    function test_ProcessBatch_ReturnValue_ZeroWithdrawalsRequested() public withExcessStakeBalance {
+        uint256 vhypeAmount = 5_000 * 1e18; // 5k vHYPE
+
+        // Setup: Queue some withdraws
+        _setupWithdraw(user, vhypeAmount);
+        _setupWithdraw(user, vhypeAmount);
+
+        // Process batch with 0 withdrawals
+        uint256 numProcessed = stakingVaultManager.processBatch(0);
+
+        // Should process 0 withdrawals
+        assertEq(numProcessed, 0, "Should have processed 0 withdrawals when limit is 0");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 0, "Last processed withdraw ID should be 0");
+    }
+
+    function test_ProcessBatch_ReturnValue_MultipleCallsInSameBatch() public withExcessStakeBalance {
+        uint256 vhypeAmount = 2_000 * 1e18; // 2k vHYPE
+
+        // Setup: Queue 6 withdraws
+        for (uint256 i = 0; i < 6; i++) {
+            _setupWithdraw(user, vhypeAmount);
+        }
+
+        // First call: process 2 withdrawals
+        uint256 numProcessed1 = stakingVaultManager.processBatch(2);
+        assertEq(numProcessed1, 2, "First call should process 2 withdrawals");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 2, "Last processed should be 2");
+
+        // Second call: process 3 more withdrawals
+        uint256 numProcessed2 = stakingVaultManager.processBatch(3);
+        assertEq(numProcessed2, 3, "Second call should process 3 withdrawals");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 5, "Last processed should be 5");
+
+        // Third call: process remaining withdrawals
+        uint256 numProcessed3 = stakingVaultManager.processBatch(type(uint256).max);
+        assertEq(numProcessed3, 1, "Third call should process 1 withdrawal");
+        assertEq(stakingVaultManager.lastProcessedWithdrawId(), 6, "Last processed should be 6");
+
+        // Verify total in batch
+        assertEq(stakingVaultManager.getBatch(0).vhypeProcessed, vhypeAmount * 6, "Batch should have all 6 withdrawals");
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    Tests: Finalize Batch                   */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
